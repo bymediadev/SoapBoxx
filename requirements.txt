@@ -1,0 +1,11 @@
+PyQt6
+openai
+sounddevice
+numpy
+requests
+python-dotenv
+openai-whisper
+pydub
+snscrape
+google-api-python-client
+websocket-client
