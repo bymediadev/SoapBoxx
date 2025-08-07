@@ -77,15 +77,34 @@ class EpisodeAnalysisThread(QThread):
 
             self.progress_updated.emit(20)
 
+            # Check file size again in case it was modified
+            file_size = os.path.getsize(self.file_path) / (1024 * 1024)  # MB
+            if file_size > 25:
+                self.error_occurred.emit(f"File size ({file_size:.1f}MB) exceeds OpenAI's 25MB limit. Please compress the audio or use a smaller file.")
+                return
+
             # Transcribe audio
-            with open(self.file_path, "rb") as f:
-                audio_data = f.read()
+            try:
+                with open(self.file_path, "rb") as f:
+                    audio_data = f.read()
+            except Exception as e:
+                self.error_occurred.emit(f"Failed to read audio file: {e}")
+                return
 
             self.progress_updated.emit(40)
 
+            # Check if audio data is too large
+            if len(audio_data) > 25 * 1024 * 1024:  # 25MB in bytes
+                self.error_occurred.emit(f"Audio file is too large ({len(audio_data) / (1024*1024):.1f}MB). OpenAI's limit is 25MB. Please compress the audio.")
+                return
+
             transcript = transcriber.transcribe(audio_data)
             if not transcript or transcript.startswith("Error"):
-                self.error_occurred.emit(f"Transcription failed: {transcript}")
+                # Check for specific OpenAI errors
+                if "413" in str(transcript) or "Maximum content size limit" in str(transcript):
+                    self.error_occurred.emit(f"File too large for OpenAI API. Please compress the audio to under 25MB or split it into smaller segments.")
+                else:
+                    self.error_occurred.emit(f"Transcription failed: {transcript}")
                 return
 
             self.progress_updated.emit(60)
@@ -144,6 +163,11 @@ class ReverbTab(QWidget):
         # Past Episodes Upload Section
         upload_group = QGroupBox("📁 Past Episodes Upload")
         upload_layout = QVBoxLayout()
+
+        # File size info
+        size_info = QLabel("💡 Note: OpenAI API has a 25MB file size limit. Larger files will need to be compressed.")
+        size_info.setStyleSheet("color: #666; font-size: 11px; margin: 5px;")
+        upload_layout.addWidget(size_info)
 
         # File selection
         file_layout = QHBoxLayout()
@@ -421,15 +445,24 @@ class ReverbTab(QWidget):
             )
 
             # Add transcript preview
-            transcript_preview = (
-                results["transcript"][:500] + "..."
-                if len(results["transcript"]) > 500
-                else results["transcript"]
-            )
-            output += f"📝 Transcript Preview:\n{transcript_preview}\n\n"
+            transcript = results.get("transcript", "")
+            if transcript and not transcript.startswith("Error"):
+                transcript_preview = (
+                    transcript[:500] + "..."
+                    if len(transcript) > 500
+                    else transcript
+                )
+                output += f"📝 Transcript Preview:\n{transcript_preview}\n\n"
+            else:
+                output += f"📝 Transcript Preview:\n❌ Transcription failed: {transcript}\n\n"
+                output += f"💡 Suggestions:\n"
+                output += f"• Check if the audio file is corrupted\n"
+                output += f"• Ensure the file is under 25MB for OpenAI API\n"
+                output += f"• Try converting to a different audio format\n"
+                output += f"• Check if the audio contains speech\n\n"
 
             # Add analysis results
-            analysis = results["analysis"]
+            analysis = results.get("analysis", {})
             if isinstance(analysis, dict):
                 if "listener_feedback" in analysis:
                     output += (
@@ -454,6 +487,8 @@ class ReverbTab(QWidget):
 
         except Exception as e:
             self.results_text.setText(f"Error displaying results: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def content_analysis(self):
         """Analyze podcast content for quality and engagement"""
