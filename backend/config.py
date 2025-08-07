@@ -135,19 +135,19 @@ class Config:
         """Set OpenAI API key"""
         self.config["openai_api_key"] = api_key
         self._save_config(self.config)
-        
+
     def setup_api_key_interactive(self):
         """Interactive setup for OpenAI API key"""
         current_key = self.get_openai_api_key()
         if current_key:
             print(f"✅ OpenAI API key already configured: {current_key[:8]}...")
             return True
-            
+
         print("🔑 OpenAI API Key Setup")
         print("You need an OpenAI API key for transcription and AI features.")
         print("Get one at: https://platform.openai.com/api-keys")
         print()
-        
+
         api_key = input("Enter your OpenAI API key (or press Enter to skip): ").strip()
         if api_key:
             self.set_openai_api_key(api_key)
@@ -156,101 +156,101 @@ class Config:
         else:
             print("⚠️  No API key provided. Some features will be limited.")
             return False
-    
+
     def setup_environment_variables(self):
         """Interactive setup for environment variables"""
         print("🔧 Environment Variables Setup")
         print("This will help you configure API keys for Scoop and Reverb tabs.")
         print()
-        
+
         # Check if .env file exists
         env_file = Path(".env")
         env_vars = {}
-        
+
         if env_file.exists():
             print("📄 Found existing .env file")
             # Read existing variables
-            with open(env_file, 'r') as f:
+            with open(env_file, "r") as f:
                 for line in f:
                     line = line.strip()
-                    if line and not line.startswith('#') and '=' in line:
-                        key, value = line.split('=', 1)
+                    if line and not line.startswith("#") and "=" in line:
+                        key, value = line.split("=", 1)
                         env_vars[key] = value
-        
+
         # Define all possible API keys
         api_keys = {
             "OPENAI_API_KEY": {
                 "description": "OpenAI API Key (for transcription and AI features)",
                 "url": "https://platform.openai.com/api-keys",
-                "required": True
+                "required": True,
             },
             "GOOGLE_CSE_ID": {
                 "description": "Google Custom Search Engine ID (for web search)",
                 "url": "https://programmablesearchengine.google.com/",
-                "required": False
+                "required": False,
             },
             "GOOGLE_API_KEY": {
                 "description": "Google API Key (for Google Custom Search API)",
                 "url": "https://console.cloud.google.com/",
-                "required": False
+                "required": False,
             },
             "NEWS_API_KEY": {
                 "description": "News API Key (for news integration in Scoop tab)",
                 "url": "https://newsapi.org/",
-                "required": False
+                "required": False,
             },
             "TWITTER_API_KEY": {
                 "description": "Twitter API Key (for social media trends)",
                 "url": "https://developer.twitter.com/",
-                "required": False
+                "required": False,
             },
             "SPOTIFY_CLIENT_ID": {
                 "description": "Spotify Client ID (for music integration - background music, royalty-free tracks)",
                 "url": "https://developer.spotify.com/",
-                "required": False
+                "required": False,
             },
             "YOUTUBE_API_KEY": {
                 "description": "YouTube API Key (for video content integration)",
                 "url": "https://console.cloud.google.com/",
-                "required": False
+                "required": False,
             },
             "AZURE_SPEECH_KEY": {
                 "description": "Azure Speech Key (for speech recognition)",
                 "url": "https://azure.microsoft.com/services/cognitive-services/speech-services/",
-                "required": False
+                "required": False,
             },
             "ELEVENLABS_API_KEY": {
                 "description": "ElevenLabs API Key (for text-to-speech)",
                 "url": "https://elevenlabs.io/",
-                "required": False
+                "required": False,
             },
             "ASSEMBLYAI_API_KEY": {
                 "description": "AssemblyAI API Key (for audio analysis)",
                 "url": "https://www.assemblyai.com/",
-                "required": False
+                "required": False,
             },
             "PODCHASER_API_KEY": {
                 "description": "Podchaser API Key (for podcast database and analytics)",
                 "url": "https://www.podchaser.com/developers",
-                "required": False
+                "required": False,
             },
             "LISTEN_NOTES_API_KEY": {
                 "description": "Listen Notes API Key (for podcast search and discovery)",
                 "url": "https://www.listennotes.com/api/",
-                "required": False
+                "required": False,
             },
             "APPLE_PODCASTS_API_KEY": {
                 "description": "Apple Podcasts API Key (for podcast directory - limited access)",
                 "url": "https://developer.apple.com/",
-                "required": False
+                "required": False,
             },
             "GOOGLE_PODCASTS_API_KEY": {
                 "description": "Google Podcasts API Key (for podcast discovery - limited access)",
                 "url": "https://console.cloud.google.com/",
-                "required": False
-            }
+                "required": False,
+            },
         }
-        
+
         print("Available API keys to configure:")
         for i, (key, info) in enumerate(api_keys.items(), 1):
             status = "✅" if env_vars.get(key) else "❌"
@@ -259,9 +259,11 @@ class Config:
             print(f"    {info['description']}")
             print(f"    Get it at: {info['url']}")
             print()
-        
-        print("Enter the number of the API key you want to configure (or press Enter to skip):")
-        
+
+        print(
+            "Enter the number of the API key you want to configure (or press Enter to skip):"
+        )
+
         try:
             choice = input("Choice: ").strip()
             if choice and choice.isdigit():
@@ -269,19 +271,19 @@ class Config:
                 if 0 <= choice_idx < len(api_keys):
                     key_name = list(api_keys.keys())[choice_idx]
                     key_info = api_keys[key_name]
-                    
+
                     current_value = env_vars.get(key_name, "")
                     if current_value:
                         print(f"Current value: {current_value[:8]}...")
                         update = input("Update this key? (y/N): ").strip().lower()
-                        if update != 'y':
+                        if update != "y":
                             return True
-                    
+
                     print(f"\n🔑 {key_name} Setup")
                     print(f"Description: {key_info['description']}")
                     print(f"Get it at: {key_info['url']}")
                     print()
-                    
+
                     new_value = input(f"Enter your {key_name}: ").strip()
                     if new_value:
                         env_vars[key_name] = new_value
@@ -295,19 +297,19 @@ class Config:
         except KeyboardInterrupt:
             print("\n⏭️  Setup cancelled.")
             return False
-        
+
         # Save to .env file
         try:
-            with open(env_file, 'w') as f:
+            with open(env_file, "w") as f:
                 f.write("# SoapBoxx Environment Variables\n")
                 f.write("# Generated by setup_environment_variables()\n\n")
-                
+
                 for key, value in env_vars.items():
                     f.write(f"{key}={value}\n")
-            
+
             print(f"\n✅ Environment variables saved to {env_file}")
             return True
-            
+
         except Exception as e:
             print(f"❌ Error saving environment variables: {e}")
             return False

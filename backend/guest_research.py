@@ -4,6 +4,7 @@ import os
 import time
 from typing import Dict, List, Optional
 from urllib.parse import quote, urlparse
+from datetime import datetime
 
 import requests
 from error_tracker import ErrorCategory, ErrorSeverity, track_api_error
@@ -12,6 +13,7 @@ from error_tracker import ErrorCategory, ErrorSeverity, track_api_error
 try:
     import openai
     from openai import OpenAI
+
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
@@ -27,7 +29,7 @@ class GuestResearch:
         self.google_cse_id = (
             google_cse_id or os.getenv("GOOGLE_CSE_ID") or "0628a50c1bb4e4976"
         )  # Default CSE ID
-        
+
         if self.api_key and OPENAI_AVAILABLE:
             try:
                 # Try new OpenAI client first
@@ -48,7 +50,7 @@ class GuestResearch:
             )
         else:
             print("Warning: No Google CSE ID provided. Web search will be limited.")
-            
+
         if not self.google_api_key:
             print("Warning: No Google API key provided. Web search will be limited.")
 
@@ -131,29 +133,285 @@ class GuestResearch:
             )
             return self._get_fallback_research(guest_name, website)
 
-    def _search_web(self, guest_name: str, website: str = None) -> List[Dict]:
-        """Search the web for information about the guest using Google CSE"""
+    def search_business(self, company_name: str, search_type: str = "company") -> Dict:
+        """
+        Search for business and company information including LinkedIn profiles
+        
+        Args:
+            company_name: Name of the company or business
+            search_type: Type of search - "company", "linkedin", "executive", "news"
+            
+        Returns:
+            Dictionary containing business search results
+        """
+        if not company_name or not company_name.strip():
+            return {
+                "error": "Company name is required",
+                "results": [],
+                "summary": "",
+            }
+
+        try:
+            results = {
+                "company_name": company_name,
+                "search_type": search_type,
+                "timestamp": datetime.now().isoformat(),
+                "results": [],
+                "summary": "",
+                "linkedin_profiles": [],
+                "company_info": {},
+                "news": [],
+                "social_media": []
+            }
+
+            # Perform different types of searches based on search_type
+            if search_type == "company" or search_type == "all":
+                # Company website and general info
+                company_results = self._search_company_info(company_name)
+                results["company_info"] = company_results
+                results["results"].extend(company_results.get("web_results", []))
+
+            if search_type == "linkedin" or search_type == "all":
+                # LinkedIn profiles and company page
+                linkedin_results = self._search_linkedin(company_name)
+                results["linkedin_profiles"] = linkedin_results
+                results["results"].extend(linkedin_results)
+
+            if search_type == "executive" or search_type == "all":
+                # Executive profiles and leadership
+                executive_results = self._search_executives(company_name)
+                results["results"].extend(executive_results)
+
+            if search_type == "news" or search_type == "all":
+                # Recent news and press releases
+                news_results = self._search_company_news(company_name)
+                results["news"] = news_results
+                results["results"].extend(news_results)
+
+            # Generate summary using AI if available
+            if self.api_key and OPENAI_AVAILABLE:
+                summary = self._generate_business_summary(company_name, results)
+                results["summary"] = summary
+
+            return results
+
+        except Exception as e:
+            print(f"Business search error: {e}")
+            track_api_error(
+                f"Business search error: {e}", component="guest_research", exception=e
+            )
+            return {
+                "error": f"Business search failed: {str(e)}",
+                "company_name": company_name,
+                "results": []
+            }
+
+    def _search_company_info(self, company_name: str) -> Dict:
+        """Search for general company information"""
+        try:
+            # Build search queries for company info
+            queries = [
+                f'"{company_name}" company',
+                f'"{company_name}" about us',
+                f'"{company_name}" official website',
+                f'"{company_name}" headquarters location'
+            ]
+            
+            all_results = []
+            for query in queries:
+                results = self._search_web(query)
+                all_results.extend(results)
+            
+            # Remove duplicates based on URL
+            seen_urls = set()
+            unique_results = []
+            for result in all_results:
+                if result.get("link") not in seen_urls:
+                    seen_urls.add(result.get("link"))
+                    unique_results.append(result)
+            
+            return {
+                "web_results": unique_results[:10],  # Limit to top 10 results
+                "company_name": company_name,
+                "search_queries": queries
+            }
+            
+        except Exception as e:
+            print(f"Company info search error: {e}")
+            return {"web_results": [], "error": str(e)}
+
+    def _search_linkedin(self, company_name: str) -> List[Dict]:
+        """Search for LinkedIn profiles and company pages"""
+        try:
+            # Build LinkedIn-specific search queries
+            linkedin_queries = [
+                f'"{company_name}" site:linkedin.com',
+                f'"{company_name}" CEO site:linkedin.com',
+                f'"{company_name}" founder site:linkedin.com',
+                f'"{company_name}" executive site:linkedin.com'
+            ]
+            
+            linkedin_results = []
+            for query in linkedin_queries:
+                results = self._search_web(query)
+                for result in results:
+                    if "linkedin.com" in result.get("link", ""):
+                        result["type"] = "linkedin_profile"
+                        linkedin_results.append(result)
+            
+            return linkedin_results[:15]  # Limit to top 15 LinkedIn results
+            
+        except Exception as e:
+            print(f"LinkedIn search error: {e}")
+            return []
+
+    def _search_executives(self, company_name: str) -> List[Dict]:
+        """Search for executive profiles and leadership information"""
+        try:
+            # Build executive search queries
+            executive_queries = [
+                f'"{company_name}" CEO president founder',
+                f'"{company_name}" executive team leadership',
+                f'"{company_name}" board of directors',
+                f'"{company_name}" management team'
+            ]
+            
+            executive_results = []
+            for query in executive_queries:
+                results = self._search_web(query)
+                for result in results:
+                    result["type"] = "executive_info"
+                    executive_results.append(result)
+            
+            return executive_results[:10]  # Limit to top 10 executive results
+            
+        except Exception as e:
+            print(f"Executive search error: {e}")
+            return []
+
+    def _search_company_news(self, company_name: str) -> List[Dict]:
+        """Search for recent company news and press releases"""
+        try:
+            # Build news search queries
+            news_queries = [
+                f'"{company_name}" news 2024',
+                f'"{company_name}" press release',
+                f'"{company_name}" announcement',
+                f'"{company_name}" recent developments'
+            ]
+            
+            news_results = []
+            for query in news_queries:
+                results = self._search_web(query)
+                for result in results:
+                    result["type"] = "news"
+                    news_results.append(result)
+            
+            return news_results[:10]  # Limit to top 10 news results
+            
+        except Exception as e:
+            print(f"Company news search error: {e}")
+            return []
+
+    def _generate_business_summary(self, company_name: str, search_results: Dict) -> str:
+        """Generate an AI-powered summary of business search results"""
+        try:
+            # Prepare context for AI summary
+            context_parts = [f"Company: {company_name}"]
+            
+            if search_results.get("company_info", {}).get("web_results"):
+                context_parts.append("Company Information:")
+                for result in search_results["company_info"]["web_results"][:3]:
+                    context_parts.append(f"- {result.get('title', 'N/A')}: {result.get('snippet', 'N/A')}")
+            
+            if search_results.get("linkedin_profiles"):
+                context_parts.append("LinkedIn Profiles:")
+                for profile in search_results["linkedin_profiles"][:3]:
+                    context_parts.append(f"- {profile.get('title', 'N/A')}: {profile.get('snippet', 'N/A')}")
+            
+            if search_results.get("news"):
+                context_parts.append("Recent News:")
+                for news in search_results["news"][:3]:
+                    context_parts.append(f"- {news.get('title', 'N/A')}: {news.get('snippet', 'N/A')}")
+            
+            context = "\n".join(context_parts)
+            
+            # Create summary prompt
+            summary_prompt = f"""
+Based on the following search results for {company_name}, provide a comprehensive business summary:
+
+{context}
+
+Please provide a summary that includes:
+1. Company overview and main business activities
+2. Key leadership and notable executives
+3. Recent news and developments
+4. Company size and industry positioning
+5. Notable achievements or challenges
+
+Format the response as a well-structured business summary.
+"""
+            
+            # Call OpenAI API
+            if self.use_new_api and self.client:
+                response = self.client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are an expert business analyst and researcher.",
+                        },
+                        {"role": "user", "content": summary_prompt},
+                    ],
+                    max_tokens=500,
+                    temperature=0.7,
+                )
+                summary = response.choices[0].message.content.strip()
+            else:
+                # Fallback to old API
+                response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are an expert business analyst and researcher.",
+                        },
+                        {"role": "user", "content": summary_prompt},
+                    ],
+                    max_tokens=500,
+                    temperature=0.7,
+                )
+                summary = response.choices[0].message.content.strip()
+            
+            return summary
+            
+        except Exception as e:
+            print(f"Business summary generation error: {e}")
+            return f"Summary generation failed: {str(e)}"
+
+    def _search_web(self, query: str, website: str = None) -> List[Dict]:
+        """Search the web for information using Google CSE"""
         if not self.google_cse_id or not self.google_api_key:
             print("Web search not available: Missing Google CSE ID or API key")
             return []
 
         try:
             # Build search query
-            search_terms = [guest_name]
+            search_terms = [query]
             if website:
                 domain = urlparse(website).netloc if website else ""
                 if domain:
                     search_terms.append(f"site:{domain}")
 
-            query = " ".join(search_terms)
-            encoded_query = quote(query)
+            final_query = " ".join(search_terms)
+            encoded_query = quote(final_query)
 
             # Google Custom Search API endpoint
             url = "https://www.googleapis.com/customsearch/v1"
             params = {
                 "key": self.google_api_key,
                 "cx": self.google_cse_id,
-                "q": query,
+                "q": final_query,
                 "num": 5,  # Limit to 5 results
             }
 
@@ -174,7 +432,7 @@ class GuestResearch:
                         }
                     )
 
-            print(f"✅ Found {len(results)} web results for {guest_name}")
+            print(f"✅ Found {len(results)} web results for query: {query}")
             return results
 
         except Exception as e:
@@ -335,6 +593,19 @@ Focus on creating engaging, relevant talking points and questions that would mak
     ) -> Dict:
         """Get comprehensive research with all available information"""
         return self.research(guest_name, website, additional_info)
+
+    def search_web(self, query: str, website: str = None) -> List[Dict]:
+        """
+        Public method to search the web for any query
+        
+        Args:
+            query: Search query
+            website: Optional website to restrict search to
+            
+        Returns:
+            List of search results
+        """
+        return self._search_web(query, website)
 
 
 # Example usage

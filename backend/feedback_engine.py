@@ -9,6 +9,7 @@ from error_tracker import ErrorCategory, ErrorSeverity, track_api_error
 try:
     import openai
     from openai import OpenAI
+
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False

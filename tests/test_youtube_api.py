@@ -11,53 +11,56 @@ from pathlib import Path
 # Load environment variables from .env file
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
-    print("Warning: python-dotenv not available. Make sure environment variables are set manually.")
+    print(
+        "Warning: python-dotenv not available. Make sure environment variables are set manually."
+    )
 
 # Add backend to path
 sys.path.insert(0, str(Path("backend")))
 
+
 def test_youtube_api():
     """Test YouTube API functionality"""
     print("🧪 Testing YouTube API integration...")
-    
+
     try:
         from googleapiclient.discovery import build
-        
+
         # Get API key from environment
         YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
-        
+
         if not YOUTUBE_API_KEY:
-            print("❌ YouTube API key not configured. Please set YOUTUBE_API_KEY in your .env file")
+            print(
+                "❌ YouTube API key not configured. Please set YOUTUBE_API_KEY in your .env file"
+            )
             return False
-        
+
         print("✅ YouTube API key found!")
-        
+
         # Build YouTube service
         youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
         print("✅ YouTube service built successfully!")
-        
+
         def search_youtube(query, max_results=5):
             """Search YouTube videos"""
             try:
                 request = youtube.search().list(
-                    q=query,
-                    part="snippet",
-                    maxResults=max_results,
-                    type="video"
+                    q=query, part="snippet", maxResults=max_results, type="video"
                 )
                 response = request.execute()
                 return response["items"]
             except Exception as e:
                 print(f"❌ Search failed: {e}")
                 return []
-        
+
         # Test search
         print("\n🔍 Testing YouTube search...")
         query = "Joe Rogan Jordan Peterson podcast"
         videos = search_youtube(query, max_results=3)
-        
+
         if videos:
             print(f"✅ Found {len(videos)} videos for query: '{query}'")
             for i, video in enumerate(videos, 1):
@@ -70,7 +73,7 @@ def test_youtube_api():
                 print()
         else:
             print("❌ No videos found")
-        
+
         # Test trending videos
         print("📈 Testing YouTube trending videos...")
         try:
@@ -78,11 +81,11 @@ def test_youtube_api():
                 part="snippet,statistics",
                 chart="mostPopular",
                 regionCode="US",
-                maxResults=3
+                maxResults=3,
             )
             trending_response = trending_request.execute()
             trending_videos = trending_response["items"]
-            
+
             if trending_videos:
                 print(f"✅ Found {len(trending_videos)} trending videos")
                 for i, video in enumerate(trending_videos, 1):
@@ -94,20 +97,23 @@ def test_youtube_api():
                     print()
             else:
                 print("❌ No trending videos found")
-                
+
         except Exception as e:
             print(f"❌ Trending videos test failed: {e}")
-        
+
         print("🎉 YouTube API tests completed!")
         return True
-        
+
     except ImportError:
-        print("❌ Google API client not available. Please install with: pip install google-api-python-client")
+        print(
+            "❌ Google API client not available. Please install with: pip install google-api-python-client"
+        )
         return False
     except Exception as e:
         print(f"❌ Test failed with error: {e}")
         return False
 
+
 if __name__ == "__main__":
     success = test_youtube_api()
-    sys.exit(0 if success else 1) 
+    sys.exit(0 if success else 1)

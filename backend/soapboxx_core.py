@@ -33,7 +33,9 @@ class SoapBoxxCore:
     Main integration class that coordinates all backend components
     """
 
-    def __init__(self, api_key: Optional[str] = None, transcription_service: str = "openai"):
+    def __init__(
+        self, api_key: Optional[str] = None, transcription_service: str = "openai"
+    ):
         # Initialize all components
         self.logger = Logger()
         self.audio_recorder = AudioRecorder()
@@ -59,7 +61,9 @@ class SoapBoxxCore:
         self.feedback_callback: Optional[Callable] = None
         self.error_callback: Optional[Callable] = None
 
-        self.logger.logger.info(f"SoapBoxxCore initialized with transcription service: {transcription_service}")
+        self.logger.logger.info(
+            f"SoapBoxxCore initialized with transcription service: {transcription_service}"
+        )
 
     def start_recording(self, session_name: str = None) -> bool:
         """
@@ -373,7 +377,7 @@ class SoapBoxxCore:
         """Change the transcription service dynamically"""
         try:
             self.transcription_service = service
-            
+
             # Get appropriate API key for the service
             api_key = None
             if service == "openai":
@@ -382,12 +386,14 @@ class SoapBoxxCore:
                 api_key = os.getenv("ASSEMBLYAI_API_KEY")
             elif service == "azure":
                 api_key = os.getenv("AZURE_SPEECH_KEY")
-            
+
             # Create new transcriber with the appropriate service and API key
             self.transcriber = Transcriber(service=service, api_key=api_key)
             self.logger.logger.info(f"Transcription service changed to: {service}")
         except Exception as e:
-            self.logger.log_error(f"Failed to change transcription service to {service}: {e}")
+            self.logger.log_error(
+                f"Failed to change transcription service to {service}: {e}"
+            )
             raise e
 
 

@@ -13,6 +13,7 @@ from pydub import AudioSegment
 # Try to import OpenAI - handle version compatibility
 try:
     import openai
+
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
@@ -21,19 +22,24 @@ except ImportError:
 # Try to import Whisper for local transcription
 try:
     import whisper
+
     WHISPER_AVAILABLE = True
 except ImportError:
     WHISPER_AVAILABLE = False
-    print("Warning: Whisper package not available. Install with: pip install openai-whisper")
+    print(
+        "Warning: Whisper package not available. Install with: pip install openai-whisper"
+    )
 
 
 class Transcriber:
-    def __init__(self, model="whisper-1", api_key: Optional[str] = None, service="openai"):
+    def __init__(
+        self, model="whisper-1", api_key: Optional[str] = None, service="openai"
+    ):
         self.model = model
         self.service = service.lower()
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.local_model = None
-        
+
         # Initialize based on service
         if self.service == "openai" and OPENAI_AVAILABLE:
             if self.api_key:
@@ -61,7 +67,9 @@ class Transcriber:
                     print(f"Warning: Failed to load local Whisper model: {e}")
                     self.local_model = None
             else:
-                print("Warning: Whisper not available. Install with: pip install openai-whisper")
+                print(
+                    "Warning: Whisper not available. Install with: pip install openai-whisper"
+                )
         else:
             print(f"Warning: Unknown transcription service: {service}")
 
@@ -140,29 +148,28 @@ class Transcriber:
 
         try:
             # Use OpenAI API with version compatibility
-            if hasattr(openai, 'Audio') and hasattr(openai.Audio, 'transcribe'):
+            if hasattr(openai, "Audio") and hasattr(openai.Audio, "transcribe"):
                 # New OpenAI API (v1.0.0+)
                 try:
                     from openai import OpenAI
+
                     client = OpenAI(api_key=self.api_key)
                     response = client.audio.transcriptions.create(
                         model=self.model,
                         file=io.BytesIO(audio_data),
-                        response_format="text"
+                        response_format="text",
                     )
                     return response.strip()
                 except ImportError:
                     # Fallback to old API
                     response = openai.Audio.transcribe(
-                        model=self.model, 
-                        file=io.BytesIO(audio_data)
+                        model=self.model, file=io.BytesIO(audio_data)
                     )
                     return response.get("text", "").strip()
             else:
                 # Legacy OpenAI API
                 response = openai.Audio.transcribe(
-                    model=self.model, 
-                    file=io.BytesIO(audio_data)
+                    model=self.model, file=io.BytesIO(audio_data)
                 )
                 return response.get("text", "").strip()
         except Exception as e:
@@ -177,40 +184,45 @@ class Transcriber:
             # Upload audio to AssemblyAI
             upload_url = "https://api.assemblyai.com/v2/upload"
             headers = {"authorization": self.api_key}
-            
+
             response = requests.post(upload_url, headers=headers, data=audio_data)
             upload_url_response = response.json()
-            
+
             if response.status_code != 200:
                 return f"AssemblyAI upload failed: {upload_url_response}"
-            
+
             # Transcribe the uploaded audio
             transcript_url = "https://api.assemblyai.com/v2/transcript"
             transcript_request = {
                 "audio_url": upload_url_response["upload_url"],
-                "language_code": "en"
+                "language_code": "en",
             }
-            
-            response = requests.post(transcript_url, json=transcript_request, headers=headers)
+
+            response = requests.post(
+                transcript_url, json=transcript_request, headers=headers
+            )
             transcript_response = response.json()
-            
+
             if response.status_code != 200:
                 return f"AssemblyAI transcription failed: {transcript_response}"
-            
+
             # Poll for completion
-            polling_url = f"https://api.assemblyai.com/v2/transcript/{transcript_response['id']}"
+            polling_url = (
+                f"https://api.assemblyai.com/v2/transcript/{transcript_response['id']}"
+            )
             while True:
                 polling_response = requests.get(polling_url, headers=headers)
                 polling_response = polling_response.json()
-                
+
                 if polling_response["status"] == "completed":
                     return polling_response["text"]
                 elif polling_response["status"] == "error":
                     return f"AssemblyAI transcription error: {polling_response}"
-                
+
                 import time
+
                 time.sleep(3)
-                
+
         except Exception as e:
             return f"AssemblyAI transcription failed: {str(e)}"
 
@@ -229,17 +241,19 @@ class Transcriber:
     def _transcribe_local(self, audio_data: bytes) -> str:
         """Transcribe using local Whisper model"""
         if not WHISPER_AVAILABLE:
-            return "Error: Whisper not available. Install with: pip install openai-whisper"
-        
+            return (
+                "Error: Whisper not available. Install with: pip install openai-whisper"
+            )
+
         if not self.local_model:
             return "Error: Local Whisper model not loaded"
-        
+
         try:
             # Save audio data to temporary file
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
                 temp_file.write(audio_data)
                 temp_path = temp_file.name
-            
+
             try:
                 # Transcribe using local Whisper model
                 result = self.local_model.transcribe(temp_path)
@@ -251,18 +265,18 @@ class Transcriber:
                     audio = AudioSegment.from_file(temp_path)
                     # Ensure mono channel and 16kHz sample rate
                     audio = audio.set_channels(1).set_frame_rate(16000)
-                    
+
                     # Export as WAV
                     converted_path = temp_path + "_converted.wav"
                     audio.export(converted_path, format="wav")
-                    
+
                     # Transcribe the converted audio
                     result = self.local_model.transcribe(converted_path)
-                    
+
                     # Clean up converted file
                     if os.path.exists(converted_path):
                         os.unlink(converted_path)
-                    
+
                     return result.get("text", "").strip()
                 except Exception as conv_e:
                     return f"Local Whisper transcription failed: {str(e)} (conversion failed: {str(conv_e)})"
@@ -270,52 +284,54 @@ class Transcriber:
                 # Clean up temporary file
                 if os.path.exists(temp_path):
                     os.unlink(temp_path)
-                    
+
         except Exception as e:
             return f"Local Whisper transcription failed: {str(e)}"
 
     def get_available_services(self) -> list:
         """Get list of available transcription services"""
         services = []
-        
+
         if OPENAI_AVAILABLE:
             services.append("openai")
-        
+
         if os.getenv("ASSEMBLYAI_API_KEY"):
             services.append("assemblyai")
-            
+
         if os.getenv("AZURE_SPEECH_KEY"):
             services.append("azure")
-            
+
         if WHISPER_AVAILABLE:
             services.append("local")
-        
+
         return services
 
     def get_local_model_info(self) -> dict:
         """Get information about the loaded local model"""
         if not WHISPER_AVAILABLE:
             return {"available": False, "error": "Whisper not installed"}
-        
+
         if not self.local_model:
             return {"available": False, "error": "No model loaded"}
-        
+
         try:
             # Get model information
             model_info = {
                 "available": True,
                 "model_name": "whisper",
                 "model_size": "base",  # Default size
-                "device": "cpu"  # Default device
+                "device": "cpu",  # Default device
             }
-            
+
             # Try to get actual model information
-            if hasattr(self.local_model, 'model'):
-                model_info["model_size"] = getattr(self.local_model.model, 'model_size', 'base')
-            
-            if hasattr(self.local_model, 'device'):
+            if hasattr(self.local_model, "model"):
+                model_info["model_size"] = getattr(
+                    self.local_model.model, "model_size", "base"
+                )
+
+            if hasattr(self.local_model, "device"):
                 model_info["device"] = str(self.local_model.device)
-            
+
             return model_info
         except Exception as e:
             return {"available": False, "error": str(e)}
