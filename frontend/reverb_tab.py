@@ -5,9 +5,16 @@ Provides AI-powered feedback and coaching for podcast creators
 """
 
 import os
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
+
+# Add backend to path - handle separate frontend/backend folder structure
+current_dir = os.path.dirname(os.path.abspath(__file__))  # frontend/
+parent_dir = os.path.dirname(current_dir)  # root/
+backend_dir = os.path.join(parent_dir, "backend")  # root/backend/
+sys.path.insert(0, backend_dir)
 
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (QButtonGroup, QComboBox, QFileDialog, QGridLayout,
@@ -34,18 +41,43 @@ class EpisodeAnalysisThread(QThread):
         try:
             self.progress_updated.emit(10)
 
-            # Import analysis modules
-            import sys
+            # Import analysis modules with robust error handling
+            feedback_engine = None
+            transcriber = None
+            
+            # Try multiple import paths
+            try:
+                from feedback_engine import FeedbackEngine
+                from transcriber import Transcriber
+                feedback_engine = FeedbackEngine()
+                transcriber = Transcriber(service="openai")
+            except ImportError:
+                try:
+                    # Try with backend path
+                    sys.path.insert(0, backend_dir)
+                    from feedback_engine import FeedbackEngine
+                    from transcriber import Transcriber
+                    feedback_engine = FeedbackEngine()
+                    transcriber = Transcriber(service="openai")
+                except ImportError:
+                    try:
+                        # Try with relative path
+                        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+                        from feedback_engine import FeedbackEngine
+                        from transcriber import Transcriber
+                        feedback_engine = FeedbackEngine()
+                        transcriber = Transcriber(service="openai")
+                    except ImportError as e:
+                        self.error_occurred.emit(f"Failed to import backend modules: {e}")
+                        return
 
-            sys.path.append(os.path.join(os.path.dirname(__file__), "..", "backend"))
-
-            from feedback_engine import FeedbackEngine
-            from transcriber import Transcriber
+            if feedback_engine is None or transcriber is None:
+                self.error_occurred.emit("Failed to initialize backend modules")
+                return
 
             self.progress_updated.emit(20)
 
             # Transcribe audio
-            transcriber = Transcriber(service="openai")
             with open(self.file_path, "rb") as f:
                 audio_data = f.read()
 
@@ -59,7 +91,6 @@ class EpisodeAnalysisThread(QThread):
             self.progress_updated.emit(60)
 
             # Analyze content
-            feedback_engine = FeedbackEngine()
             analysis = feedback_engine.analyze(transcript=transcript)
 
             self.progress_updated.emit(80)
@@ -81,6 +112,8 @@ class EpisodeAnalysisThread(QThread):
 
         except Exception as e:
             self.error_occurred.emit(f"Analysis failed: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
 
 class ReverbTab(QWidget):
@@ -421,13 +454,31 @@ class ReverbTab(QWidget):
     def content_analysis(self):
         """Analyze podcast content for quality and engagement"""
         try:
-            # Import backend components
-            import sys
+            # Import backend components with robust error handling
+            feedback_engine = None
+            
+            try:
+                from feedback_engine import FeedbackEngine
+                feedback_engine = FeedbackEngine()
+            except ImportError:
+                try:
+                    # Try with backend path
+                    sys.path.insert(0, backend_dir)
+                    from feedback_engine import FeedbackEngine
+                    feedback_engine = FeedbackEngine()
+                except ImportError:
+                    try:
+                        # Try with relative path
+                        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+                        from feedback_engine import FeedbackEngine
+                        feedback_engine = FeedbackEngine()
+                    except ImportError as e:
+                        self.results_text.setText(f"❌ Error: Could not import FeedbackEngine module. Please check backend installation. Error: {e}")
+                        return
 
-            sys.path.insert(0, str(Path("backend")))
-            from feedback_engine import FeedbackEngine
-
-            feedback_engine = FeedbackEngine()
+            if feedback_engine is None:
+                self.results_text.setText("❌ Error: Could not import FeedbackEngine module. Please check backend installation.")
+                return
 
             # This would analyze the current transcript or uploaded content
             self.results_text.setText(
@@ -436,17 +487,37 @@ class ReverbTab(QWidget):
 
         except Exception as e:
             self.results_text.setText(f"❌ Error in content analysis: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def video_content_analysis(self):
         """Analyze video podcast content using YouTube API"""
         try:
-            # Import YouTube API components
-            import sys
+            # Import YouTube API components with robust error handling
+            google_apis = None
+            
+            try:
+                from google_apis import GoogleAPIs
+                google_apis = GoogleAPIs()
+            except ImportError:
+                try:
+                    # Try with backend path
+                    sys.path.insert(0, backend_dir)
+                    from google_apis import GoogleAPIs
+                    google_apis = GoogleAPIs()
+                except ImportError:
+                    try:
+                        # Try with relative path
+                        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+                        from google_apis import GoogleAPIs
+                        google_apis = GoogleAPIs()
+                    except ImportError as e:
+                        self.results_text.setText(f"❌ Error: Could not import GoogleAPIs module. Please check backend installation. Error: {e}")
+                        return
 
-            sys.path.insert(0, str(Path("backend")))
-            from google_apis import GoogleAPIs
-
-            google_apis = GoogleAPIs()
+            if google_apis is None:
+                self.results_text.setText("❌ Error: Could not import GoogleAPIs module. Please check backend installation.")
+                return
 
             if not google_apis.is_available():
                 self.results_text.setText(
@@ -507,17 +578,37 @@ class ReverbTab(QWidget):
 
         except Exception as e:
             self.results_text.setText(f"❌ Error in video content analysis: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def video_podcast_research(self):
         """Research video podcast trends and content"""
         try:
-            # Import YouTube API components
-            import sys
+            # Import YouTube API components with robust error handling
+            google_apis = None
+            
+            try:
+                from google_apis import GoogleAPIs
+                google_apis = GoogleAPIs()
+            except ImportError:
+                try:
+                    # Try with backend path
+                    sys.path.insert(0, backend_dir)
+                    from google_apis import GoogleAPIs
+                    google_apis = GoogleAPIs()
+                except ImportError:
+                    try:
+                        # Try with relative path
+                        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+                        from google_apis import GoogleAPIs
+                        google_apis = GoogleAPIs()
+                    except ImportError as e:
+                        self.results_text.setText(f"❌ Error: Could not import GoogleAPIs module. Please check backend installation. Error: {e}")
+                        return
 
-            sys.path.insert(0, str(Path("backend")))
-            from google_apis import GoogleAPIs
-
-            google_apis = GoogleAPIs()
+            if google_apis is None:
+                self.results_text.setText("❌ Error: Could not import GoogleAPIs module. Please check backend installation.")
+                return
 
             if not google_apis.is_available():
                 self.results_text.setText(
@@ -580,6 +671,8 @@ class ReverbTab(QWidget):
 
         except Exception as e:
             self.results_text.setText(f"❌ Error in video podcast research: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def performance_coaching(self):
         """Provide performance coaching for podcast hosts"""
@@ -624,13 +717,32 @@ class ReverbTab(QWidget):
     def podcast_analytics(self):
         """Analyze podcast performance and trends"""
         try:
-            # Import podcast APIs
-            import sys
+            # Import podcast APIs with robust error handling
+            podcast_apis = None
+            
+            try:
+                from podcast_apis import PodcastAPIs
+                podcast_apis = PodcastAPIs()
+            except ImportError:
+                try:
+                    # Try with backend path
+                    sys.path.insert(0, backend_dir)
+                    from podcast_apis import PodcastAPIs
+                    podcast_apis = PodcastAPIs()
+                except ImportError:
+                    try:
+                        # Try with relative path
+                        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+                        from podcast_apis import PodcastAPIs
+                        podcast_apis = PodcastAPIs()
+                    except ImportError as e:
+                        self.results_text.setText(f"❌ Error: Could not import PodcastAPIs module. Please check backend installation. Error: {e}")
+                        return
 
-            sys.path.insert(0, str(Path("backend")))
-            from podcast_apis import PodcastAPIs
+            if podcast_apis is None:
+                self.results_text.setText("❌ Error: Could not import PodcastAPIs module. Please check backend installation.")
+                return
 
-            podcast_apis = PodcastAPIs()
             available_apis = podcast_apis.get_available_apis()
 
             if not any(available_apis.values()):
@@ -653,17 +765,37 @@ class ReverbTab(QWidget):
 
         except Exception as e:
             self.results_text.setText(f"❌ Error in podcast analytics: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def podchaser_analytics(self):
         """Get detailed analytics from Podchaser"""
         try:
-            # Import podcast APIs
-            import sys
+            # Import podcast APIs with robust error handling
+            podcast_apis = None
+            
+            try:
+                from podcast_apis import PodcastAPIs
+                podcast_apis = PodcastAPIs()
+            except ImportError:
+                try:
+                    # Try with backend path
+                    sys.path.insert(0, backend_dir)
+                    from podcast_apis import PodcastAPIs
+                    podcast_apis = PodcastAPIs()
+                except ImportError:
+                    try:
+                        # Try with relative path
+                        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+                        from podcast_apis import PodcastAPIs
+                        podcast_apis = PodcastAPIs()
+                    except ImportError as e:
+                        self.results_text.setText(f"❌ Error: Could not import PodcastAPIs module. Please check backend installation. Error: {e}")
+                        return
 
-            sys.path.insert(0, str(Path("backend")))
-            from podcast_apis import PodcastAPIs
-
-            podcast_apis = PodcastAPIs()
+            if podcast_apis is None:
+                self.results_text.setText("❌ Error: Could not import PodcastAPIs module. Please check backend installation.")
+                return
 
             if not podcast_apis.podchaser_key:
                 self.results_text.setText(
@@ -731,17 +863,37 @@ class ReverbTab(QWidget):
 
         except Exception as e:
             self.results_text.setText(f"❌ Error in Podchaser analytics: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def podchaser_trending(self):
         """Get trending podcasts from Podchaser"""
         try:
-            # Import podcast APIs
-            import sys
+            # Import podcast APIs with robust error handling
+            podcast_apis = None
+            
+            try:
+                from podcast_apis import PodcastAPIs
+                podcast_apis = PodcastAPIs()
+            except ImportError:
+                try:
+                    # Try with backend path
+                    sys.path.insert(0, backend_dir)
+                    from podcast_apis import PodcastAPIs
+                    podcast_apis = PodcastAPIs()
+                except ImportError:
+                    try:
+                        # Try with relative path
+                        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+                        from podcast_apis import PodcastAPIs
+                        podcast_apis = PodcastAPIs()
+                    except ImportError as e:
+                        self.results_text.setText(f"❌ Error: Could not import PodcastAPIs module. Please check backend installation. Error: {e}")
+                        return
 
-            sys.path.insert(0, str(Path("backend")))
-            from podcast_apis import PodcastAPIs
-
-            podcast_apis = PodcastAPIs()
+            if podcast_apis is None:
+                self.results_text.setText("❌ Error: Could not import PodcastAPIs module. Please check backend installation.")
+                return
 
             if not podcast_apis.podchaser_key:
                 self.results_text.setText(
@@ -799,3 +951,5 @@ class ReverbTab(QWidget):
 
         except Exception as e:
             self.results_text.setText(f"❌ Error in Podchaser trending: {str(e)}")
+            import traceback
+            traceback.print_exc()

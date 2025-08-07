@@ -6,9 +6,10 @@ import time
 import traceback
 from datetime import datetime
 
-# Add backend to path - use absolute path for better compatibility
-current_dir = os.path.dirname(os.path.abspath(__file__))
-backend_dir = os.path.join(os.path.dirname(current_dir), "backend")
+# Add backend to path - handle separate frontend/backend folder structure
+current_dir = os.path.dirname(os.path.abspath(__file__))  # frontend/
+parent_dir = os.path.dirname(current_dir)  # root/
+backend_dir = os.path.join(parent_dir, "backend")  # root/backend/
 sys.path.insert(0, backend_dir)
 
 from dotenv import load_dotenv
@@ -24,7 +25,6 @@ load_dotenv()
 # Try to import OBS WebSocket
 try:
     import websocket
-
     OBS_AVAILABLE = True
 except ImportError:
     OBS_AVAILABLE = False
@@ -36,7 +36,6 @@ try:
     from backend.config import Config
     from backend.soapboxx_core import SoapBoxxCore
     from backend.transcriber import Transcriber
-
     BACKEND_AVAILABLE = True
 except ImportError as e:
     print(f"Backend not available: {e}")
@@ -47,12 +46,21 @@ except ImportError as e:
         from config import Config
         from soapboxx_core import SoapBoxxCore
         from transcriber import Transcriber
-
         BACKEND_AVAILABLE = True
         print("✅ Backend imported using alternative method")
     except ImportError as e2:
         print(f"Alternative import also failed: {e2}")
-        BACKEND_AVAILABLE = False
+        # Try one more time with explicit path
+        try:
+            sys.path.insert(0, backend_dir)
+            from config import Config
+            from soapboxx_core import SoapBoxxCore
+            from transcriber import Transcriber
+            BACKEND_AVAILABLE = True
+            print("✅ Backend imported using explicit path method")
+        except ImportError as e3:
+            print(f"Explicit path import also failed: {e3}")
+            BACKEND_AVAILABLE = False
 
 
 class ModernCard(QFrame):

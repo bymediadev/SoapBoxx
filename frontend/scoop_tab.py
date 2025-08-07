@@ -3,8 +3,11 @@ import sys
 from datetime import datetime
 from typing import Dict, Optional
 
-# Add backend to path
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", "backend"))
+# Add backend to path - handle separate frontend/backend folder structure
+current_dir = os.path.dirname(os.path.abspath(__file__))  # frontend/
+parent_dir = os.path.dirname(current_dir)  # root/
+backend_dir = os.path.join(parent_dir, "backend")  # root/backend/
+sys.path.insert(0, backend_dir)
 
 from dotenv import load_dotenv
 from PyQt6.QtWidgets import (QComboBox, QGridLayout, QGroupBox, QHBoxLayout,
@@ -398,12 +401,32 @@ class ScoopTab(QWidget):
     def search_guest(self, guest_name: str):
         """Search for guest information"""
         try:
-            # Import guest research
-            import sys
-            from pathlib import Path
-
-            sys.path.insert(0, str(Path("backend")))
-            from guest_research import GuestResearch
+            # Import guest research with robust error handling
+            guest_research = None
+            
+            # Try multiple import paths for separate frontend/backend structure
+            try:
+                from guest_research import GuestResearch
+                guest_research = GuestResearch()
+            except ImportError:
+                try:
+                    # Try with backend path (already added to sys.path)
+                    from guest_research import GuestResearch
+                    guest_research = GuestResearch()
+                except ImportError:
+                    try:
+                        # Try with explicit backend path
+                        backend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend")
+                        sys.path.insert(0, backend_path)
+                        from guest_research import GuestResearch
+                        guest_research = GuestResearch()
+                    except ImportError as e:
+                        self.results_text.setText(f"❌ Error: Could not import GuestResearch module. Please check backend installation. Error: {e}")
+                        return
+            
+            if guest_research is None:
+                self.results_text.setText("❌ Error: Could not import GuestResearch module. Please check backend installation.")
+                return
 
             self.results_text.setText(
                 f"🔍 Researching guest: {guest_name}...\n\nThis may take a moment..."
@@ -415,9 +438,6 @@ class ScoopTab(QWidget):
                 if self.additional_info_input.isVisible()
                 else None
             )
-
-            # Initialize guest research
-            guest_research = GuestResearch()
 
             # Perform research
             research_results = guest_research.research(
@@ -506,23 +526,42 @@ class ScoopTab(QWidget):
         except Exception as e:
             self.results_text.setText(f"❌ Error researching guest: {str(e)}")
             print(f"Guest research error: {e}")
+            import traceback
+            traceback.print_exc()
 
     def search_topic(self, topic: str):
         """Search for topic information"""
         try:
-            # Import guest research for web search functionality
-            import sys
-            from pathlib import Path
-
-            sys.path.insert(0, str(Path("backend")))
-            from guest_research import GuestResearch
+            # Import guest research for web search functionality with robust error handling
+            guest_research = None
+            
+            # Try multiple import paths for separate frontend/backend structure
+            try:
+                from guest_research import GuestResearch
+                guest_research = GuestResearch()
+            except ImportError:
+                try:
+                    # Try with backend path (already added to sys.path)
+                    from guest_research import GuestResearch
+                    guest_research = GuestResearch()
+                except ImportError:
+                    try:
+                        # Try with explicit backend path
+                        backend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend")
+                        sys.path.insert(0, backend_path)
+                        from guest_research import GuestResearch
+                        guest_research = GuestResearch()
+                    except ImportError as e:
+                        self.results_text.setText(f"❌ Error: Could not import GuestResearch module. Please check backend installation. Error: {e}")
+                        return
+            
+            if guest_research is None:
+                self.results_text.setText("❌ Error: Could not import GuestResearch module. Please check backend installation.")
+                return
 
             self.results_text.setText(
                 f"🔍 Researching topic: {topic}...\n\nThis may take a moment..."
             )
-
-            # Initialize guest research for web search
-            guest_research = GuestResearch()
 
             # Use the public web search functionality from guest research
             web_results = guest_research.search_web(topic)
@@ -572,6 +611,8 @@ class ScoopTab(QWidget):
         except Exception as e:
             self.results_text.setText(f"❌ Error researching topic: {str(e)}")
             print(f"Topic research error: {e}")
+            import traceback
+            traceback.print_exc()
 
     def search_news(self, query: str):
         """Search for news articles"""
@@ -671,18 +712,36 @@ class ScoopTab(QWidget):
     def search_social_media(self, query: str):
         """Search for social media content"""
         try:
-            # Import social media scraper
-            import sys
-            from pathlib import Path
-
-            sys.path.insert(0, str(Path("backend")))
-            from social_media_scraper import SocialMediaScraper
+            # Import social media scraper with robust error handling
+            scraper = None
+            
+            # Try multiple import paths
+            try:
+                from social_media_scraper import SocialMediaScraper
+                scraper = SocialMediaScraper()
+            except ImportError:
+                try:
+                    # Try with backend path
+                    sys.path.insert(0, backend_dir)
+                    from social_media_scraper import SocialMediaScraper
+                    scraper = SocialMediaScraper()
+                except ImportError:
+                    try:
+                        # Try with relative path
+                        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+                        from social_media_scraper import SocialMediaScraper
+                        scraper = SocialMediaScraper()
+                    except ImportError as e:
+                        self.results_text.setText(f"❌ Error: Could not import SocialMediaScraper module. Please check backend installation. Error: {e}")
+                        return
+            
+            if scraper is None:
+                self.results_text.setText("❌ Error: Could not import SocialMediaScraper module. Please check backend installation.")
+                return
 
             self.results_text.setText(
                 f"🐦 Searching social media for: {query}...\n\nThis may take a moment..."
             )
-
-            scraper = SocialMediaScraper()
 
             if not scraper.is_available():
                 self.results_text.setText(
@@ -777,23 +836,42 @@ class ScoopTab(QWidget):
         except Exception as e:
             self.results_text.setText(f"❌ Error searching social media: {str(e)}")
             print(f"Social media search error: {e}")
+            import traceback
+            traceback.print_exc()
 
     def search_business(self, company_name: str, search_type: str = "all"):
         """Search for business and company information"""
         try:
-            # Import guest research
-            import sys
-            from pathlib import Path
-
-            sys.path.insert(0, str(Path("backend")))
-            from guest_research import GuestResearch
+            # Import guest research with robust error handling
+            guest_research = None
+            
+            # Try multiple import paths
+            try:
+                from guest_research import GuestResearch
+                guest_research = GuestResearch()
+            except ImportError:
+                try:
+                    # Try with backend path
+                    sys.path.insert(0, backend_dir)
+                    from guest_research import GuestResearch
+                    guest_research = GuestResearch()
+                except ImportError:
+                    try:
+                        # Try with relative path
+                        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+                        from guest_research import GuestResearch
+                        guest_research = GuestResearch()
+                    except ImportError as e:
+                        self.results_text.setText(f"❌ Error: Could not import GuestResearch module. Please check backend installation. Error: {e}")
+                        return
+            
+            if guest_research is None:
+                self.results_text.setText("❌ Error: Could not import GuestResearch module. Please check backend installation.")
+                return
 
             self.results_text.setText(
                 f"🔍 Searching for business information: {company_name}...\n\nThis may take a moment..."
             )
-
-            # Initialize guest research
-            guest_research = GuestResearch()
 
             # Perform business search
             search_results = guest_research.search_business(company_name, search_type)
@@ -882,6 +960,8 @@ class ScoopTab(QWidget):
         except Exception as e:
             self.results_text.setText(f"❌ Error searching business: {str(e)}")
             print(f"Business search error: {e}")
+            import traceback
+            traceback.print_exc()
 
     def get_api_keys(self) -> Dict[str, str]:
         """Get all relevant API keys from environment variables"""
