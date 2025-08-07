@@ -6,8 +6,10 @@ import traceback
 import json
 from datetime import datetime
 
-# Add backend to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'backend'))
+# Add backend to path - use absolute path for better compatibility
+current_dir = os.path.dirname(os.path.abspath(__file__))
+backend_dir = os.path.join(os.path.dirname(current_dir), 'backend')
+sys.path.insert(0, backend_dir)
 
 from dotenv import load_dotenv
 from PyQt6.QtCore import QTimer, pyqtSignal, QThread
@@ -26,15 +28,27 @@ except ImportError:
     OBS_AVAILABLE = False
     print("OBS WebSocket not available. Install with: pip install websocket-client")
 
-
+# Try to import backend modules
 try:
-    from soapboxx_core import SoapBoxxCore
-    from config import Config
-    from transcriber import Transcriber
+    # Import using the package structure
+    from backend.soapboxx_core import SoapBoxxCore
+    from backend.config import Config
+    from backend.transcriber import Transcriber
     BACKEND_AVAILABLE = True
 except ImportError as e:
     print(f"Backend not available: {e}")
-    BACKEND_AVAILABLE = False
+    print(f"Backend directory: {backend_dir}")
+    print(f"Current sys.path: {sys.path}")
+    # Try alternative import method
+    try:
+        from soapboxx_core import SoapBoxxCore
+        from config import Config
+        from transcriber import Transcriber
+        BACKEND_AVAILABLE = True
+        print("✅ Backend imported using alternative method")
+    except ImportError as e2:
+        print(f"Alternative import also failed: {e2}")
+        BACKEND_AVAILABLE = False
 
 
 class AudioLevelThread(QThread):
