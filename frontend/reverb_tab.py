@@ -333,13 +333,17 @@ class ReverbTab(QWidget):
             QMessageBox.warning(self, "Error", "Please select an episode file first.")
             return
 
-        # Check file size
+        # Check file size - OpenAI has a 25MB limit
         file_size = os.path.getsize(self.selected_file_path) / (1024 * 1024)  # MB
-        if file_size > 100:  # 100MB limit
+        if file_size > 25:  # OpenAI's 25MB limit
             QMessageBox.warning(
                 self,
                 "File Too Large",
-                f"File size ({file_size:.1f}MB) exceeds the 100MB limit. Please use a smaller file.",
+                f"File size ({file_size:.1f}MB) exceeds OpenAI's 25MB limit. Please use a smaller file or compress the audio.\n\n"
+                f"Tips:\n"
+                f"• Convert to MP3 with lower bitrate (128kbps)\n"
+                f"• Use audio compression tools\n"
+                f"• Split large files into smaller segments",
             )
             return
 
