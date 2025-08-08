@@ -10,12 +10,12 @@ backend_dir = os.path.join(parent_dir, "backend")  # root/backend/
 sys.path.insert(0, backend_dir)
 
 from dotenv import load_dotenv
-from PyQt6.QtWidgets import (QComboBox, QGridLayout, QGroupBox, QHBoxLayout,
-                             QLabel, QLineEdit, QMessageBox, QPushButton,
-                             QSplitter, QTextEdit, QVBoxLayout, QWidget,
-                             QScrollArea, QScrollBar, QAbstractScrollArea,
-                             QFrame) # Added QFrame
 from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QComboBox  # Added QFrame
+from PyQt6.QtWidgets import (QAbstractScrollArea, QFrame, QGridLayout,
+                             QGroupBox, QHBoxLayout, QLabel, QLineEdit,
+                             QMessageBox, QPushButton, QScrollArea, QScrollBar,
+                             QSplitter, QTextEdit, QVBoxLayout, QWidget)
 
 # Load environment variables from .env if not already loaded
 load_dotenv()
@@ -23,11 +23,12 @@ load_dotenv()
 
 class ModernCard(QFrame):
     """Modern card widget with shadow and rounded corners"""
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFrameStyle(QFrame.Shape.Box)
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
             ModernCard {
                 background-color: white;
                 border: 1px solid #E0E0E0;
@@ -38,20 +39,22 @@ class ModernCard(QFrame):
             ModernCard:hover {
                 border: 1px solid #BDBDBD;
             }
-        """)
+        """
+        )
 
 
 class ModernButton(QPushButton):
     """Modern button with gradient and hover effects"""
-    
+
     def __init__(self, text="", parent=None, style="primary"):
         super().__init__(text, parent)
         self.style_type = style
         self.update_style()
-    
+
     def update_style(self):
         if self.style_type == "primary":
-            self.setStyleSheet("""
+            self.setStyleSheet(
+                """
                 ModernButton {
                     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                         stop:0 #3498DB, stop:1 #2980B9);
@@ -70,9 +73,11 @@ class ModernButton(QPushButton):
                     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                         stop:0 #1F5F8B, stop:1 #154360);
                 }
-            """)
+            """
+            )
         elif self.style_type == "secondary":
-            self.setStyleSheet("""
+            self.setStyleSheet(
+                """
                 ModernButton {
                     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                         stop:0 #6C757D, stop:1 #495057);
@@ -87,9 +92,11 @@ class ModernButton(QPushButton):
                     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                         stop:0 #495057, stop:1 #343A40);
                 }
-            """)
+            """
+            )
         elif self.style_type == "success":
-            self.setStyleSheet("""
+            self.setStyleSheet(
+                """
                 ModernButton {
                     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                         stop:0 #28A745, stop:1 #1E7E34);
@@ -104,7 +111,8 @@ class ModernButton(QPushButton):
                     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                         stop:0 #1E7E34, stop:1 #155724);
                 }
-            """)
+            """
+            )
 
 
 class ScoopTab(QWidget):
@@ -112,7 +120,7 @@ class ScoopTab(QWidget):
         super().__init__()
         # Defer UI setup until widget is shown
         self._ui_initialized = False
-        
+
         # Connect show event to initialize UI
         self.showEvent = self._on_show_event
 
@@ -123,7 +131,7 @@ class ScoopTab(QWidget):
             self.setup_ui()
             self._ui_initialized = True
             print("✅ ScoopTab: UI initialized")
-        
+
         # Call the original showEvent if it exists
         super().showEvent(event)
 
@@ -135,19 +143,22 @@ class ScoopTab(QWidget):
 
         # Title with modern styling
         title = QLabel("📰 Scoop - News & Research")
-        title.setStyleSheet("""
+        title.setStyleSheet(
+            """
             font-size: 24px; 
             font-weight: bold; 
             color: #2C3E50;
             margin: 20px 0;
-        """)
+        """
+        )
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
 
         # Create a scroll area for better content management
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setStyleSheet("""
+        scroll_area.setStyleSheet(
+            """
             QScrollArea {
                 border: none;
                 background: transparent;
@@ -165,8 +176,9 @@ class ScoopTab(QWidget):
             QScrollBar::handle:vertical:hover {
                 background: #ADB5BD;
             }
-        """)
-        
+        """
+        )
+
         scroll_content = QWidget()
         scroll_layout = QVBoxLayout(scroll_content)
         scroll_layout.setSpacing(20)
@@ -174,15 +186,17 @@ class ScoopTab(QWidget):
         # Search Engine Section - Modern Card Design
         search_card = ModernCard()
         search_layout = QVBoxLayout(search_card)
-        
+
         # Card header
         search_header = QLabel("🔍 Search Engine")
-        search_header.setStyleSheet("""
+        search_header.setStyleSheet(
+            """
             font-size: 18px; 
             font-weight: bold; 
             color: #2C3E50;
             margin-bottom: 15px;
-        """)
+        """
+        )
         search_layout.addWidget(search_header)
 
         # Search type selector with modern styling
@@ -191,10 +205,20 @@ class ScoopTab(QWidget):
         search_type_label.setStyleSheet("font-weight: bold; color: #495057;")
         self.search_type_combo = QComboBox()
         self.search_type_combo.addItems(
-            ["Guest Research", "Topic Research", "News Search", "Social Media Search", "Business Search", "LinkedIn Search", "Executive Search", "Company News"]
+            [
+                "Guest Research",
+                "Topic Research",
+                "News Search",
+                "Social Media Search",
+                "Business Search",
+                "LinkedIn Search",
+                "Executive Search",
+                "Company News",
+            ]
         )
         self.search_type_combo.currentTextChanged.connect(self.on_search_type_changed)
-        self.search_type_combo.setStyleSheet("""
+        self.search_type_combo.setStyleSheet(
+            """
             QComboBox {
                 padding: 10px;
                 border: 2px solid #E0E0E0;
@@ -205,7 +229,8 @@ class ScoopTab(QWidget):
             QComboBox:focus {
                 border: 2px solid #3498DB;
             }
-        """)
+        """
+        )
         search_type_layout.addWidget(search_type_label)
         search_type_layout.addWidget(self.search_type_combo)
         search_type_layout.addStretch()
@@ -218,7 +243,8 @@ class ScoopTab(QWidget):
         self.query_input = QLineEdit()
         self.query_input.setPlaceholderText("Enter guest name, topic, or keywords...")
         self.query_input.returnPressed.connect(self.perform_search)
-        self.query_input.setStyleSheet("""
+        self.query_input.setStyleSheet(
+            """
             QLineEdit {
                 padding: 12px;
                 border: 2px solid #E0E0E0;
@@ -229,7 +255,8 @@ class ScoopTab(QWidget):
             QLineEdit:focus {
                 border: 2px solid #3498DB;
             }
-        """)
+        """
+        )
         query_layout.addWidget(query_label)
         query_layout.addWidget(self.query_input)
         search_layout.addLayout(query_layout)
@@ -242,7 +269,8 @@ class ScoopTab(QWidget):
             "Website, social media, or additional context..."
         )
         self.additional_info_input.setVisible(False)
-        self.additional_info_input.setStyleSheet("""
+        self.additional_info_input.setStyleSheet(
+            """
             QLineEdit {
                 padding: 12px;
                 border: 2px solid #E0E0E0;
@@ -253,7 +281,8 @@ class ScoopTab(QWidget):
             QLineEdit:focus {
                 border: 2px solid #3498DB;
             }
-        """)
+        """
+        )
         search_layout.addWidget(self.additional_info_label)
         search_layout.addWidget(self.additional_info_input)
 
@@ -267,15 +296,17 @@ class ScoopTab(QWidget):
         # API Keys Status Section - Modern Card Design
         api_card = ModernCard()
         api_layout = QVBoxLayout(api_card)
-        
+
         # Card header
         api_header = QLabel("🔑 API Keys Status")
-        api_header.setStyleSheet("""
+        api_header.setStyleSheet(
+            """
             font-size: 18px; 
             font-weight: bold; 
             color: #2C3E50;
             margin-bottom: 15px;
-        """)
+        """
+        )
         api_layout.addWidget(api_header)
 
         # Get API keys from environment
@@ -312,21 +343,24 @@ class ScoopTab(QWidget):
         # Results Section - Modern Card Design
         results_card = ModernCard()
         results_layout = QVBoxLayout(results_card)
-        
+
         # Card header
         results_header = QLabel("📊 Search Results")
-        results_header.setStyleSheet("""
+        results_header.setStyleSheet(
+            """
             font-size: 18px; 
             font-weight: bold; 
             color: #2C3E50;
             margin-bottom: 15px;
-        """)
+        """
+        )
         results_layout.addWidget(results_header)
 
         # Results text area with modern styling
         self.results_text = QTextEdit()
         self.results_text.setPlaceholderText("Search results will appear here...")
-        self.results_text.setStyleSheet("""
+        self.results_text.setStyleSheet(
+            """
             QTextEdit {
                 border: 2px solid #E0E0E0;
                 border-radius: 8px;
@@ -338,7 +372,8 @@ class ScoopTab(QWidget):
             QTextEdit:focus {
                 border: 2px solid #3498DB;
             }
-        """)
+        """
+        )
         self.results_text.setMinimumHeight(300)
         results_layout.addWidget(self.results_text)
 
@@ -364,7 +399,9 @@ class ScoopTab(QWidget):
             self.additional_info_input.setVisible(False)
             self.additional_info_label.setVisible(False)
         elif search_type == "Social Media Search":
-            self.query_input.setPlaceholderText("Enter social media topic or hashtag...")
+            self.query_input.setPlaceholderText(
+                "Enter social media topic or hashtag..."
+            )
             self.additional_info_input.setVisible(False)
             self.additional_info_label.setVisible(False)
         elif search_type == "Business Search":
@@ -376,7 +413,9 @@ class ScoopTab(QWidget):
             self.additional_info_input.setVisible(False)
             self.additional_info_label.setVisible(False)
         elif search_type == "Executive Search":
-            self.query_input.setPlaceholderText("Enter company name for executive search...")
+            self.query_input.setPlaceholderText(
+                "Enter company name for executive search..."
+            )
             self.additional_info_input.setVisible(False)
             self.additional_info_label.setVisible(False)
         elif search_type == "Company News":
@@ -418,29 +457,38 @@ class ScoopTab(QWidget):
         try:
             # Import guest research with robust error handling
             guest_research = None
-            
+
             # Try multiple import paths for separate frontend/backend structure
             try:
                 from guest_research import GuestResearch
+
                 guest_research = GuestResearch()
             except ImportError:
                 try:
                     # Try with backend path (already added to sys.path)
                     from guest_research import GuestResearch
+
                     guest_research = GuestResearch()
                 except ImportError:
                     try:
                         # Try with explicit backend path
-                        backend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend")
+                        backend_path = os.path.join(
+                            os.path.dirname(os.path.dirname(__file__)), "backend"
+                        )
                         sys.path.insert(0, backend_path)
                         from guest_research import GuestResearch
+
                         guest_research = GuestResearch()
                     except ImportError as e:
-                        self.results_text.setText(f"❌ Error: Could not import GuestResearch module. Please check backend installation. Error: {e}")
+                        self.results_text.setText(
+                            f"❌ Error: Could not import GuestResearch module. Please check backend installation. Error: {e}"
+                        )
                         return
-            
+
             if guest_research is None:
-                self.results_text.setText("❌ Error: Could not import GuestResearch module. Please check backend installation.")
+                self.results_text.setText(
+                    "❌ Error: Could not import GuestResearch module. Please check backend installation."
+                )
                 return
 
             self.results_text.setText(
@@ -514,14 +562,20 @@ class ScoopTab(QWidget):
                 results.append("")
 
             # If no results found, provide fallback
-            if not any([research_results.get("profile"), 
-                       research_results.get("talking_points"),
-                       research_results.get("questions"),
-                       research_results.get("recent_work"),
-                       research_results.get("controversies"),
-                       research_results.get("interests")]):
+            if not any(
+                [
+                    research_results.get("profile"),
+                    research_results.get("talking_points"),
+                    research_results.get("questions"),
+                    research_results.get("recent_work"),
+                    research_results.get("controversies"),
+                    research_results.get("interests"),
+                ]
+            ):
                 results.append("📋 Basic Profile:")
-                results.append(f"{guest_name} is a notable guest with expertise in their field.")
+                results.append(
+                    f"{guest_name} is a notable guest with expertise in their field."
+                )
                 results.append("")
                 results.append("💬 Suggested Talking Points:")
                 results.append("  • Professional background and experience")
@@ -531,7 +585,9 @@ class ScoopTab(QWidget):
                 results.append("❓ Suggested Questions:")
                 results.append("  • What inspired your career path?")
                 results.append("  • Can you tell us about your current projects?")
-                results.append("  • What advice would you give to someone starting out?")
+                results.append(
+                    "  • What advice would you give to someone starting out?"
+                )
                 results.append("")
 
             results.append("✨ Powered by AI-powered guest research!")
@@ -542,6 +598,7 @@ class ScoopTab(QWidget):
             self.results_text.setText(f"❌ Error researching guest: {str(e)}")
             print(f"Guest research error: {e}")
             import traceback
+
             traceback.print_exc()
 
     def search_topic(self, topic: str):
@@ -549,29 +606,38 @@ class ScoopTab(QWidget):
         try:
             # Import guest research for web search functionality with robust error handling
             guest_research = None
-            
+
             # Try multiple import paths for separate frontend/backend structure
             try:
                 from guest_research import GuestResearch
+
                 guest_research = GuestResearch()
             except ImportError:
                 try:
                     # Try with backend path (already added to sys.path)
                     from guest_research import GuestResearch
+
                     guest_research = GuestResearch()
                 except ImportError:
                     try:
                         # Try with explicit backend path
-                        backend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend")
+                        backend_path = os.path.join(
+                            os.path.dirname(os.path.dirname(__file__)), "backend"
+                        )
                         sys.path.insert(0, backend_path)
                         from guest_research import GuestResearch
+
                         guest_research = GuestResearch()
                     except ImportError as e:
-                        self.results_text.setText(f"❌ Error: Could not import GuestResearch module. Please check backend installation. Error: {e}")
+                        self.results_text.setText(
+                            f"❌ Error: Could not import GuestResearch module. Please check backend installation. Error: {e}"
+                        )
                         return
-            
+
             if guest_research is None:
-                self.results_text.setText("❌ Error: Could not import GuestResearch module. Please check backend installation.")
+                self.results_text.setText(
+                    "❌ Error: Could not import GuestResearch module. Please check backend installation."
+                )
                 return
 
             self.results_text.setText(
@@ -612,7 +678,7 @@ class ScoopTab(QWidget):
 
             for i, result in enumerate(web_results[:5], 1):
                 results.append(f"{i}. {result.get('title', 'No title')}")
-                snippet = result.get('snippet', 'No description available')
+                snippet = result.get("snippet", "No description available")
                 results.append(
                     f"   {snippet[:200]}{'...' if len(snippet) > 200 else ''}"
                 )
@@ -627,6 +693,7 @@ class ScoopTab(QWidget):
             self.results_text.setText(f"❌ Error researching topic: {str(e)}")
             print(f"Topic research error: {e}")
             import traceback
+
             traceback.print_exc()
 
     def search_news(self, query: str):
@@ -729,29 +796,38 @@ class ScoopTab(QWidget):
         try:
             # Import social media scraper with robust error handling
             scraper = None
-            
+
             # Try multiple import paths
             try:
                 from social_media_scraper import SocialMediaScraper
+
                 scraper = SocialMediaScraper()
             except ImportError:
                 try:
                     # Try with backend path
                     sys.path.insert(0, backend_dir)
                     from social_media_scraper import SocialMediaScraper
+
                     scraper = SocialMediaScraper()
                 except ImportError:
                     try:
                         # Try with relative path
-                        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+                        sys.path.insert(
+                            0, os.path.join(os.path.dirname(__file__), "..", "backend")
+                        )
                         from social_media_scraper import SocialMediaScraper
+
                         scraper = SocialMediaScraper()
                     except ImportError as e:
-                        self.results_text.setText(f"❌ Error: Could not import SocialMediaScraper module. Please check backend installation. Error: {e}")
+                        self.results_text.setText(
+                            f"❌ Error: Could not import SocialMediaScraper module. Please check backend installation. Error: {e}"
+                        )
                         return
-            
+
             if scraper is None:
-                self.results_text.setText("❌ Error: Could not import SocialMediaScraper module. Please check backend installation.")
+                self.results_text.setText(
+                    "❌ Error: Could not import SocialMediaScraper module. Please check backend installation."
+                )
                 return
 
             self.results_text.setText(
@@ -787,7 +863,9 @@ class ScoopTab(QWidget):
                     results.append(
                         f"  {i}. @{tweet.get('username', 'unknown')}: {tweet.get('content', '')[:150]}{'...' if len(tweet.get('content', '')) > 150 else ''}"
                     )
-                    results.append(f"     ❤️ {tweet.get('likes', 0)} likes | 🔗 {tweet.get('url', 'N/A')}")
+                    results.append(
+                        f"     ❤️ {tweet.get('likes', 0)} likes | 🔗 {tweet.get('url', 'N/A')}"
+                    )
                 results.append("")
             elif "error" in twitter_results:
                 results.append(
@@ -852,6 +930,7 @@ class ScoopTab(QWidget):
             self.results_text.setText(f"❌ Error searching social media: {str(e)}")
             print(f"Social media search error: {e}")
             import traceback
+
             traceback.print_exc()
 
     def search_business(self, company_name: str, search_type: str = "all"):
@@ -859,29 +938,38 @@ class ScoopTab(QWidget):
         try:
             # Import guest research with robust error handling
             guest_research = None
-            
+
             # Try multiple import paths
             try:
                 from guest_research import GuestResearch
+
                 guest_research = GuestResearch()
             except ImportError:
                 try:
                     # Try with backend path
                     sys.path.insert(0, backend_dir)
                     from guest_research import GuestResearch
+
                     guest_research = GuestResearch()
                 except ImportError:
                     try:
                         # Try with relative path
-                        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+                        sys.path.insert(
+                            0, os.path.join(os.path.dirname(__file__), "..", "backend")
+                        )
                         from guest_research import GuestResearch
+
                         guest_research = GuestResearch()
                     except ImportError as e:
-                        self.results_text.setText(f"❌ Error: Could not import GuestResearch module. Please check backend installation. Error: {e}")
+                        self.results_text.setText(
+                            f"❌ Error: Could not import GuestResearch module. Please check backend installation. Error: {e}"
+                        )
                         return
-            
+
             if guest_research is None:
-                self.results_text.setText("❌ Error: Could not import GuestResearch module. Please check backend installation.")
+                self.results_text.setText(
+                    "❌ Error: Could not import GuestResearch module. Please check backend installation."
+                )
                 return
 
             self.results_text.setText(
@@ -915,7 +1003,9 @@ class ScoopTab(QWidget):
             # Company Information
             if search_results.get("company_info", {}).get("web_results"):
                 results.append("🏢 Company Information:")
-                for i, result in enumerate(search_results["company_info"]["web_results"][:5], 1):
+                for i, result in enumerate(
+                    search_results["company_info"]["web_results"][:5], 1
+                ):
                     results.append(f"  {i}. {result.get('title', 'N/A')}")
                     results.append(f"     {result.get('snippet', 'N/A')}")
                     results.append(f"     🔗 {result.get('link', 'N/A')}")
@@ -944,7 +1034,11 @@ class ScoopTab(QWidget):
 
             # Executive Information
             if search_results.get("results"):
-                executive_results = [r for r in search_results["results"] if r.get("type") == "executive_info"]
+                executive_results = [
+                    r
+                    for r in search_results["results"]
+                    if r.get("type") == "executive_info"
+                ]
                 if executive_results:
                     results.append("👔 Executive Information:")
                     for i, exec_info in enumerate(executive_results[:5], 1):
@@ -955,11 +1049,15 @@ class ScoopTab(QWidget):
                     results.append("")
 
             # If no specific results found, show general results
-            if not any([search_results.get("summary"), 
-                       search_results.get("company_info", {}).get("web_results"),
-                       search_results.get("linkedin_profiles"),
-                       search_results.get("news"),
-                       search_results.get("results")]):
+            if not any(
+                [
+                    search_results.get("summary"),
+                    search_results.get("company_info", {}).get("web_results"),
+                    search_results.get("linkedin_profiles"),
+                    search_results.get("news"),
+                    search_results.get("results"),
+                ]
+            ):
                 results.append("📊 General Search Results:")
                 for i, result in enumerate(search_results.get("results", [])[:5], 1):
                     results.append(f"  {i}. {result.get('title', 'N/A')}")
@@ -976,21 +1074,48 @@ class ScoopTab(QWidget):
             self.results_text.setText(f"❌ Error searching business: {str(e)}")
             print(f"Business search error: {e}")
             import traceback
+
             traceback.print_exc()
 
     def get_api_keys(self) -> Dict[str, str]:
         """Get all relevant API keys from environment variables"""
         return {
-            "OpenAI API Key": "✅ Configured" if os.environ.get("OPENAI_API_KEY") else "❌ Not set",
-            "News API Key": "✅ Configured" if os.environ.get("NEWS_API_KEY") else "❌ Not set",
-            "Twitter API Key": "✅ Configured" if os.environ.get("TWITTER_API_KEY") else "❌ Not set",
-            "Google API Key": "✅ Configured" if os.environ.get("GOOGLE_API_KEY") else "❌ Not set",
-            "Google CSE ID": "✅ Configured" if os.environ.get("GOOGLE_CSE_ID") else "❌ Not set",
-            "YouTube API Key": "✅ Configured" if os.environ.get("YOUTUBE_API_KEY") else "❌ Not set",
-            "PODCHASER_API_KEY": "✅ Configured" if os.environ.get("PODCHASER_API_KEY") else "❌ Not set",
-            "LISTEN_NOTES_API_KEY": "✅ Configured" if os.environ.get("LISTEN_NOTES_API_KEY") else "❌ Not set",
-            "APPLE_PODCASTS_API_KEY": "✅ Configured" if os.environ.get("APPLE_PODCASTS_API_KEY") else "❌ Not set",
-            "GOOGLE_PODCASTS_API_KEY": "✅ Configured" if os.environ.get("GOOGLE_PODCASTS_API_KEY") else "❌ Not set",
+            "OpenAI API Key": (
+                "✅ Configured" if os.environ.get("OPENAI_API_KEY") else "❌ Not set"
+            ),
+            "News API Key": (
+                "✅ Configured" if os.environ.get("NEWS_API_KEY") else "❌ Not set"
+            ),
+            "Twitter API Key": (
+                "✅ Configured" if os.environ.get("TWITTER_API_KEY") else "❌ Not set"
+            ),
+            "Google API Key": (
+                "✅ Configured" if os.environ.get("GOOGLE_API_KEY") else "❌ Not set"
+            ),
+            "Google CSE ID": (
+                "✅ Configured" if os.environ.get("GOOGLE_CSE_ID") else "❌ Not set"
+            ),
+            "YouTube API Key": (
+                "✅ Configured" if os.environ.get("YOUTUBE_API_KEY") else "❌ Not set"
+            ),
+            "PODCHASER_API_KEY": (
+                "✅ Configured" if os.environ.get("PODCHASER_API_KEY") else "❌ Not set"
+            ),
+            "LISTEN_NOTES_API_KEY": (
+                "✅ Configured"
+                if os.environ.get("LISTEN_NOTES_API_KEY")
+                else "❌ Not set"
+            ),
+            "APPLE_PODCASTS_API_KEY": (
+                "✅ Configured"
+                if os.environ.get("APPLE_PODCASTS_API_KEY")
+                else "❌ Not set"
+            ),
+            "GOOGLE_PODCASTS_API_KEY": (
+                "✅ Configured"
+                if os.environ.get("GOOGLE_PODCASTS_API_KEY")
+                else "❌ Not set"
+            ),
         }
 
     def get_latest_news(self):

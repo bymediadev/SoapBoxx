@@ -3,20 +3,23 @@
 Simple microphone test script
 """
 
-import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
+import sys
 
-from audio_recorder import AudioRecorder
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
+
 import time
+
 import numpy as np
+from audio_recorder import AudioRecorder
+
 
 def test_microphone():
     print("🎤 Testing microphone input...")
-    
+
     # Create recorder
     rec = AudioRecorder()
-    
+
     try:
         # Start recording
         print("Starting recording...")
@@ -25,12 +28,12 @@ def test_microphone():
         else:
             print("❌ Failed to start recording")
             return
-        
+
         # Collect audio chunks for 5 seconds
         print("Recording for 5 seconds... Speak into your microphone!")
         chunks = []
         start_time = time.time()
-        
+
         while time.time() - start_time < 5:
             chunk = rec.get_chunk()
             if chunk is not None:
@@ -39,26 +42,26 @@ def test_microphone():
                 level = np.max(np.abs(chunk))
                 print(f"Audio level: {level:6.1f} | Chunks: {len(chunks)}")
             time.sleep(0.1)
-        
+
         # Stop recording
         rec.stop_recording()
         print("✅ Recording stopped")
-        
+
         # Analyze results
         if chunks:
             print(f"\n📊 Results:")
             print(f"Total chunks collected: {len(chunks)}")
-            
+
             # Calculate audio levels
             levels = [np.max(np.abs(chunk)) for chunk in chunks]
             avg_level = np.mean(levels)
             max_level = np.max(levels)
             min_level = np.min(levels)
-            
+
             print(f"Average audio level: {avg_level:.1f}")
             print(f"Maximum audio level: {max_level:.1f}")
             print(f"Minimum audio level: {min_level:.1f}")
-            
+
             # Check if we're getting audio
             if max_level > 100:  # Threshold for detecting audio
                 print("✅ Microphone is working - audio detected!")
@@ -72,11 +75,12 @@ def test_microphone():
             print("   - Check microphone permissions")
             print("   - Ensure microphone is not muted")
             print("   - Try a different audio device")
-            
+
     except Exception as e:
         print(f"❌ Error during testing: {e}")
     finally:
         rec.cleanup()
+
 
 if __name__ == "__main__":
     test_microphone()

@@ -34,7 +34,7 @@ class BackendTester:
         print("🔑 CRITICAL: Testing OpenAI API configuration...")
         try:
             from config import config
-            
+
             # Check if OpenAI is configured
             if not config.is_openai_configured():
                 print("❌ CRITICAL ERROR: OpenAI API is NOT configured!")
@@ -44,10 +44,10 @@ class BackendTester:
                 print("   - Guest research will be limited")
                 print("   - Most core features will not work")
                 return False
-            
+
             # Get detailed OpenAI status
             openai_status = config.get_openai_status()
-            
+
             if openai_status["configured"]:
                 print("✅ CRITICAL SUCCESS: OpenAI API is properly configured!")
                 print("   Enabled features:")
@@ -66,7 +66,7 @@ class BackendTester:
                 for rec in openai_status["recommendations"]:
                     print(f"   💡 {rec}")
                 return False
-                
+
         except Exception as e:
             print(f"❌ CRITICAL ERROR: OpenAI test failed: {e}")
             return False

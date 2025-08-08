@@ -2,17 +2,17 @@
 import os
 import threading
 import time
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable, Dict, List, Optional
-from collections import defaultdict
 
 # Try to import backend modules
 try:
     from .audio_recorder import AudioRecorder
     from .error_tracker import (ErrorCategory, ErrorSeverity, error_tracker,
-                               track_api_error, track_audio_error,
-                               track_config_error, track_transcription_error)
+                                track_api_error, track_audio_error,
+                                track_config_error, track_transcription_error)
     from .feedback_engine import FeedbackEngine
     from .guest_research import GuestResearch
     from .logger import Logger
@@ -22,31 +22,53 @@ except ImportError:
         from audio_recorder import AudioRecorder
         from error_tracker import (ErrorCategory, ErrorSeverity, error_tracker,
                                    track_api_error, track_audio_error,
-                                   track_config_error, track_transcription_error)
+                                   track_config_error,
+                                   track_transcription_error)
         from feedback_engine import FeedbackEngine
         from guest_research import GuestResearch
         from logger import Logger
         from transcriber import Transcriber
     except ImportError as e:
         print(f"Warning: Some backend modules not available: {e}")
+
         # Create placeholder classes
-        class AudioRecorder: pass
-        class FeedbackEngine: pass
-        class GuestResearch: pass
-        class Logger: pass
-        class Transcriber: pass
+        class AudioRecorder:
+            pass
+
+        class FeedbackEngine:
+            pass
+
+        class GuestResearch:
+            pass
+
+        class Logger:
+            pass
+
+        class Transcriber:
+            pass
+
         class ErrorCategory:
             AUDIO = "audio"
             TRANSCRIPTION = "transcription"
             AI_API = "ai_api"
             CONFIGURATION = "configuration"
+
         class ErrorSeverity:
             MEDIUM = "medium"
             HIGH = "high"
-        def track_api_error(message, **kwargs): pass
-        def track_audio_error(message, **kwargs): pass
-        def track_config_error(message, **kwargs): pass
-        def track_transcription_error(message, **kwargs): pass
+
+        def track_api_error(message, **kwargs):
+            pass
+
+        def track_audio_error(message, **kwargs):
+            pass
+
+        def track_config_error(message, **kwargs):
+            pass
+
+        def track_transcription_error(message, **kwargs):
+            pass
+
         error_tracker = None
 
 
@@ -65,80 +87,81 @@ class RecordingSession:
 
 class PerformanceMonitor:
     """Monitor system performance and resource usage"""
-    
+
     def __init__(self):
         self.request_times = defaultdict(list)
         self.error_counts = defaultdict(int)
         self.resource_usage = {}
         self.start_time = time.time()
-    
+
     def track_request(self, operation: str, duration: float):
         """Track request performance"""
         self.request_times[operation].append(duration)
         # Keep only last 100 requests per operation
         if len(self.request_times[operation]) > 100:
             self.request_times[operation] = self.request_times[operation][-100:]
-    
+
     def track_error(self, operation: str):
         """Track error occurrence"""
         self.error_counts[operation] += 1
-    
+
     def get_performance_summary(self) -> Dict:
         """Get performance summary"""
         summary = {
             "uptime": time.time() - self.start_time,
             "operations": {},
             "error_rates": {},
-            "resource_usage": self.resource_usage
+            "resource_usage": self.resource_usage,
         }
-        
+
         for operation, times in self.request_times.items():
             if times:
                 summary["operations"][operation] = {
                     "avg_time": sum(times) / len(times),
                     "min_time": min(times),
                     "max_time": max(times),
-                    "total_requests": len(times)
+                    "total_requests": len(times),
                 }
-        
+
         for operation, count in self.error_counts.items():
             total_requests = len(self.request_times.get(operation, []))
             if total_requests > 0:
                 summary["error_rates"][operation] = count / total_requests
-        
+
         return summary
 
 
 class RateLimiter:
     """Simple rate limiter for API calls"""
-    
+
     def __init__(self, max_requests: int = 5, time_window: int = 60):
         self.max_requests = max_requests
         self.time_window = time_window
         self.requests = defaultdict(list)
         self._lock = threading.Lock()
-    
+
     def can_make_request(self, operation: str) -> bool:
         """Check if request can be made"""
         with self._lock:
             now = time.time()
             # Clean old requests
             self.requests[operation] = [
-                req_time for req_time in self.requests[operation]
+                req_time
+                for req_time in self.requests[operation]
                 if now - req_time < self.time_window
             ]
-            
+
             if len(self.requests[operation]) < self.max_requests:
                 self.requests[operation].append(now)
                 return True
             return False
-    
+
     def get_wait_time(self, operation: str) -> float:
         """Get time to wait before next request"""
         with self._lock:
             if not self.requests[operation]:
                 return 0
-            
+
             oldest_request = min(self.requests[operation])
             return max(0, self.time_window - (time.time() - oldest_request))
 
@@ -169,8 +192,10 @@ class SoapBoxxCore:
         # Performance monitoring and rate limiting
         self.performance_monitor = PerformanceMonitor()
         self.rate_limiter = RateLimiter(
-            max_requests=config.get_security_settings().get("max_concurrent_requests", 5),
-            time_window=60
+            max_requests=config.get_security_settings().get(
+                "max_concurrent_requests", 5
+            ),
+            time_window=60,
         )
 
         # Session management
@@ -205,10 +230,10 @@ class SoapBoxxCore:
             # Create new session with performance tracking
             session_id = f"session_{int(time.time())}"
             self.current_session = RecordingSession(
-                session_id=session_id, 
-                start_time=datetime.now(), 
+                session_id=session_id,
+                start_time=datetime.now(),
                 audio_chunks=[],
-                performance_metrics={}
+                performance_metrics={},
             )
 
             # Start audio recording
@@ -250,13 +275,15 @@ class SoapBoxxCore:
 
             # Process the recording
             results = self._process_recording()
-            
+
             # Update session with end time
             if self.current_session:
                 self.current_session.end_time = datetime.now()
                 self.current_session.transcript = results.get("transcript", "")
                 self.current_session.feedback = results.get("feedback", {})
-                self.current_session.performance_metrics = self.performance_monitor.get_performance_summary()
+                self.current_session.performance_metrics = (
+                    self.performance_monitor.get_performance_summary()
+                )
 
             return results
 
@@ -274,7 +301,7 @@ class SoapBoxxCore:
                 chunk = self.audio_recorder.get_chunk()
                 if chunk and self.current_session:
                     self.current_session.audio_chunks.append(chunk)
-                
+
                 time.sleep(0.1)  # Small delay to prevent CPU overload
 
         except Exception as e:
@@ -285,18 +312,20 @@ class SoapBoxxCore:
     def _process_audio_chunks(self):
         """Process audio chunks with performance monitoring"""
         start_time = time.time()
-        
+
         try:
             if not self.current_session or not self.current_session.audio_chunks:
                 return None
 
             # Combine audio chunks
-            combined_audio = self._combine_audio_chunks(self.current_session.audio_chunks)
-            
+            combined_audio = self._combine_audio_chunks(
+                self.current_session.audio_chunks
+            )
+
             # Track performance
             duration = time.time() - start_time
             self.performance_monitor.track_request("audio_processing", duration)
-            
+
             return combined_audio
 
         except Exception as e:
@@ -343,14 +372,22 @@ class SoapBoxxCore:
             feedback_start = time.time()
             feedback = self.get_feedback(transcript)
             feedback_duration = time.time() - feedback_start
-            self.performance_monitor.track_request("feedback_generation", feedback_duration)
+            self.performance_monitor.track_request(
+                "feedback_generation", feedback_duration
+            )
 
             return {
                 "transcript": transcript,
                 "feedback": feedback,
-                "session_id": self.current_session.session_id if self.current_session else None,
-                "duration": len(self.current_session.audio_chunks) * 0.1 if self.current_session else 0,
-                "performance_metrics": self.performance_monitor.get_performance_summary()
+                "session_id": (
+                    self.current_session.session_id if self.current_session else None
+                ),
+                "duration": (
+                    len(self.current_session.audio_chunks) * 0.1
+                    if self.current_session
+                    else 0
+                ),
+                "performance_metrics": self.performance_monitor.get_performance_summary(),
             }
 
         except Exception as e:
@@ -364,24 +401,24 @@ class SoapBoxxCore:
     ) -> Dict:
         """Research guest with rate limiting and performance monitoring"""
         operation = "guest_research"
-        
+
         # Check rate limiting
         if not self.rate_limiter.can_make_request(operation):
             wait_time = self.rate_limiter.get_wait_time(operation)
             return {
                 "error": f"Rate limit exceeded. Please wait {wait_time:.1f} seconds.",
-                "wait_time": wait_time
+                "wait_time": wait_time,
             }
 
         start_time = time.time()
-        
+
         try:
             result = self.guest_research.research(guest_name, website, additional_info)
-            
+
             # Track performance
             duration = time.time() - start_time
             self.performance_monitor.track_request(operation, duration)
-            
+
             return result
 
         except Exception as e:
@@ -393,24 +430,24 @@ class SoapBoxxCore:
     def get_feedback(self, transcript: str, focus_area: str = None) -> Dict:
         """Get feedback with rate limiting and performance monitoring"""
         operation = "feedback_generation"
-        
+
         # Check rate limiting
         if not self.rate_limiter.can_make_request(operation):
             wait_time = self.rate_limiter.get_wait_time(operation)
             return {
                 "error": f"Rate limit exceeded. Please wait {wait_time:.1f} seconds.",
-                "wait_time": wait_time
+                "wait_time": wait_time,
             }
 
         start_time = time.time()
-        
+
         try:
             result = self.feedback_engine.analyze(transcript, focus_area)
-            
+
             # Track performance
             duration = time.time() - start_time
             self.performance_monitor.track_request(operation, duration)
-            
+
             return result
 
         except Exception as e:
@@ -422,21 +459,21 @@ class SoapBoxxCore:
     def transcribe_audio(self, audio_data: bytes) -> str:
         """Transcribe audio with rate limiting and performance monitoring"""
         operation = "transcription"
-        
+
         # Check rate limiting
         if not self.rate_limiter.can_make_request(operation):
             wait_time = self.rate_limiter.get_wait_time(operation)
             return f"Error: Rate limit exceeded. Please wait {wait_time:.1f} seconds."
 
         start_time = time.time()
-        
+
         try:
             result = self.transcriber.transcribe(audio_data)
-            
+
             # Track performance
             duration = time.time() - start_time
             self.performance_monitor.track_request(operation, duration)
-            
+
             return result
 
         except Exception as e:
@@ -462,20 +499,24 @@ class SoapBoxxCore:
             status = {
                 "recording": self.is_recording,
                 "transcription_service": self.transcription_service,
-                "session_id": self.current_session.session_id if self.current_session else None,
+                "session_id": (
+                    self.current_session.session_id if self.current_session else None
+                ),
                 "performance": self.performance_monitor.get_performance_summary(),
                 "rate_limits": {
-                    "can_make_request": self.rate_limiter.can_make_request("transcription"),
-                    "wait_time": self.rate_limiter.get_wait_time("transcription")
+                    "can_make_request": self.rate_limiter.can_make_request(
+                        "transcription"
+                    ),
+                    "wait_time": self.rate_limiter.get_wait_time("transcription"),
                 },
                 "components": {
                     "audio_recorder": self.audio_recorder is not None,
                     "transcriber": self.transcriber is not None,
                     "feedback_engine": self.feedback_engine is not None,
                     "guest_research": self.guest_research is not None,
-                }
+                },
             }
-            
+
             return status
 
         except Exception as e:
@@ -488,15 +529,15 @@ class SoapBoxxCore:
         try:
             if self.is_recording:
                 self.stop_recording()
-            
+
             if self.audio_recorder:
                 self.audio_recorder.cleanup()
-            
+
             # Clear callbacks
             self.transcript_callback = None
             self.feedback_callback = None
             self.error_callback = None
-            
+
             self.logger.logger.info("SoapBoxxCore cleanup completed")
 
         except Exception as e:
@@ -509,11 +550,13 @@ class SoapBoxxCore:
         try:
             valid_services = ["openai", "local", "assemblyai", "azure"]
             if service.lower() not in valid_services:
-                raise ValueError(f"Invalid service: {service}. Valid services: {valid_services}")
-            
+                raise ValueError(
+                    f"Invalid service: {service}. Valid services: {valid_services}"
+                )
+
             self.transcription_service = service.lower()
             self.transcriber = Transcriber(service=service.lower())
-            
+
             self.logger.logger.info(f"Transcription service changed to: {service}")
 
         except Exception as e:

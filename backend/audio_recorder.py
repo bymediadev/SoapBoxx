@@ -9,14 +9,18 @@ try:
     from .error_tracker import ErrorCategory, ErrorSeverity, track_audio_error
 except ImportError:
     try:
-        from error_tracker import ErrorCategory, ErrorSeverity, track_audio_error
+        from error_tracker import (ErrorCategory, ErrorSeverity,
+                                   track_audio_error)
     except ImportError:
         print("Warning: error_tracker not available")
+
         # Create placeholder classes
         class ErrorCategory:
             AUDIO = "audio"
+
         class ErrorSeverity:
             MEDIUM = "medium"
+
         def track_audio_error(message, **kwargs):
             print(f"Audio error: {message}")
 
@@ -41,23 +45,25 @@ class AudioRecorder:
                 component="audio_recorder",
                 severity=ErrorSeverity.MEDIUM,
             )
-        
+
         if self.is_recording:
             # Only add to queue if we're recording
             try:
                 # Put with timeout to prevent blocking
                 self.q.put_nowait(indata.copy())
-                
+
                 # Debug: Print audio levels occasionally
-                if hasattr(self, '_debug_counter'):
+                if hasattr(self, "_debug_counter"):
                     self._debug_counter += 1
                 else:
                     self._debug_counter = 0
-                    
+
                 if self._debug_counter % 100 == 0:  # Every 100 chunks
                     audio_level = np.abs(indata).mean()
-                    print(f"🎤 Audio callback: {indata.shape}, level: {audio_level:.4f}, queue: {self.q.qsize()}")
-                    
+                    print(
+                        f"🎤 Audio callback: {indata.shape}, level: {audio_level:.4f}, queue: {self.q.qsize()}"
+                    )
+
             except queue.Full:
                 # If queue is full, remove oldest item and add new one
                 try:
@@ -68,11 +74,11 @@ class AudioRecorder:
                     pass  # Queue was emptied by another thread
         else:
             # Debug: Print when not recording
-            if hasattr(self, '_debug_counter'):
+            if hasattr(self, "_debug_counter"):
                 self._debug_counter += 1
             else:
                 self._debug_counter = 0
-                
+
             if self._debug_counter % 200 == 0:  # Every 200 calls
                 print(f"⏸️ Audio callback: not recording, queue: {self.q.qsize()}")
 
@@ -85,7 +91,7 @@ class AudioRecorder:
                 dtype=self.dtype,
                 callback=self._callback,
                 blocksize=self.chunk_size,
-                latency='low'  # Reduce latency for real-time processing
+                latency="low",  # Reduce latency for real-time processing
             )
             self.stream.start()
             self.is_recording = True
@@ -121,20 +127,22 @@ class AudioRecorder:
         """Get the next audio chunk from the queue"""
         try:
             chunk = self.q.get_nowait()
-            
+
             # Debug: Print chunk info occasionally
-            if hasattr(self, '_get_chunk_counter'):
+            if hasattr(self, "_get_chunk_counter"):
                 self._get_chunk_counter += 1
             else:
                 self._get_chunk_counter = 0
-                
+
             if self._get_chunk_counter % 50 == 0:  # Every 50 chunks
                 if chunk is not None:
                     audio_level = np.abs(chunk).mean()
-                    print(f"📥 Got chunk: {chunk.shape}, level: {audio_level:.4f}, queue: {self.q.qsize()}")
+                    print(
+                        f"📥 Got chunk: {chunk.shape}, level: {audio_level:.4f}, queue: {self.q.qsize()}"
+                    )
                 else:
                     print(f"📥 No chunk available, queue: {self.q.qsize()}")
-                    
+
             return chunk
         except queue.Empty:
             return None

@@ -12,17 +12,22 @@ except ImportError:
         from error_tracker import ErrorCategory, ErrorSeverity, track_api_error
     except ImportError:
         print("Warning: error_tracker not available")
+
         # Create placeholder classes
         class ErrorCategory:
             AI_API = "ai_api"
+
         class ErrorSeverity:
             HIGH = "high"
+
         def track_api_error(message, **kwargs):
             print(f"API error: {message}")
+
 
 # Try to import OpenAI
 try:
     import openai
+
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False

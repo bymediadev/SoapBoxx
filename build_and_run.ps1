@@ -2,6 +2,8 @@
 # Sets up environment, formats code, then runs the app
 
 Write-Host "`nActivating virtual environment..."
+# Ensure UTF-8 output to avoid UnicodeEncodeError
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $env:PYTHONIOENCODING="utf-8" } catch {}
 if (!(Test-Path .\.venv\Scripts\Activate.ps1)) {
     Write-Host "No virtual environment found. Run: python -m venv .venv"
     exit 1
@@ -33,9 +35,9 @@ try {
 # Launch app
 Write-Host "`nLaunching SoapBoxx UI..."
 try {
-    python frontend\main_window.py
+    python -m frontend.main_window
 } catch {
-    Write-Host "Error launching frontend. Ensure the file exists at frontend\main_window.py"
+    Write-Host "Error launching frontend. Ensure the package 'frontend' is importable and contains main_window.py"
 }
 
 # Optional: open logs

@@ -1,11 +1,12 @@
 # backend/guest_research.py
 import json
 import os
-import requests
 import time
-from typing import Dict, List, Optional
 from datetime import datetime
-from urllib.parse import urlparse, quote
+from typing import Dict, List, Optional
+from urllib.parse import quote, urlparse
+
+import requests
 
 # Try to import error tracker
 try:
@@ -15,17 +16,22 @@ except ImportError:
         from error_tracker import ErrorCategory, ErrorSeverity, track_api_error
     except ImportError:
         print("Warning: error_tracker not available")
+
         # Create placeholder classes
         class ErrorCategory:
             AI_API = "ai_api"
+
         class ErrorSeverity:
             HIGH = "high"
+
         def track_api_error(message, **kwargs):
             print(f"API error: {message}")
+
 
 # Try to import OpenAI
 try:
     import openai
+
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
@@ -148,11 +154,11 @@ class GuestResearch:
     def search_business(self, company_name: str, search_type: str = "company") -> Dict:
         """
         Search for business and company information including LinkedIn profiles
-        
+
         Args:
             company_name: Name of the company or business
             search_type: Type of search - "company", "linkedin", "executive", "news"
-            
+
         Returns:
             Dictionary containing business search results
         """
@@ -173,7 +179,7 @@ class GuestResearch:
                 "linkedin_profiles": [],
                 "company_info": {},
                 "news": [],
-                "social_media": []
+                "social_media": [],
             }
 
             # Perform different types of searches based on search_type
@@ -215,7 +221,7 @@ class GuestResearch:
             return {
                 "error": f"Business search failed: {str(e)}",
                 "company_name": company_name,
-                "results": []
+                "results": [],
             }
 
     def _search_company_info(self, company_name: str) -> Dict:
@@ -226,14 +232,14 @@ class GuestResearch:
                 f'"{company_name}" company',
                 f'"{company_name}" about us',
                 f'"{company_name}" official website',
-                f'"{company_name}" headquarters location'
+                f'"{company_name}" headquarters location',
             ]
-            
+
             all_results = []
             for query in queries:
                 results = self._search_web(query)
                 all_results.extend(results)
-            
+
             # Remove duplicates based on URL
             seen_urls = set()
             unique_results = []
@@ -241,13 +247,13 @@ class GuestResearch:
                 if result.get("link") not in seen_urls:
                     seen_urls.add(result.get("link"))
                     unique_results.append(result)
-            
+
             return {
                 "web_results": unique_results[:10],  # Limit to top 10 results
                 "company_name": company_name,
-                "search_queries": queries
+                "search_queries": queries,
             }
-            
+
         except Exception as e:
             print(f"Company info search error: {e}")
             return {"web_results": [], "error": str(e)}
@@ -260,9 +266,9 @@ class GuestResearch:
                 f'"{company_name}" site:linkedin.com',
                 f'"{company_name}" CEO site:linkedin.com',
                 f'"{company_name}" founder site:linkedin.com',
-                f'"{company_name}" executive site:linkedin.com'
+                f'"{company_name}" executive site:linkedin.com',
             ]
-            
+
             linkedin_results = []
             for query in linkedin_queries:
                 results = self._search_web(query)
@@ -270,9 +276,9 @@ class GuestResearch:
                     if "linkedin.com" in result.get("link", ""):
                         result["type"] = "linkedin_profile"
                         linkedin_results.append(result)
-            
+
             return linkedin_results[:15]  # Limit to top 15 LinkedIn results
-            
+
         except Exception as e:
             print(f"LinkedIn search error: {e}")
             return []
@@ -285,18 +291,18 @@ class GuestResearch:
                 f'"{company_name}" CEO president founder',
                 f'"{company_name}" executive team leadership',
                 f'"{company_name}" board of directors',
-                f'"{company_name}" management team'
+                f'"{company_name}" management team',
             ]
-            
+
             executive_results = []
             for query in executive_queries:
                 results = self._search_web(query)
                 for result in results:
                     result["type"] = "executive_info"
                     executive_results.append(result)
-            
+
             return executive_results[:10]  # Limit to top 10 executive results
-            
+
         except Exception as e:
             print(f"Executive search error: {e}")
             return []
@@ -309,45 +315,53 @@ class GuestResearch:
                 f'"{company_name}" news 2024',
                 f'"{company_name}" press release',
                 f'"{company_name}" announcement',
-                f'"{company_name}" recent developments'
+                f'"{company_name}" recent developments',
             ]
-            
+
             news_results = []
             for query in news_queries:
                 results = self._search_web(query)
                 for result in results:
                     result["type"] = "news"
                     news_results.append(result)
-            
+
             return news_results[:10]  # Limit to top 10 news results
-            
+
         except Exception as e:
             print(f"Company news search error: {e}")
             return []
 
-    def _generate_business_summary(self, company_name: str, search_results: Dict) -> str:
+    def _generate_business_summary(
+        self, company_name: str, search_results: Dict
+    ) -> str:
         """Generate an AI-powered summary of business search results"""
         try:
             # Prepare context for AI summary
             context_parts = [f"Company: {company_name}"]
-            
+
             if search_results.get("company_info", {}).get("web_results"):
                 context_parts.append("Company Information:")
                 for result in search_results["company_info"]["web_results"][:3]:
-                    context_parts.append(f"- {result.get('title', 'N/A')}: {result.get('snippet', 'N/A')}")
-            
+                    context_parts.append(
+                        f"- {result.get('title', 'N/A')}: {result.get('snippet', 'N/A')}"
+                    )
+
             if search_results.get("linkedin_profiles"):
                 context_parts.append("LinkedIn Profiles:")
                 for profile in search_results["linkedin_profiles"][:3]:
-                    context_parts.append(f"- {profile.get('title', 'N/A')}: {profile.get('snippet', 'N/A')}")
-            
+                    context_parts.append(
+                        f"- {profile.get('title', 'N/A')}: {profile.get('snippet', 'N/A')}"
+                    )
+
             if search_results.get("news"):
                 context_parts.append("Recent News:")
                 for news in search_results["news"][:3]:
-                    context_parts.append(f"- {news.get('title', 'N/A')}: {news.get('snippet', 'N/A')}")
-            
+                    context_parts.append(
+                        f"- {news.get('title', 'N/A')}: {news.get('snippet', 'N/A')}"
+                    )
+
             context = "\n".join(context_parts)
-            
+
             # Create summary prompt
             summary_prompt = f"""
 Based on the following search results for {company_name}, provide a comprehensive business summary:
@@ -363,7 +377,7 @@ Please provide a summary that includes:
 
 Format the response as a well-structured business summary.
 """
-            
+
             # Call OpenAI API
             if self.use_new_api and self.client:
                 response = self.client.chat.completions.create(
@@ -394,9 +408,9 @@ Format the response as a well-structured business summary.
                     temperature=0.7,
                 )
                 summary = response.choices[0].message.content.strip()
-            
+
             return summary
-            
+
         except Exception as e:
             print(f"Business summary generation error: {e}")
             return f"Summary generation failed: {str(e)}"
@@ -428,35 +442,41 @@ Format the response as a well-structured business summary.
             }
 
             response = requests.get(url, params=params, timeout=10)
-            
+
             # Enhanced error handling
             if response.status_code == 403:
-                print(f"⚠️ Google API 403 Forbidden - API key may be invalid or quota exceeded")
+                print(
+                    f"⚠️ Google API 403 Forbidden - API key may be invalid or quota exceeded"
+                )
                 print(f"   Query: {final_query}")
                 print(f"   CSE ID: {self.google_cse_id[:8]}...")
-                print(f"   API Key: {self.google_api_key[:10]}..." if self.google_api_key else "   API Key: Not set")
+                print(
+                    f"   API Key: {self.google_api_key[:10]}..."
+                    if self.google_api_key
+                    else "   API Key: Not set"
+                )
                 track_api_error(
                     f"Google API 403 Forbidden for query: {final_query}",
                     component="guest_research",
-                    severity=ErrorSeverity.MEDIUM
+                    severity=ErrorSeverity.MEDIUM,
                 )
                 return self._get_fallback_web_results(query)
-                
+
             elif response.status_code == 429:
                 print(f"⚠️ Google API 429 Rate Limited - Too many requests")
                 track_api_error(
                     f"Google API 429 Rate Limited for query: {final_query}",
                     component="guest_research",
-                    severity=ErrorSeverity.MEDIUM
+                    severity=ErrorSeverity.MEDIUM,
                 )
                 return self._get_fallback_web_results(query)
-                
+
             elif response.status_code != 200:
                 print(f"⚠️ Google API Error {response.status_code}: {response.text}")
                 track_api_error(
                     f"Google API Error {response.status_code}: {response.text}",
                     component="guest_research",
-                    severity=ErrorSeverity.MEDIUM
+                    severity=ErrorSeverity.MEDIUM,
                 )
                 return self._get_fallback_web_results(query)
 
@@ -482,32 +502,30 @@ Format the response as a well-structured business summary.
             track_api_error(
                 f"Web search timeout for query: {query}",
                 component="guest_research",
-                severity=ErrorSeverity.MEDIUM
+                severity=ErrorSeverity.MEDIUM,
             )
             return self._get_fallback_web_results(query)
-            
+
         except requests.exceptions.RequestException as e:
             print(f"⚠️ Web search request error: {e}")
             track_api_error(
                 f"Web search request error: {e}",
                 component="guest_research",
-                severity=ErrorSeverity.MEDIUM
+                severity=ErrorSeverity.MEDIUM,
             )
             return self._get_fallback_web_results(query)
 
         except Exception as e:
             print(f"Web search error: {e}")
             track_api_error(
-                f"Web search error: {e}", 
-                component="guest_research", 
-                exception=e
+                f"Web search error: {e}", component="guest_research", exception=e
             )
             return self._get_fallback_web_results(query)
 
     def _get_fallback_web_results(self, query: str) -> List[Dict]:
         """Provide fallback results when web search fails"""
         print(f"🔄 Using fallback research for: {query}")
-        
+
         # Return basic fallback results
         return [
             {
@@ -515,7 +533,7 @@ Format the response as a well-structured business summary.
                 "snippet": f"Basic information about {query} - web search unavailable",
                 "link": "",
                 "displayLink": "",
-                "fallback": True
+                "fallback": True,
             }
         ]
 
@@ -523,19 +541,19 @@ Format the response as a well-structured business summary.
         """Validate Google API configuration and provide recommendations"""
         issues = []
         recommendations = []
-        
+
         if not self.google_api_key:
             issues.append("Google API key not configured")
             recommendations.append("Set GOOGLE_API_KEY environment variable")
         else:
             print(f"✅ Google API key configured: {self.google_api_key[:10]}...")
-            
+
         if not self.google_cse_id:
             issues.append("Google CSE ID not configured")
             recommendations.append("Set GOOGLE_CSE_ID environment variable")
         else:
             print(f"✅ Google CSE ID configured: {self.google_cse_id[:8]}...")
-            
+
         # Test API access if both are configured
         if self.google_api_key and self.google_cse_id:
             try:
@@ -544,11 +562,11 @@ Format the response as a well-structured business summary.
                     "key": self.google_api_key,
                     "cx": self.google_cse_id,
                     "q": "test",
-                    "num": 1
+                    "num": 1,
                 }
-                
+
                 response = requests.get(test_url, params=test_params, timeout=5)
-                
+
                 if response.status_code == 200:
                     print("✅ Google API test successful")
                 elif response.status_code == 403:
@@ -563,15 +581,15 @@ Format the response as a well-structured business summary.
                 else:
                     issues.append(f"Google API test failed: {response.status_code}")
                     recommendations.append("Check API configuration")
-                    
+
             except Exception as e:
                 issues.append(f"Google API test error: {e}")
                 recommendations.append("Check network connectivity")
-        
+
         return {
             "valid": len(issues) == 0,
             "issues": issues,
-            "recommendations": recommendations
+            "recommendations": recommendations,
         }
 
     def _gather_guest_info(
@@ -729,11 +747,11 @@ Focus on creating engaging, relevant talking points and questions that would mak
     def search_web(self, query: str, website: str = None) -> List[Dict]:
         """
         Public method to search the web for any query
-        
+
         Args:
             query: Search query
             website: Optional website to restrict search to
-            
+
         Returns:
             List of search results
         """

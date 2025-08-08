@@ -95,7 +95,7 @@ class ErrorTracker:
                 error_type = "UnknownError"
             if not message or not isinstance(message, str):
                 message = "No error message provided"
-            
+
             # Merge any extra metadata into context for storage
             if kwargs:
                 context = {**(context or {}), **kwargs}
@@ -103,7 +103,11 @@ class ErrorTracker:
             # Get stack trace if exception provided
             stack_trace = None
             if exception:
-                stack_trace = ''.join(traceback.format_exception(type(exception), exception, exception.__traceback__))
+                stack_trace = "".join(
+                    traceback.format_exception(
+                        type(exception), exception, exception.__traceback__
+                    )
+                )
 
             # Create error event
             error = ErrorEvent(
@@ -139,7 +143,7 @@ class ErrorTracker:
                 message=f"Failed to track error: {str(e)}",
                 severity=ErrorSeverity.HIGH,
                 category=ErrorCategory.SYSTEM,
-                component="error_tracker"
+                component="error_tracker",
             )
 
     def get_errors(
@@ -256,16 +260,24 @@ class ErrorTracker:
         """Update error counts with enhanced error handling"""
         try:
             # Update error type counts
-            self.error_counts[error.error_type] = self.error_counts.get(error.error_type, 0) + 1
+            self.error_counts[error.error_type] = (
+                self.error_counts.get(error.error_type, 0) + 1
+            )
 
             # Update severity counts
-            self.severity_counts[error.severity] = self.severity_counts.get(error.severity, 0) + 1
+            self.severity_counts[error.severity] = (
+                self.severity_counts.get(error.severity, 0) + 1
+            )
 
             # Update category counts
-            self.category_counts[error.category] = self.category_counts.get(error.category, 0) + 1
+            self.category_counts[error.category] = (
+                self.category_counts.get(error.category, 0) + 1
+            )
 
             # Update component counts
-            self.component_counts[error.component] = self.component_counts.get(error.component, 0) + 1
+            self.component_counts[error.component] = (
+                self.component_counts.get(error.component, 0) + 1
+            )
         except Exception as e:
             print(f"ErrorTracker failed to update counts: {e}")
 
@@ -292,7 +304,9 @@ def track_error(error_type: str, message: str, **kwargs) -> Optional[ErrorEvent]
         return None
 
 
-def track_api_error(message: str, severity: ErrorSeverity = ErrorSeverity.HIGH, **kwargs) -> Optional[ErrorEvent]:
+def track_api_error(
+    message: str, severity: ErrorSeverity = ErrorSeverity.HIGH, **kwargs
+) -> Optional[ErrorEvent]:
     """Track API-related errors with enhanced validation"""
     try:
         return get_error_tracker().track_error(
@@ -367,7 +381,9 @@ def track_ui_error(message: str, **kwargs) -> Optional[ErrorEvent]:
         return None
 
 
-def track_user_action(action: str, duration: float = None, success: bool = True, **kwargs) -> Optional[ErrorEvent]:
+def track_user_action(
+    action: str, duration: float = None, success: bool = True, **kwargs
+) -> Optional[ErrorEvent]:
     """Track user actions for UX analytics with enhanced validation"""
     try:
         # Convert user action to error tracking format for monitoring
@@ -375,13 +391,18 @@ def track_user_action(action: str, duration: float = None, success: bool = True,
         message = f"User action: {action} {'succeeded' if success else 'failed'}"
         if duration:
             message += f" (duration: {duration:.2f}s)"
-        
+
         return get_error_tracker().track_error(
             error_type="UserAction",
             message=message,
             category=ErrorCategory.UI,  # User actions are UI-related
             severity=severity,
-            context={"action": action, "duration": duration, "success": success, **kwargs}
+            context={
+                "action": action,
+                "duration": duration,
+                "success": success,
+                **kwargs,
+            },
         )
     except Exception as e:
         print(f"Failed to track user action: {e}")
@@ -392,19 +413,29 @@ def get_ui_performance_metrics() -> Dict:
     """Get UI performance metrics with enhanced error handling"""
     try:
         tracker = get_error_tracker()
-        
+
         ui_errors = [e for e in tracker.errors if e.error_type in ["UIError"]]
         user_actions = [e for e in tracker.errors if e.error_type == "UserAction"]
-        
-        successful_actions = [a for a in user_actions if a.context and a.context.get("success", True)]
-        failed_actions = [a for a in user_actions if a.context and not a.context.get("success", True)]
-        
-        success_rate = len(successful_actions) / len(user_actions) if user_actions else 1.0
-        
+
+        successful_actions = [
+            a for a in user_actions if a.context and a.context.get("success", True)
+        ]
+        failed_actions = [
+            a for a in user_actions if a.context and not a.context.get("success", True)
+        ]
+
+        success_rate = (
+            len(successful_actions) / len(user_actions) if user_actions else 1.0
+        )
+
         # Calculate average duration for successful actions
-        durations = [a.context.get("duration", 0) for a in successful_actions if a.context and a.context.get("duration")]
+        durations = [
+            a.context.get("duration", 0)
+            for a in successful_actions
+            if a.context and a.context.get("duration")
+        ]
         average_duration = sum(durations) / len(durations) if durations else 0.0
-        
+
         return {
             "total_ui_errors": len(ui_errors),
             "total_user_actions": len(user_actions),
@@ -412,9 +443,9 @@ def get_ui_performance_metrics() -> Dict:
             "failed_actions": len(failed_actions),
             "success_rate": success_rate,
             "average_action_duration": average_duration,
-            "recent_errors": [e.message for e in ui_errors[-5:]]  # Last 5 errors
+            "recent_errors": [e.message for e in ui_errors[-5:]],  # Last 5 errors
         }
-        
+
     except Exception as e:
         print(f"Failed to get UI performance metrics: {e}")
         return {}

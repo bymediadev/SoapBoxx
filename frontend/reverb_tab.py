@@ -44,11 +44,12 @@ class EpisodeAnalysisThread(QThread):
             # Import analysis modules with robust error handling
             feedback_engine = None
             transcriber = None
-            
+
             # Try multiple import paths
             try:
                 from feedback_engine import FeedbackEngine
                 from transcriber import Transcriber
+
                 feedback_engine = FeedbackEngine()
                 transcriber = Transcriber(service="openai")
             except ImportError:
@@ -57,18 +58,24 @@ class EpisodeAnalysisThread(QThread):
                     sys.path.insert(0, backend_dir)
                     from feedback_engine import FeedbackEngine
                     from transcriber import Transcriber
+
                     feedback_engine = FeedbackEngine()
                     transcriber = Transcriber(service="openai")
                 except ImportError:
                     try:
                         # Try with relative path
-                        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+                        sys.path.insert(
+                            0, os.path.join(os.path.dirname(__file__), "..", "backend")
+                        )
                         from feedback_engine import FeedbackEngine
                         from transcriber import Transcriber
+
                         feedback_engine = FeedbackEngine()
                         transcriber = Transcriber(service="openai")
                     except ImportError as e:
-                        self.error_occurred.emit(f"Failed to import backend modules: {e}")
+                        self.error_occurred.emit(
+                            f"Failed to import backend modules: {e}"
+                        )
                         return
 
             if feedback_engine is None or transcriber is None:
@@ -80,7 +87,9 @@ class EpisodeAnalysisThread(QThread):
             # Check file size again in case it was modified
             file_size = os.path.getsize(self.file_path) / (1024 * 1024)  # MB
             if file_size > 25:
-                self.error_occurred.emit(f"File size ({file_size:.1f}MB) exceeds OpenAI's 25MB limit. Please compress the audio or use a smaller file.")
+                self.error_occurred.emit(
+                    f"File size ({file_size:.1f}MB) exceeds OpenAI's 25MB limit. Please compress the audio or use a smaller file."
+                )
                 return
 
             # Transcribe audio
@@ -95,14 +104,20 @@ class EpisodeAnalysisThread(QThread):
 
             # Check if audio data is too large
             if len(audio_data) > 25 * 1024 * 1024:  # 25MB in bytes
-                self.error_occurred.emit(f"Audio file is too large ({len(audio_data) / (1024*1024):.1f}MB). OpenAI's limit is 25MB. Please compress the audio.")
+                self.error_occurred.emit(
+                    f"Audio file is too large ({len(audio_data) / (1024*1024):.1f}MB). OpenAI's limit is 25MB. Please compress the audio."
+                )
                 return
 
             transcript = transcriber.transcribe(audio_data)
             if not transcript or transcript.startswith("Error"):
                 # Check for specific OpenAI errors
-                if "413" in str(transcript) or "Maximum content size limit" in str(transcript):
-                    self.error_occurred.emit(f"File too large for OpenAI API. Please compress the audio to under 25MB or split it into smaller segments.")
+                if "413" in str(transcript) or "Maximum content size limit" in str(
+                    transcript
+                ):
+                    self.error_occurred.emit(
+                        f"File too large for OpenAI API. Please compress the audio to under 25MB or split it into smaller segments."
+                    )
                 else:
                     self.error_occurred.emit(f"Transcription failed: {transcript}")
                 return
@@ -132,6 +147,7 @@ class EpisodeAnalysisThread(QThread):
         except Exception as e:
             self.error_occurred.emit(f"Analysis failed: {str(e)}")
             import traceback
+
             traceback.print_exc()
 
 
@@ -144,7 +160,7 @@ class ReverbTab(QWidget):
         self.analysis_thread = None
         # Defer UI setup until widget is shown
         self._ui_initialized = False
-        
+
         # Connect show event to initialize UI
         self.showEvent = self._on_show_event
 
@@ -155,7 +171,7 @@ class ReverbTab(QWidget):
             self.init_ui()
             self._ui_initialized = True
             print("✅ ReverbTab: UI initialized")
-        
+
         # Call the original showEvent if it exists
         super().showEvent(event)
 
@@ -180,7 +196,9 @@ class ReverbTab(QWidget):
         upload_layout = QVBoxLayout()
 
         # File size info
-        size_info = QLabel("💡 Note: OpenAI API has a 25MB file size limit. Larger files will need to be compressed.")
+        size_info = QLabel(
+            "💡 Note: OpenAI API has a 25MB file size limit. Larger files will need to be compressed."
+        )
         size_info.setStyleSheet("color: #666; font-size: 11px; margin: 5px;")
         upload_layout.addWidget(size_info)
 
@@ -463,13 +481,13 @@ class ReverbTab(QWidget):
             transcript = results.get("transcript", "")
             if transcript and not transcript.startswith("Error"):
                 transcript_preview = (
-                    transcript[:500] + "..."
-                    if len(transcript) > 500
-                    else transcript
+                    transcript[:500] + "..." if len(transcript) > 500 else transcript
                 )
                 output += f"📝 Transcript Preview:\n{transcript_preview}\n\n"
             else:
-                output += f"📝 Transcript Preview:\n❌ Transcription failed: {transcript}\n\n"
+                output += (
+                    f"📝 Transcript Preview:\n❌ Transcription failed: {transcript}\n\n"
+                )
                 output += f"💡 Suggestions:\n"
                 output += f"• Check if the audio file is corrupted\n"
                 output += f"• Ensure the file is under 25MB for OpenAI API\n"
@@ -503,6 +521,7 @@ class ReverbTab(QWidget):
         except Exception as e:
             self.results_text.setText(f"Error displaying results: {str(e)}")
             import traceback
+
             traceback.print_exc()
 
     def content_analysis(self):
@@ -510,28 +529,37 @@ class ReverbTab(QWidget):
         try:
             # Import backend components with robust error handling
             feedback_engine = None
-            
+
             try:
                 from feedback_engine import FeedbackEngine
+
                 feedback_engine = FeedbackEngine()
             except ImportError:
                 try:
                     # Try with backend path
                     sys.path.insert(0, backend_dir)
                     from feedback_engine import FeedbackEngine
+
                     feedback_engine = FeedbackEngine()
                 except ImportError:
                     try:
                         # Try with relative path
-                        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+                        sys.path.insert(
+                            0, os.path.join(os.path.dirname(__file__), "..", "backend")
+                        )
                         from feedback_engine import FeedbackEngine
+
                         feedback_engine = FeedbackEngine()
                     except ImportError as e:
-                        self.results_text.setText(f"❌ Error: Could not import FeedbackEngine module. Please check backend installation. Error: {e}")
+                        self.results_text.setText(
+                            f"❌ Error: Could not import FeedbackEngine module. Please check backend installation. Error: {e}"
+                        )
                         return
 
             if feedback_engine is None:
-                self.results_text.setText("❌ Error: Could not import FeedbackEngine module. Please check backend installation.")
+                self.results_text.setText(
+                    "❌ Error: Could not import FeedbackEngine module. Please check backend installation."
+                )
                 return
 
             # This would analyze the current transcript or uploaded content
@@ -542,6 +570,7 @@ class ReverbTab(QWidget):
         except Exception as e:
             self.results_text.setText(f"❌ Error in content analysis: {str(e)}")
             import traceback
+
             traceback.print_exc()
 
     def video_content_analysis(self):
@@ -549,28 +578,37 @@ class ReverbTab(QWidget):
         try:
             # Import YouTube API components with robust error handling
             google_apis = None
-            
+
             try:
                 from google_apis import GoogleAPIs
+
                 google_apis = GoogleAPIs()
             except ImportError:
                 try:
                     # Try with backend path
                     sys.path.insert(0, backend_dir)
                     from google_apis import GoogleAPIs
+
                     google_apis = GoogleAPIs()
                 except ImportError:
                     try:
                         # Try with relative path
-                        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+                        sys.path.insert(
+                            0, os.path.join(os.path.dirname(__file__), "..", "backend")
+                        )
                         from google_apis import GoogleAPIs
+
                         google_apis = GoogleAPIs()
                     except ImportError as e:
-                        self.results_text.setText(f"❌ Error: Could not import GoogleAPIs module. Please check backend installation. Error: {e}")
+                        self.results_text.setText(
+                            f"❌ Error: Could not import GoogleAPIs module. Please check backend installation. Error: {e}"
+                        )
                         return
 
             if google_apis is None:
-                self.results_text.setText("❌ Error: Could not import GoogleAPIs module. Please check backend installation.")
+                self.results_text.setText(
+                    "❌ Error: Could not import GoogleAPIs module. Please check backend installation."
+                )
                 return
 
             if not google_apis.is_available():
@@ -633,6 +671,7 @@ class ReverbTab(QWidget):
         except Exception as e:
             self.results_text.setText(f"❌ Error in video content analysis: {str(e)}")
             import traceback
+
             traceback.print_exc()
 
     def video_podcast_research(self):
@@ -640,28 +679,37 @@ class ReverbTab(QWidget):
         try:
             # Import YouTube API components with robust error handling
             google_apis = None
-            
+
             try:
                 from google_apis import GoogleAPIs
+
                 google_apis = GoogleAPIs()
             except ImportError:
                 try:
                     # Try with backend path
                     sys.path.insert(0, backend_dir)
                     from google_apis import GoogleAPIs
+
                     google_apis = GoogleAPIs()
                 except ImportError:
                     try:
                         # Try with relative path
-                        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+                        sys.path.insert(
+                            0, os.path.join(os.path.dirname(__file__), "..", "backend")
+                        )
                         from google_apis import GoogleAPIs
+
                         google_apis = GoogleAPIs()
                     except ImportError as e:
-                        self.results_text.setText(f"❌ Error: Could not import GoogleAPIs module. Please check backend installation. Error: {e}")
+                        self.results_text.setText(
+                            f"❌ Error: Could not import GoogleAPIs module. Please check backend installation. Error: {e}"
+                        )
                         return
 
             if google_apis is None:
-                self.results_text.setText("❌ Error: Could not import GoogleAPIs module. Please check backend installation.")
+                self.results_text.setText(
+                    "❌ Error: Could not import GoogleAPIs module. Please check backend installation."
+                )
                 return
 
             if not google_apis.is_available():
@@ -726,6 +774,7 @@ class ReverbTab(QWidget):
         except Exception as e:
             self.results_text.setText(f"❌ Error in video podcast research: {str(e)}")
             import traceback
+
             traceback.print_exc()
 
     def performance_coaching(self):
@@ -773,28 +822,37 @@ class ReverbTab(QWidget):
         try:
             # Import podcast APIs with robust error handling
             podcast_apis = None
-            
+
             try:
                 from podcast_apis import PodcastAPIs
+
                 podcast_apis = PodcastAPIs()
             except ImportError:
                 try:
                     # Try with backend path
                     sys.path.insert(0, backend_dir)
                     from podcast_apis import PodcastAPIs
+
                     podcast_apis = PodcastAPIs()
                 except ImportError:
                     try:
                         # Try with relative path
-                        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+                        sys.path.insert(
+                            0, os.path.join(os.path.dirname(__file__), "..", "backend")
+                        )
                         from podcast_apis import PodcastAPIs
+
                         podcast_apis = PodcastAPIs()
                     except ImportError as e:
-                        self.results_text.setText(f"❌ Error: Could not import PodcastAPIs module. Please check backend installation. Error: {e}")
+                        self.results_text.setText(
+                            f"❌ Error: Could not import PodcastAPIs module. Please check backend installation. Error: {e}"
+                        )
                         return
 
             if podcast_apis is None:
-                self.results_text.setText("❌ Error: Could not import PodcastAPIs module. Please check backend installation.")
+                self.results_text.setText(
+                    "❌ Error: Could not import PodcastAPIs module. Please check backend installation."
+                )
                 return
 
             available_apis = podcast_apis.get_available_apis()
@@ -820,6 +878,7 @@ class ReverbTab(QWidget):
         except Exception as e:
             self.results_text.setText(f"❌ Error in podcast analytics: {str(e)}")
             import traceback
+
             traceback.print_exc()
 
     def podchaser_analytics(self):
@@ -827,28 +886,37 @@ class ReverbTab(QWidget):
         try:
             # Import podcast APIs with robust error handling
             podcast_apis = None
-            
+
             try:
                 from podcast_apis import PodcastAPIs
+
                 podcast_apis = PodcastAPIs()
             except ImportError:
                 try:
                     # Try with backend path
                     sys.path.insert(0, backend_dir)
                     from podcast_apis import PodcastAPIs
+
                     podcast_apis = PodcastAPIs()
                 except ImportError:
                     try:
                         # Try with relative path
-                        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+                        sys.path.insert(
+                            0, os.path.join(os.path.dirname(__file__), "..", "backend")
+                        )
                         from podcast_apis import PodcastAPIs
+
                         podcast_apis = PodcastAPIs()
                     except ImportError as e:
-                        self.results_text.setText(f"❌ Error: Could not import PodcastAPIs module. Please check backend installation. Error: {e}")
+                        self.results_text.setText(
+                            f"❌ Error: Could not import PodcastAPIs module. Please check backend installation. Error: {e}"
+                        )
                         return
 
             if podcast_apis is None:
-                self.results_text.setText("❌ Error: Could not import PodcastAPIs module. Please check backend installation.")
+                self.results_text.setText(
+                    "❌ Error: Could not import PodcastAPIs module. Please check backend installation."
+                )
                 return
 
             if not podcast_apis.podchaser_key:
@@ -918,6 +986,7 @@ class ReverbTab(QWidget):
         except Exception as e:
             self.results_text.setText(f"❌ Error in Podchaser analytics: {str(e)}")
             import traceback
+
             traceback.print_exc()
 
     def podchaser_trending(self):
@@ -925,28 +994,37 @@ class ReverbTab(QWidget):
         try:
             # Import podcast APIs with robust error handling
             podcast_apis = None
-            
+
             try:
                 from podcast_apis import PodcastAPIs
+
                 podcast_apis = PodcastAPIs()
             except ImportError:
                 try:
                     # Try with backend path
                     sys.path.insert(0, backend_dir)
                     from podcast_apis import PodcastAPIs
+
                     podcast_apis = PodcastAPIs()
                 except ImportError:
                     try:
                         # Try with relative path
-                        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+                        sys.path.insert(
+                            0, os.path.join(os.path.dirname(__file__), "..", "backend")
+                        )
                         from podcast_apis import PodcastAPIs
+
                         podcast_apis = PodcastAPIs()
                     except ImportError as e:
-                        self.results_text.setText(f"❌ Error: Could not import PodcastAPIs module. Please check backend installation. Error: {e}")
+                        self.results_text.setText(
+                            f"❌ Error: Could not import PodcastAPIs module. Please check backend installation. Error: {e}"
+                        )
                         return
 
             if podcast_apis is None:
-                self.results_text.setText("❌ Error: Could not import PodcastAPIs module. Please check backend installation.")
+                self.results_text.setText(
+                    "❌ Error: Could not import PodcastAPIs module. Please check backend installation."
+                )
                 return
 
             if not podcast_apis.podchaser_key:
@@ -1006,4 +1084,5 @@ class ReverbTab(QWidget):
         except Exception as e:
             self.results_text.setText(f"❌ Error in Podchaser trending: {str(e)}")
             import traceback
+
             traceback.print_exc()
