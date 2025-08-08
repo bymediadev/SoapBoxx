@@ -25,7 +25,7 @@ SoapBoxx is a comprehensive podcast recording system that combines real-time aud
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/bymediadev/SoapBoxx.git
    cd SoapBoxx
    ```
 
