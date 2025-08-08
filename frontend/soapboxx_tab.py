@@ -173,6 +173,11 @@ class AudioLevelThread(QThread):
         self.last_update_time = 0
         self.update_interval = 0.1  # Update every 100ms to prevent overflow
         self.audio_stream = None
+        self.device_id = None
+
+    def set_device(self, device_id):
+        """Set the device ID to use for monitoring"""
+        self.device_id = device_id
 
     def run(self):
         """Monitor audio levels"""
@@ -206,13 +211,19 @@ class AudioLevelThread(QThread):
                             print(f"Error calculating audio level: {e}")
 
             # Use larger buffer size and lower sample rate to prevent overflow
-            with sd.InputStream(
-                callback=audio_callback, 
-                channels=1, 
-                samplerate=16000,
-                blocksize=1024,  # Larger block size
-                latency='high'   # Higher latency for stability
-            ):
+            stream_params = {
+                'callback': audio_callback, 
+                'channels': 1, 
+                'samplerate': 16000,
+                'blocksize': 1024,  # Larger block size
+                'latency': 'high'   # Higher latency for stability
+            }
+            
+            # Add device selection if specified
+            if self.device_id is not None:
+                stream_params['device'] = self.device_id
+
+            with sd.InputStream(**stream_params):
                 while self.is_monitoring:
                     time_module.sleep(0.05)  # Shorter sleep time for responsiveness
 
@@ -337,7 +348,6 @@ class RecordingThread(QThread):
 class SoapBoxxTab(QWidget):
     def __init__(self):
         super().__init__()
-        self.setup_ui()
         self.core = None
         self.transcriber = None
         self.audio_level_thread = None
@@ -351,7 +361,12 @@ class SoapBoxxTab(QWidget):
         self._questions_timer = QTimer(self)
         self._questions_timer.setInterval(2000)  # 2s
         self._questions_timer.timeout.connect(self._scan_transcript_for_questions)
+        
+        self.setup_ui()
         self.setup_backend()
+        
+        # Refresh devices after a short delay to ensure UI is fully loaded
+        QTimer.singleShot(500, self.refresh_devices)
 
     def setup_ui(self):
         """Setup the user interface with modern design"""
@@ -817,12 +832,16 @@ class SoapBoxxTab(QWidget):
                 # Select the first device by default
                 if self.device_combo.count() > 0:
                     self.device_combo.setCurrentIndex(0)
+                    # Start audio monitoring after device selection
+                    QTimer.singleShot(100, self._start_audio_monitoring_if_needed)
             else:
                 # Try to add default device
                 try:
                     default_device = sd.default.device[0]  # Get default input device
                     self.device_combo.addItem(f"Default Device (ID: {default_device})")
                     print(f"✅ Using default device (ID: {default_device})")
+                    # Start audio monitoring after device selection
+                    QTimer.singleShot(100, self._start_audio_monitoring_if_needed)
                 except:
                     self.device_combo.addItem("No input devices found")
                     print("⚠️ No input devices found")
@@ -837,6 +856,17 @@ class SoapBoxxTab(QWidget):
             print(f"❌ Audio device detection error: {e}")
             traceback.print_exc()
 
+    def _start_audio_monitoring_if_needed(self):
+        """Start audio monitoring if not already running"""
+        try:
+            if (self.audio_level_thread is None or not self.audio_level_thread.isRunning()) and self.device_combo.count() > 0:
+                device_name = self.device_combo.currentText()
+                if device_name and "Error" not in device_name and "not available" not in device_name and "Loading" not in device_name:
+                    print(f"🎤 Starting audio monitoring for device: {device_name}")
+                    self.start_audio_monitoring()
+        except Exception as e:
+            print(f"Error starting audio monitoring: {e}")
+
     def on_device_changed(self, device_name):
         """Handle device selection change"""
         if (
@@ -848,6 +878,21 @@ class SoapBoxxTab(QWidget):
             self.status_label.setText(f"Selected: {device_name}")
             self.status_label.setStyleSheet("font-weight: bold; color: blue;")
             print(f"🎤 Selected device: {device_name}")
+            
+            # Restart audio monitoring with the new device
+            QTimer.singleShot(100, self._restart_audio_monitoring_for_device)
+    
+    def _restart_audio_monitoring_for_device(self):
+        """Restart audio monitoring for the newly selected device"""
+        try:
+            if self.audio_level_thread and self.audio_level_thread.isRunning():
+                self.audio_level_thread.stop_monitoring()
+                self.audio_level_thread.wait(1000)  # Wait for thread to finish
+            
+            # Start monitoring with the new device
+            self.start_audio_monitoring()
+        except Exception as e:
+            print(f"Error restarting audio monitoring for new device: {e}")
 
     def test_microphone(self):
         """Test the selected microphone with robust error handling"""
@@ -1101,6 +1146,21 @@ class SoapBoxxTab(QWidget):
                 self.audio_level_thread = AudioLevelThread()
                 self.audio_level_thread.level_updated.connect(self.update_audio_level)
                 self.audio_level_thread.error_occurred.connect(self._handle_audio_thread_error)
+                
+                # Set device if available
+                device_name = self.device_combo.currentText()
+                if device_name and "Error" not in device_name and "not available" not in device_name and "Loading" not in device_name:
+                    # Extract device ID from the device name
+                    try:
+                        if "(ID:" in device_name:
+                            device_id_str = device_name.split("(ID:")[1].split(")")[0].strip()
+                            device_id = int(device_id_str)
+                            self.audio_level_thread.set_device(device_id)
+                            print(f"🎤 Set device ID: {device_id} for monitoring")
+                    except (ValueError, IndexError) as e:
+                        print(f"Could not parse device ID from '{device_name}': {e}")
+                        # Continue without device selection (will use default)
+                
                 self.audio_level_thread.start_monitoring()
                 print("✅ Audio level monitoring started")
         except ImportError as e:
