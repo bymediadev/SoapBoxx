@@ -390,7 +390,7 @@ Format the response as a well-structured business summary.
             return f"Summary generation failed: {str(e)}"
 
     def _search_web(self, query: str, website: str = None) -> List[Dict]:
-        """Search the web for information using Google CSE"""
+        """Search the web for information using Google CSE with enhanced error handling"""
         if not self.google_cse_id or not self.google_api_key:
             print("Web search not available: Missing Google CSE ID or API key")
             return []
@@ -416,7 +416,37 @@ Format the response as a well-structured business summary.
             }
 
             response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()
+            
+            # Enhanced error handling
+            if response.status_code == 403:
+                print(f"⚠️ Google API 403 Forbidden - API key may be invalid or quota exceeded")
+                print(f"   Query: {final_query}")
+                print(f"   CSE ID: {self.google_cse_id[:8]}...")
+                print(f"   API Key: {self.google_api_key[:10]}..." if self.google_api_key else "   API Key: Not set")
+                track_api_error(
+                    f"Google API 403 Forbidden for query: {final_query}",
+                    component="guest_research",
+                    severity=ErrorSeverity.MEDIUM
+                )
+                return self._get_fallback_web_results(query)
+                
+            elif response.status_code == 429:
+                print(f"⚠️ Google API 429 Rate Limited - Too many requests")
+                track_api_error(
+                    f"Google API 429 Rate Limited for query: {final_query}",
+                    component="guest_research",
+                    severity=ErrorSeverity.MEDIUM
+                )
+                return self._get_fallback_web_results(query)
+                
+            elif response.status_code != 200:
+                print(f"⚠️ Google API Error {response.status_code}: {response.text}")
+                track_api_error(
+                    f"Google API Error {response.status_code}: {response.text}",
+                    component="guest_research",
+                    severity=ErrorSeverity.MEDIUM
+                )
+                return self._get_fallback_web_results(query)
 
             data = response.json()
             results = []
@@ -435,12 +465,102 @@ Format the response as a well-structured business summary.
             print(f"✅ Found {len(results)} web results for query: {query}")
             return results
 
+        except requests.exceptions.Timeout:
+            print(f"⚠️ Web search timeout for query: {query}")
+            track_api_error(
+                f"Web search timeout for query: {query}",
+                component="guest_research",
+                severity=ErrorSeverity.MEDIUM
+            )
+            return self._get_fallback_web_results(query)
+            
+        except requests.exceptions.RequestException as e:
+            print(f"⚠️ Web search request error: {e}")
+            track_api_error(
+                f"Web search request error: {e}",
+                component="guest_research",
+                severity=ErrorSeverity.MEDIUM
+            )
+            return self._get_fallback_web_results(query)
+            
         except Exception as e:
             print(f"Web search error: {e}")
             track_api_error(
-                f"Web search error: {e}", component="guest_research", exception=e
+                f"Web search error: {e}", 
+                component="guest_research", 
+                exception=e
             )
-            return []
+            return self._get_fallback_web_results(query)
+
+    def _get_fallback_web_results(self, query: str) -> List[Dict]:
+        """Provide fallback results when web search fails"""
+        print(f"🔄 Using fallback research for: {query}")
+        
+        # Return basic fallback results
+        return [
+            {
+                "title": f"Research for {query}",
+                "snippet": f"Basic information about {query} - web search unavailable",
+                "link": "",
+                "displayLink": "",
+                "fallback": True
+            }
+        ]
+
+    def _validate_google_api_config(self) -> Dict:
+        """Validate Google API configuration and provide recommendations"""
+        issues = []
+        recommendations = []
+        
+        if not self.google_api_key:
+            issues.append("Google API key not configured")
+            recommendations.append("Set GOOGLE_API_KEY environment variable")
+        else:
+            print(f"✅ Google API key configured: {self.google_api_key[:10]}...")
+            
+        if not self.google_cse_id:
+            issues.append("Google CSE ID not configured")
+            recommendations.append("Set GOOGLE_CSE_ID environment variable")
+        else:
+            print(f"✅ Google CSE ID configured: {self.google_cse_id[:8]}...")
+            
+        # Test API access if both are configured
+        if self.google_api_key and self.google_cse_id:
+            try:
+                test_url = "https://www.googleapis.com/customsearch/v1"
+                test_params = {
+                    "key": self.google_api_key,
+                    "cx": self.google_cse_id,
+                    "q": "test",
+                    "num": 1
+                }
+                
+                response = requests.get(test_url, params=test_params, timeout=5)
+                
+                if response.status_code == 200:
+                    print("✅ Google API test successful")
+                elif response.status_code == 403:
+                    issues.append("Google API 403 Forbidden - Check API key and CSE ID")
+                    recommendations.append("Verify Google API key is valid")
+                    recommendations.append("Verify Custom Search Engine ID is correct")
+                    recommendations.append("Check API quotas and billing")
+                elif response.status_code == 429:
+                    issues.append("Google API 429 Rate Limited")
+                    recommendations.append("Wait before making more requests")
+                    recommendations.append("Consider upgrading API quota")
+                else:
+                    issues.append(f"Google API test failed: {response.status_code}")
+                    recommendations.append("Check API configuration")
+                    
+            except Exception as e:
+                issues.append(f"Google API test error: {e}")
+                recommendations.append("Check network connectivity")
+        
+        return {
+            "valid": len(issues) == 0,
+            "issues": issues,
+            "recommendations": recommendations
+        }
 
     def _gather_guest_info(
         self,

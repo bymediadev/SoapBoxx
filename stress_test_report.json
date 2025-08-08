@@ -1,0 +1,686 @@
+{
+  "timestamp": "2025-08-07T21:46:13.519722",
+  "total_time": 274.435343503952,
+  "total_requests": 19,
+  "successful_requests": 19,
+  "failed_requests": 0,
+  "success_rate": 100.0,
+  "results": {
+    "OpenAI API Concurrent Requests": {
+      "1": {
+        "total_requests": 1,
+        "successful": 1,
+        "failed": 0,
+        "total_time": 0.06110215187072754,
+        "avg_response_time": 0.06110215187072754,
+        "responses": [
+          {
+            "request_id": 0,
+            "success": true,
+            "duration": 0.0601041316986084,
+            "result_length": 94
+          }
+        ]
+      },
+      "3": {
+        "total_requests": 3,
+        "successful": 3,
+        "failed": 0,
+        "total_time": 0.0717325210571289,
+        "avg_response_time": 0.0239108403523763,
+        "responses": [
+          {
+            "request_id": 0,
+            "success": true,
+            "duration": 0.0717325210571289,
+            "result_length": 94
+          },
+          {
+            "request_id": 1,
+            "success": true,
+            "duration": 0.07073211669921875,
+            "result_length": 94
+          },
+          {
+            "request_id": 2,
+            "success": true,
+            "duration": 0.07073211669921875,
+            "result_length": 94
+          }
+        ]
+      },
+      "5": {
+        "total_requests": 5,
+        "successful": 5,
+        "failed": 0,
+        "total_time": 0.09673333168029785,
+        "avg_response_time": 0.01934666633605957,
+        "responses": [
+          {
+            "request_id": 2,
+            "success": true,
+            "duration": 0.08069133758544922,
+            "result_length": 94
+          },
+          {
+            "request_id": 1,
+            "success": true,
+            "duration": 0.0916903018951416,
+            "result_length": 94
+          },
+          {
+            "request_id": 4,
+            "success": true,
+            "duration": 0.09369111061096191,
+            "result_length": 94
+          },
+          {
+            "request_id": 3,
+            "success": true,
+            "duration": 0.09369111061096191,
+            "result_length": 94
+          },
+          {
+            "request_id": 0,
+            "success": true,
+            "duration": 0.09469056129455566,
+            "result_length": 94
+          }
+        ]
+      },
+      "10": {
+        "total_requests": 10,
+        "successful": 10,
+        "failed": 0,
+        "total_time": 0.15875530242919922,
+        "avg_response_time": 0.015875530242919923,
+        "responses": [
+          {
+            "request_id": 1,
+            "success": true,
+            "duration": 0.11190342903137207,
+            "result_length": 94
+          },
+          {
+            "request_id": 5,
+            "success": true,
+            "duration": 0.11708307266235352,
+            "result_length": 94
+          },
+          {
+            "request_id": 4,
+            "success": true,
+            "duration": 0.142425537109375,
+            "result_length": 94
+          },
+          {
+            "request_id": 0,
+            "success": true,
+            "duration": 0.14642739295959473,
+            "result_length": 94
+          },
+          {
+            "request_id": 8,
+            "success": true,
+            "duration": 0.1455988883972168,
+            "result_length": 94
+          },
+          {
+            "request_id": 9,
+            "success": true,
+            "duration": 0.14459729194641113,
+            "result_length": 94
+          },
+          {
+            "request_id": 7,
+            "success": true,
+            "duration": 0.14859890937805176,
+            "result_length": 94
+          },
+          {
+            "request_id": 2,
+            "success": true,
+            "duration": 0.15260052680969238,
+            "result_length": 94
+          },
+          {
+            "request_id": 6,
+            "success": true,
+            "duration": 0.15059733390808105,
+            "result_length": 94
+          },
+          {
+            "request_id": 3,
+            "success": true,
+            "duration": 0.15763425827026367,
+            "result_length": 94
+          }
+        ]
+      }
+    },
+    "Audio Recording Rapid Cycles": [
+      {
+        "cycle": 0,
+        "success": false,
+        "duration": 0.0,
+        "error": "'AudioRecorder' object has no attribute 'start_recording'"
+      },
+      {
+        "cycle": 1,
+        "success": false,
+        "duration": 0.0,
+        "error": "'AudioRecorder' object has no attribute 'start_recording'"
+      },
+      {
+        "cycle": 2,
+        "success": false,
+        "duration": 0.0,
+        "error": "'AudioRecorder' object has no attribute 'start_recording'"
+      },
+      {
+        "cycle": 3,
+        "success": false,
+        "duration": 0.0,
+        "error": "'AudioRecorder' object has no attribute 'start_recording'"
+      },
+      {
+        "cycle": 4,
+        "success": false,
+        "duration": 0.0,
+        "error": "'AudioRecorder' object has no attribute 'start_recording'"
+      },
+      {
+        "cycle": 5,
+        "success": false,
+        "duration": 0.0,
+        "error": "'AudioRecorder' object has no attribute 'start_recording'"
+      },
+      {
+        "cycle": 6,
+        "success": false,
+        "duration": 0.0,
+        "error": "'AudioRecorder' object has no attribute 'start_recording'"
+      },
+      {
+        "cycle": 7,
+        "success": false,
+        "duration": 0.0,
+        "error": "'AudioRecorder' object has no attribute 'start_recording'"
+      },
+      {
+        "cycle": 8,
+        "success": false,
+        "duration": 0.0,
+        "error": "'AudioRecorder' object has no attribute 'start_recording'"
+      },
+      {
+        "cycle": 9,
+        "success": false,
+        "duration": 0.0,
+        "error": "'AudioRecorder' object has no attribute 'start_recording'"
+      }
+    ],
+    "Transcription Various Sizes": [
+      {
+        "audio_size": 100,
+        "success": true,
+        "duration": 0.05451655387878418,
+        "result_length": 94
+      },
+      {
+        "audio_size": 1000,
+        "success": true,
+        "duration": 0.05277061462402344,
+        "result_length": 94
+      },
+      {
+        "audio_size": 10000,
+        "success": true,
+        "duration": 0.05301642417907715,
+        "result_length": 94
+      },
+      {
+        "audio_size": 100000,
+        "success": true,
+        "duration": 0.0686650276184082,
+        "result_length": 94
+      }
+    ],
+    "Feedback Engine Various Transcripts": [
+      {
+        "transcript_length": 10,
+        "success": true,
+        "duration": 3.5119566917419434,
+        "has_feedback": true
+      },
+      {
+        "transcript_length": 100,
+        "success": true,
+        "duration": 3.226288318634033,
+        "has_feedback": true
+      },
+      {
+        "transcript_length": 1000,
+        "success": true,
+        "duration": 2.8369719982147217,
+        "has_feedback": true
+      },
+      {
+        "transcript_length": 5000,
+        "success": true,
+        "duration": 0.4850494861602783,
+        "has_feedback": true
+      }
+    ],
+    "Guest Research Various Names": [
+      {
+        "guest_name": "John Doe",
+        "success": true,
+        "duration": 3.4131083488464355,
+        "has_results": true
+      },
+      {
+        "guest_name": "Jane Smith",
+        "success": true,
+        "duration": 2.74873423576355,
+        "has_results": true
+      },
+      {
+        "guest_name": "Tech Expert",
+        "success": true,
+        "duration": 3.1417529582977295,
+        "has_results": true
+      },
+      {
+        "guest_name": "Business Leader",
+        "success": true,
+        "duration": 2.8279387950897217,
+        "has_results": true
+      },
+      {
+        "guest_name": "Podcast Host",
+        "success": true,
+        "duration": 3.259075403213501,
+        "has_results": true
+      }
+    ],
+    "Memory Usage Repeated Operations": [
+      {
+        "iteration": 0,
+        "success": true,
+        "duration": 4.13098406791687,
+        "memory_mb": 236.25,
+        "memory_increase": 1.67578125
+      },
+      {
+        "iteration": 1,
+        "success": true,
+        "duration": 5.084070444107056,
+        "memory_mb": 236.4609375,
+        "memory_increase": 1.88671875
+      },
+      {
+        "iteration": 2,
+        "success": true,
+        "duration": 4.506536960601807,
+        "memory_mb": 236.53515625,
+        "memory_increase": 1.9609375
+      },
+      {
+        "iteration": 3,
+        "success": true,
+        "duration": 5.535025596618652,
+        "memory_mb": 236.71875,
+        "memory_increase": 2.14453125
+      },
+      {
+        "iteration": 4,
+        "success": true,
+        "duration": 5.974672317504883,
+        "memory_mb": 236.734375,
+        "memory_increase": 2.16015625
+      },
+      {
+        "iteration": 5,
+        "success": true,
+        "duration": 5.1352527141571045,
+        "memory_mb": 236.7421875,
+        "memory_increase": 2.16796875
+      },
+      {
+        "iteration": 6,
+        "success": true,
+        "duration": 5.400198698043823,
+        "memory_mb": 236.7421875,
+        "memory_increase": 2.16796875
+      },
+      {
+        "iteration": 7,
+        "success": true,
+        "duration": 4.129460573196411,
+        "memory_mb": 236.8125,
+        "memory_increase": 2.23828125
+      },
+      {
+        "iteration": 8,
+        "success": true,
+        "duration": 5.797173261642456,
+        "memory_mb": 236.8125,
+        "memory_increase": 2.23828125
+      },
+      {
+        "iteration": 9,
+        "success": true,
+        "duration": 4.681851625442505,
+        "memory_mb": 236.8125,
+        "memory_increase": 2.23828125
+      },
+      {
+        "iteration": 10,
+        "success": true,
+        "duration": 4.835946083068848,
+        "memory_mb": 236.81640625,
+        "memory_increase": 2.2421875
+      },
+      {
+        "iteration": 11,
+        "success": true,
+        "duration": 5.727041006088257,
+        "memory_mb": 236.96875,
+        "memory_increase": 2.39453125
+      },
+      {
+        "iteration": 12,
+        "success": true,
+        "duration": 4.992178440093994,
+        "memory_mb": 236.96875,
+        "memory_increase": 2.39453125
+      },
+      {
+        "iteration": 13,
+        "success": true,
+        "duration": 3.6484625339508057,
+        "memory_mb": 236.97265625,
+        "memory_increase": 2.3984375
+      },
+      {
+        "iteration": 14,
+        "success": true,
+        "duration": 5.773048639297485,
+        "memory_mb": 236.98828125,
+        "memory_increase": 2.4140625
+      },
+      {
+        "iteration": 15,
+        "success": true,
+        "duration": 4.684227228164673,
+        "memory_mb": 236.984375,
+        "memory_increase": 2.41015625
+      },
+      {
+        "iteration": 16,
+        "success": true,
+        "duration": 3.700683355331421,
+        "memory_mb": 236.984375,
+        "memory_increase": 2.41015625
+      },
+      {
+        "iteration": 17,
+        "success": true,
+        "duration": 4.367360591888428,
+        "memory_mb": 236.984375,
+        "memory_increase": 2.41015625
+      },
+      {
+        "iteration": 18,
+        "success": true,
+        "duration": 4.601153612136841,
+        "memory_mb": 236.98046875,
+        "memory_increase": 2.40625
+      },
+      {
+        "iteration": 19,
+        "success": true,
+        "duration": 4.742902040481567,
+        "memory_mb": 236.98828125,
+        "memory_increase": 2.4140625
+      },
+      {
+        "iteration": 20,
+        "success": true,
+        "duration": 5.3197550773620605,
+        "memory_mb": 236.984375,
+        "memory_increase": 2.41015625
+      },
+      {
+        "iteration": 21,
+        "success": true,
+        "duration": 5.962477445602417,
+        "memory_mb": 236.953125,
+        "memory_increase": 2.37890625
+      },
+      {
+        "iteration": 22,
+        "success": true,
+        "duration": 4.589463949203491,
+        "memory_mb": 236.953125,
+        "memory_increase": 2.37890625
+      },
+      {
+        "iteration": 23,
+        "success": true,
+        "duration": 4.806609869003296,
+        "memory_mb": 236.953125,
+        "memory_increase": 2.37890625
+      },
+      {
+        "iteration": 24,
+        "success": true,
+        "duration": 6.357818126678467,
+        "memory_mb": 236.953125,
+        "memory_increase": 2.37890625
+      },
+      {
+        "iteration": 25,
+        "success": true,
+        "duration": 5.411943435668945,
+        "memory_mb": 236.95703125,
+        "memory_increase": 2.3828125
+      },
+      {
+        "iteration": 26,
+        "success": true,
+        "duration": 3.9871060848236084,
+        "memory_mb": 236.94921875,
+        "memory_increase": 2.375
+      },
+      {
+        "iteration": 27,
+        "success": true,
+        "duration": 5.177204132080078,
+        "memory_mb": 236.953125,
+        "memory_increase": 2.37890625
+      },
+      {
+        "iteration": 28,
+        "success": true,
+        "duration": 5.619763374328613,
+        "memory_mb": 236.95703125,
+        "memory_increase": 2.3828125
+      },
+      {
+        "iteration": 29,
+        "success": true,
+        "duration": 4.6184751987457275,
+        "memory_mb": 236.9609375,
+        "memory_increase": 2.38671875
+      },
+      {
+        "iteration": 30,
+        "success": true,
+        "duration": 4.887434244155884,
+        "memory_mb": 236.96484375,
+        "memory_increase": 2.390625
+      },
+      {
+        "iteration": 31,
+        "success": true,
+        "duration": 4.173684358596802,
+        "memory_mb": 236.96484375,
+        "memory_increase": 2.390625
+      },
+      {
+        "iteration": 32,
+        "success": true,
+        "duration": 5.666013240814209,
+        "memory_mb": 236.9609375,
+        "memory_increase": 2.38671875
+      },
+      {
+        "iteration": 33,
+        "success": true,
+        "duration": 4.213719129562378,
+        "memory_mb": 236.95703125,
+        "memory_increase": 2.3828125
+      },
+      {
+        "iteration": 34,
+        "success": true,
+        "duration": 5.19915246963501,
+        "memory_mb": 236.95703125,
+        "memory_increase": 2.3828125
+      },
+      {
+        "iteration": 35,
+        "success": true,
+        "duration": 4.6019861698150635,
+        "memory_mb": 236.953125,
+        "memory_increase": 2.37890625
+      },
+      {
+        "iteration": 36,
+        "success": true,
+        "duration": 4.841877460479736,
+        "memory_mb": 236.953125,
+        "memory_increase": 2.37890625
+      },
+      {
+        "iteration": 37,
+        "success": true,
+        "duration": 4.162917852401733,
+        "memory_mb": 236.9453125,
+        "memory_increase": 2.37109375
+      },
+      {
+        "iteration": 38,
+        "success": true,
+        "duration": 4.4551780223846436,
+        "memory_mb": 236.94921875,
+        "memory_increase": 2.375
+      },
+      {
+        "iteration": 39,
+        "success": true,
+        "duration": 5.359988212585449,
+        "memory_mb": 236.94921875,
+        "memory_increase": 2.375
+      },
+      {
+        "iteration": 40,
+        "success": true,
+        "duration": 5.454368352890015,
+        "memory_mb": 236.94921875,
+        "memory_increase": 2.375
+      },
+      {
+        "iteration": 41,
+        "success": true,
+        "duration": 4.944832801818848,
+        "memory_mb": 236.9453125,
+        "memory_increase": 2.37109375
+      },
+      {
+        "iteration": 42,
+        "success": true,
+        "duration": 4.25896692276001,
+        "memory_mb": 237.01953125,
+        "memory_increase": 2.4453125
+      },
+      {
+        "iteration": 43,
+        "success": true,
+        "duration": 4.470966100692749,
+        "memory_mb": 237.01953125,
+        "memory_increase": 2.4453125
+      },
+      {
+        "iteration": 44,
+        "success": true,
+        "duration": 4.981736421585083,
+        "memory_mb": 237.01953125,
+        "memory_increase": 2.4453125
+      },
+      {
+        "iteration": 45,
+        "success": true,
+        "duration": 5.346357583999634,
+        "memory_mb": 237.01953125,
+        "memory_increase": 2.4453125
+      },
+      {
+        "iteration": 46,
+        "success": true,
+        "duration": 5.258273363113403,
+        "memory_mb": 237.01953125,
+        "memory_increase": 2.4453125
+      },
+      {
+        "iteration": 47,
+        "success": true,
+        "duration": 5.918477535247803,
+        "memory_mb": 237.01953125,
+        "memory_increase": 2.4453125
+      },
+      {
+        "iteration": 48,
+        "success": true,
+        "duration": 5.741058588027954,
+        "memory_mb": 237.01953125,
+        "memory_increase": 2.4453125
+      },
+      {
+        "iteration": 49,
+        "success": true,
+        "duration": 4.796292066574097,
+        "memory_mb": 237.0234375,
+        "memory_increase": 2.44921875
+      }
+    ],
+    "Error Recovery Mechanisms": [
+      {
+        "scenario": "Empty audio",
+        "success": false,
+        "duration": 0.0,
+        "graceful_handling": false
+      },
+      {
+        "scenario": "Invalid audio format",
+        "success": false,
+        "duration": 0.05234074592590332,
+        "graceful_handling": false
+      },
+      {
+        "scenario": "Very large audio",
+        "success": false,
+        "duration": 0.16652441024780273,
+        "graceful_handling": false
+      },
+      {
+        "scenario": "None input",
+        "success": false,
+        "duration": 0.0,
+        "graceful_handling": false
+      }
+    ]
+  }
+}

@@ -73,135 +73,98 @@ class Transcriber:
         else:
             print(f"Warning: Unknown transcription service: {service}")
 
-    def _convert_audio_to_wav(self, audio_data: Union[bytes, np.ndarray]) -> bytes:
-        """Convert audio data to WAV format for API compatibility"""
-        if isinstance(audio_data, np.ndarray):
-            # Convert numpy array to bytes
-            audio_bytes = audio_data.tobytes()
-        else:
-            audio_bytes = audio_data
-
-        # Create temporary file for conversion
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-            temp_file.write(audio_bytes)
-            temp_path = temp_file.name
-
-        try:
-            # Load and convert to WAV format
-            audio = AudioSegment.from_file(temp_path)
-            # Ensure mono channel and 16kHz sample rate
-            audio = audio.set_channels(1).set_frame_rate(16000)
-
-            # Export as WAV bytes
-            wav_buffer = io.BytesIO()
-            audio.export(wav_buffer, format="wav")
-            return wav_buffer.getvalue()
-        finally:
-            # Clean up temporary file
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
-
-    def transcribe(self, audio: Union[bytes, str, np.ndarray]) -> str:
-        """
-        Transcribe audio to text using the configured service with robust error handling
-
-        Args:
-            audio: Audio data as bytes, file path, or numpy array
-
-        Returns:
-            Transcribed text string or error message
-        """
-        try:
-            # Input validation
-            if audio is None:
-                error_msg = "No audio data provided"
-                track_transcription_error(error_msg, {"service": self.service})
-                return f"Error: {error_msg}"
-
-            # Handle different input types with validation
-            audio_data = None
+    def transcribe(self, audio_data: bytes) -> str:
+        """Transcribe audio data with comprehensive error handling"""
+        # Enhanced input validation
+        if audio_data is None:
+            return "Error: No audio data provided"
+            
+        if not isinstance(audio_data, bytes):
             try:
-                if isinstance(audio, str):
-                    # File path validation
-                    if not os.path.exists(audio):
-                        error_msg = f"Audio file not found: {audio}"
-                        track_transcription_error(error_msg, {"service": self.service, "file_path": audio})
-                        return f"Error: {error_msg}"
-                    
-                    # Check file size (25MB limit for OpenAI)
-                    file_size = os.path.getsize(audio)
-                    if self.service == "openai" and file_size > 25 * 1024 * 1024:
-                        error_msg = f"File too large ({file_size / (1024*1024):.1f}MB). OpenAI limit is 25MB."
-                        track_transcription_error(error_msg, {"service": self.service, "file_size": file_size})
-                        return f"Error: {error_msg}"
-                    
-                    with open(audio, "rb") as audio_file:
-                        audio_data = audio_file.read()
-                        
-                elif isinstance(audio, np.ndarray):
-                    # Validate numpy array
-                    if audio.size == 0:
-                        error_msg = "Empty audio array provided"
-                        track_transcription_error(error_msg, {"service": self.service})
-                        return f"Error: {error_msg}"
-                    
-                    # Convert numpy array to WAV format
-                    audio_data = self._convert_audio_to_wav(audio)
-                else:
-                    # Assume bytes, validate and convert to WAV format
-                    if len(audio) == 0:
-                        error_msg = "Empty audio data provided"
-                        track_transcription_error(error_msg, {"service": self.service})
-                        return f"Error: {error_msg}"
-                    
-                    audio_data = self._convert_audio_to_wav(audio)
-                
-            except Exception as audio_error:
-                error_msg = f"Audio processing failed: {str(audio_error)}"
-                track_transcription_error(error_msg, {"service": self.service, "audio_type": type(audio).__name__})
-                return f"Error: {error_msg}"
+                audio_data = bytes(audio_data)
+            except Exception:
+                return "Error: Invalid audio data format"
+        
+        if len(audio_data) == 0:
+            return "Error: Empty audio data provided"
+            
+        # Check file size limit before processing
+        if len(audio_data) > 25 * 1024 * 1024:  # 25MB limit
+            return f"Error: Audio file too large ({len(audio_data) / (1024*1024):.1f}MB) - maximum size is 25MB"
 
-            # Final validation of processed audio data
-            if not audio_data or len(audio_data) == 0:
-                error_msg = "Processed audio data is empty"
-                track_transcription_error(error_msg, {"service": self.service})
-                return f"Error: {error_msg}"
-
-            # Check processed audio size for OpenAI
-            if self.service == "openai" and len(audio_data) > 25 * 1024 * 1024:
-                error_msg = f"Processed audio too large ({len(audio_data) / (1024*1024):.1f}MB). OpenAI limit is 25MB."
-                track_transcription_error(error_msg, {"service": self.service, "processed_size": len(audio_data)})
-                return f"Error: {error_msg}"
-
-            # Route to appropriate service
+        try:
+            # Validate audio data format
+            if not self._is_valid_audio_data(audio_data):
+                return "Error: Invalid audio data format - audio appears to be corrupted or unsupported"
+            
+            # Attempt transcription based on service
             if self.service == "openai":
                 return self._transcribe_openai(audio_data)
             elif self.service == "assemblyai":
                 return self._transcribe_assemblyai(audio_data)
-            elif self.service == "azure":
-                return self._transcribe_azure(audio_data)
             elif self.service == "local":
                 return self._transcribe_local(audio_data)
             else:
-                return f"Unknown transcription service: {self.service}"
-
+                return f"Error: Unsupported transcription service: {self.service}"
+                
         except Exception as e:
             error_msg = f"Transcription failed: {str(e)}"
-            track_transcription_error(error_msg)
-            return error_msg
+            track_transcription_error(error_msg, service=self.service, audio_size=len(audio_data))
+            return f"Error: {error_msg}"
+
+    def _is_valid_audio_data(self, audio_data: bytes) -> bool:
+        """Validate that audio data appears to be valid"""
+        try:
+            # Check minimum size
+            if len(audio_data) < 100:
+                return False
+                
+            # Check for common audio file signatures
+            if audio_data.startswith(b'RIFF') or audio_data.startswith(b'ID3') or audio_data.startswith(b'\xff\xfb'):
+                return True
+                
+            # Check for non-zero data (basic sanity check)
+            if all(b == 0 for b in audio_data[:100]):
+                return False
+                
+            return True
+            
+        except Exception:
+            return False
+
+    def _convert_audio_to_wav(self, audio_data: bytes) -> bytes:
+        """Convert audio data to WAV format for OpenAI"""
+        try:
+            from pydub import AudioSegment
+            import io
+            
+            # Try to load audio data
+            audio = AudioSegment.from_file(io.BytesIO(audio_data))
+            
+            # Convert to WAV format
+            wav_buffer = io.BytesIO()
+            audio.export(wav_buffer, format="wav")
+            return wav_buffer.getvalue()
+            
+        except ImportError:
+            print("⚠️ pydub not available, using raw audio data")
+            return audio_data
+        except Exception as e:
+            print(f"⚠️ Audio conversion failed: {e}, using raw audio data")
+            return audio_data
 
     def _transcribe_openai(self, audio_data: bytes) -> str:
         """Transcribe using OpenAI Whisper API with comprehensive error handling - CRITICAL OPERATION"""
         if not self.api_key:
             error_msg = "CRITICAL ERROR: No OpenAI API key configured - Transcription will fail"
-            track_transcription_error(error_msg, {"service": "openai", "critical": True})
+            track_transcription_error(error_msg, service="openai", critical=True)
             return f"Error: {error_msg} - Get your key at https://platform.openai.com/api-keys"
 
         try:
             # Validate audio data size again (defensive programming)
             if len(audio_data) > 25 * 1024 * 1024:  # 25MB limit
                 error_msg = f"CRITICAL ERROR: Audio file too large ({len(audio_data) / (1024*1024):.1f}MB) for OpenAI API"
-                track_transcription_error(error_msg, {"service": "openai", "size": len(audio_data), "critical": True})
+                track_transcription_error(error_msg, service="openai", size=len(audio_data), critical=True)
                 return f"Error: {error_msg} - Compress audio or use shorter recording"
 
             # Convert audio to WAV format for OpenAI
@@ -224,7 +187,7 @@ class Transcriber:
             # Validate response
             if not response or not response.get("text"):
                 error_msg = "CRITICAL ERROR: OpenAI returned empty transcription"
-                track_transcription_error(error_msg, {"service": "openai", "critical": True})
+                track_transcription_error(error_msg, service="openai", critical=True)
                 return f"Error: {error_msg} - Try again or check audio quality"
 
             transcript = response["text"].strip()
@@ -234,7 +197,7 @@ class Transcriber:
                 return transcript
             else:
                 error_msg = "CRITICAL ERROR: OpenAI returned empty transcript"
-                track_transcription_error(error_msg, {"service": "openai", "critical": True})
+                track_transcription_error(error_msg, service="openai", critical=True)
                 return f"Error: {error_msg} - Check audio quality or try again"
 
         except Exception as api_error:
@@ -252,7 +215,7 @@ class Transcriber:
             else:
                 error_msg = f"CRITICAL ERROR: OpenAI API error: {error_str}"
             
-            track_transcription_error(error_msg, {"service": "openai", "api_error": error_str, "critical": True})
+            track_transcription_error(error_msg, service="openai", api_error=error_str, critical=True)
             return f"Error: {error_msg} - This is a CRITICAL system component"
 
     def _transcribe_assemblyai(self, audio_data: bytes) -> str:

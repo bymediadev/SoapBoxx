@@ -13,6 +13,7 @@ class AudioRecorder:
         self.dtype = dtype
         self.q = queue.Queue()
         self.stream = None
+        self.recording_chunks = []
 
     def _callback(self, indata, frames, time, status):
         if status:
@@ -25,6 +26,7 @@ class AudioRecorder:
         self.q.put(indata.copy())
 
     def start(self):
+        """Start audio recording stream"""
         self.stream = sd.InputStream(
             samplerate=self.samplerate,
             channels=self.channels,
@@ -33,6 +35,20 @@ class AudioRecorder:
         )
         self.stream.start()
 
+    def start_recording(self):
+        """Start recording and collect audio data"""
+        try:
+            self.recording_chunks = []  # Reset chunks
+            self.start()
+            return True
+        except Exception as e:
+            track_audio_error(
+                f"Failed to start recording: {e}",
+                component="audio_recorder",
+                severity=ErrorSeverity.HIGH,
+            )
+            return False
+
     def read_chunk(self, timeout=1):
         try:
             return self.q.get(timeout=timeout)
@@ -40,9 +56,53 @@ class AudioRecorder:
             return None
 
     def stop(self):
+        """Stop audio recording stream"""
         if self.stream:
             self.stream.stop()
             self.stream.close()
+
+    def stop_recording(self):
+        """Stop recording and return collected audio data"""
+        try:
+            # Collect any remaining chunks
+            while True:
+                chunk = self.read_chunk(timeout=0.1)
+                if chunk is not None:
+                    self.recording_chunks.append(chunk)
+                else:
+                    break
+            
+            # Stop the stream
+            self.stop()
+            
+            # Combine all chunks into single audio data
+            if self.recording_chunks:
+                combined_audio = np.concatenate(self.recording_chunks, axis=0)
+                return combined_audio.tobytes()
+            else:
+                return b""
+                
+        except Exception as e:
+            track_audio_error(
+                f"Failed to stop recording: {e}",
+                component="audio_recorder",
+                severity=ErrorSeverity.HIGH,
+            )
+            return b""
+
+    def cleanup(self):
+        """Clean up resources"""
+        try:
+            if self.stream:
+                self.stream.stop()
+                self.stream.close()
+                self.stream = None
+        except Exception as e:
+            track_audio_error(
+                f"Cleanup error: {e}",
+                component="audio_recorder",
+                severity=ErrorSeverity.LOW,
+            )
 
 
 # Example usage
