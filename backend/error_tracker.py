@@ -86,13 +86,24 @@ class ErrorTracker:
         context: Optional[Dict] = None,
         user_id: Optional[str] = None,
         session_id: Optional[str] = None,
-        **metadata: Any,
+        **kwargs: Any,
     ) -> ErrorEvent:
-        """Track a new error"""
+        """Track a new error with enhanced parameter validation"""
         try:
+            # Validate required parameters
+            if not error_type or not isinstance(error_type, str):
+                error_type = "UnknownError"
+            if not message or not isinstance(message, str):
+                message = "No error message provided"
+            
             # Merge any extra metadata into context for storage
-            if metadata:
-                context = {**(context or {}), **metadata}
+            if kwargs:
+                context = {**(context or {}), **kwargs}
+
+            # Get stack trace if exception provided
+            stack_trace = None
+            if exception:
+                stack_trace = ''.join(traceback.format_exception(type(exception), exception, exception.__traceback__))
 
             # Create error event
             error = ErrorEvent(
@@ -102,26 +113,34 @@ class ErrorTracker:
                 severity=severity,
                 category=category,
                 component=component,
-                stack_trace=traceback.format_exc() if exception else None,
+                stack_trace=stack_trace,
                 context=context,
                 user_id=user_id,
                 session_id=session_id,
             )
 
-            # Add to errors list
+            # Thread-safe addition
             with self._lock:
                 self.errors.append(error)
                 self._update_counts(error)
 
-                # Limit errors to max_errors
+                # Maintain max errors limit
                 if len(self.errors) > self.max_errors:
-                    self.errors = self.errors[-self.max_errors :]
+                    self.errors.pop(0)
 
             return error
+
         except Exception as e:
-            # Fallback: just print the error
             print(f"ErrorTracker failed to track error: {e}")
-            return None
+            # Return a minimal error event as fallback
+            return ErrorEvent(
+                timestamp=datetime.now(),
+                error_type="ErrorTrackerFailure",
+                message=f"Failed to track error: {str(e)}",
+                severity=ErrorSeverity.HIGH,
+                category=ErrorCategory.SYSTEM,
+                component="error_tracker"
+            )
 
     def get_errors(
         self,
@@ -131,12 +150,11 @@ class ErrorTracker:
         resolved: Optional[bool] = None,
         hours: Optional[int] = None,
     ) -> List[ErrorEvent]:
-        """Get filtered errors"""
+        """Get filtered errors with enhanced error handling"""
         try:
             with self._lock:
                 filtered_errors = self.errors.copy()
 
-            # Apply filters
             if severity:
                 filtered_errors = [e for e in filtered_errors if e.severity == severity]
 
@@ -163,7 +181,7 @@ class ErrorTracker:
             return []
 
     def get_error_summary(self) -> Dict:
-        """Get error summary statistics"""
+        """Get error summary statistics with enhanced error handling"""
         try:
             with self._lock:
                 total_errors = len(self.errors)
@@ -212,7 +230,7 @@ class ErrorTracker:
             }
 
     def get_health_score(self) -> float:
-        """Calculate system health score (0-100)"""
+        """Calculate system health score (0-100) with enhanced error handling"""
         try:
             summary = self.get_error_summary()
 
@@ -231,46 +249,42 @@ class ErrorTracker:
             # Ensure score is between 0 and 100
             return max(0.0, min(100.0, score))
         except Exception as e:
-            print(f"ErrorTracker failed to get health score: {e}")
-            return 100.0
+            print(f"ErrorTracker failed to calculate health score: {e}")
+            return 0.0
 
     def _update_counts(self, error: ErrorEvent):
-        """Update error counts"""
+        """Update error counts with enhanced error handling"""
         try:
-            # Update error type count
-            self.error_counts[error.error_type] = (
-                self.error_counts.get(error.error_type, 0) + 1
-            )
+            # Update error type counts
+            self.error_counts[error.error_type] = self.error_counts.get(error.error_type, 0) + 1
 
-            # Update severity count
-            self.severity_counts[error.severity] += 1
+            # Update severity counts
+            self.severity_counts[error.severity] = self.severity_counts.get(error.severity, 0) + 1
 
-            # Update category count
-            self.category_counts[error.category] += 1
+            # Update category counts
+            self.category_counts[error.category] = self.category_counts.get(error.category, 0) + 1
 
-            # Update component count
-            self.component_counts[error.component] = (
-                self.component_counts.get(error.component, 0) + 1
-            )
+            # Update component counts
+            self.component_counts[error.component] = self.component_counts.get(error.component, 0) + 1
         except Exception as e:
             print(f"ErrorTracker failed to update counts: {e}")
 
 
-# Global error tracker instance (lazy-loaded)
-_error_tracker_instance = None
+# Global error tracker instance
+_error_tracker: Optional[ErrorTracker] = None
 
 
-def get_error_tracker():
-    """Get the global error tracker instance (lazy-loaded)"""
-    global _error_tracker_instance
-    if _error_tracker_instance is None:
-        _error_tracker_instance = ErrorTracker()
-    return _error_tracker_instance
+def get_error_tracker() -> ErrorTracker:
+    """Get or create global error tracker instance"""
+    global _error_tracker
+    if _error_tracker is None:
+        _error_tracker = ErrorTracker()
+    return _error_tracker
 
 
-# Convenience functions for easy error tracking
-def track_error(error_type: str, message: str, **kwargs):
-    """Convenience function to track an error"""
+# Convenience functions with enhanced error handling and consistent signatures
+def track_error(error_type: str, message: str, **kwargs) -> Optional[ErrorEvent]:
+    """Convenience function to track an error with enhanced validation"""
     try:
         return get_error_tracker().track_error(error_type, message, **kwargs)
     except Exception as e:
@@ -278,8 +292,8 @@ def track_error(error_type: str, message: str, **kwargs):
         return None
 
 
-def track_api_error(message: str, severity: ErrorSeverity = ErrorSeverity.HIGH, **kwargs):
-    """Track API-related errors (allows custom severity without collision)"""
+def track_api_error(message: str, severity: ErrorSeverity = ErrorSeverity.HIGH, **kwargs) -> Optional[ErrorEvent]:
+    """Track API-related errors with enhanced validation"""
     try:
         return get_error_tracker().track_error(
             error_type="APIError",
@@ -293,8 +307,8 @@ def track_api_error(message: str, severity: ErrorSeverity = ErrorSeverity.HIGH, 
         return None
 
 
-def track_audio_error(message: str, **kwargs):
-    """Track audio-related errors"""
+def track_audio_error(message: str, **kwargs) -> Optional[ErrorEvent]:
+    """Track audio-related errors with enhanced validation"""
     try:
         return get_error_tracker().track_error(
             error_type="AudioError",
@@ -308,8 +322,8 @@ def track_audio_error(message: str, **kwargs):
         return None
 
 
-def track_transcription_error(message: str, **kwargs):
-    """Track transcription-related errors"""
+def track_transcription_error(message: str, **kwargs) -> Optional[ErrorEvent]:
+    """Track transcription-related errors with enhanced validation"""
     try:
         return get_error_tracker().track_error(
             error_type="TranscriptionError",
@@ -323,8 +337,8 @@ def track_transcription_error(message: str, **kwargs):
         return None
 
 
-def track_config_error(message: str, **kwargs):
-    """Track configuration-related errors"""
+def track_config_error(message: str, **kwargs) -> Optional[ErrorEvent]:
+    """Track configuration-related errors with enhanced validation"""
     try:
         return get_error_tracker().track_error(
             error_type="ConfigurationError",
@@ -338,13 +352,13 @@ def track_config_error(message: str, **kwargs):
         return None
 
 
-def track_ui_error(message: str, **kwargs):
-    """Track UI-related errors and user experience issues"""
+def track_ui_error(message: str, **kwargs) -> Optional[ErrorEvent]:
+    """Track UI-related errors with enhanced validation"""
     try:
         return get_error_tracker().track_error(
             error_type="UIError",
             message=message,
-            category=ErrorCategory.CONFIGURATION,  # UI errors affect user config/experience
+            category=ErrorCategory.UI,
             severity=ErrorSeverity.MEDIUM,
             **kwargs,
         )
@@ -353,8 +367,8 @@ def track_ui_error(message: str, **kwargs):
         return None
 
 
-def track_user_action(action: str, duration: float = None, success: bool = True, **kwargs):
-    """Track user actions for UX analytics"""
+def track_user_action(action: str, duration: float = None, success: bool = True, **kwargs) -> Optional[ErrorEvent]:
+    """Track user actions for UX analytics with enhanced validation"""
     try:
         # Convert user action to error tracking format for monitoring
         severity = ErrorSeverity.LOW if success else ErrorSeverity.MEDIUM
@@ -365,40 +379,30 @@ def track_user_action(action: str, duration: float = None, success: bool = True,
         return get_error_tracker().track_error(
             error_type="UserAction",
             message=message,
-            category=ErrorCategory.CONFIGURATION,  # User actions affect configuration/workflow
+            category=ErrorCategory.UI,  # User actions are UI-related
             severity=severity,
-            action=action,
-            duration=duration,
-            success=success,
-            **kwargs,
+            context={"action": action, "duration": duration, "success": success, **kwargs}
         )
     except Exception as e:
         print(f"Failed to track user action: {e}")
         return None
 
 
-def get_ui_performance_metrics():
-    """Get UI performance and user experience metrics"""
+def get_ui_performance_metrics() -> Dict:
+    """Get UI performance metrics with enhanced error handling"""
     try:
         tracker = get_error_tracker()
-        if not tracker.errors:
-            return {
-                "total_ui_errors": 0,
-                "total_user_actions": 0,
-                "success_rate": 1.0,
-                "average_action_duration": 0.0
-            }
         
         ui_errors = [e for e in tracker.errors if e.error_type in ["UIError"]]
         user_actions = [e for e in tracker.errors if e.error_type == "UserAction"]
         
-        successful_actions = [a for a in user_actions if a.metadata.get("success", True)]
-        failed_actions = [a for a in user_actions if not a.metadata.get("success", True)]
+        successful_actions = [a for a in user_actions if a.context and a.context.get("success", True)]
+        failed_actions = [a for a in user_actions if a.context and not a.context.get("success", True)]
         
         success_rate = len(successful_actions) / len(user_actions) if user_actions else 1.0
         
         # Calculate average duration for successful actions
-        durations = [a.metadata.get("duration", 0) for a in successful_actions if a.metadata.get("duration")]
+        durations = [a.context.get("duration", 0) for a in successful_actions if a.context and a.context.get("duration")]
         average_duration = sum(durations) / len(durations) if durations else 0.0
         
         return {

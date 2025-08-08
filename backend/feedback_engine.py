@@ -1,15 +1,28 @@
 # backend/feedback_engine.py
 import json
 import os
+import time
 from typing import Dict, List, Optional
 
-from error_tracker import ErrorCategory, ErrorSeverity, track_api_error
+# Try to import error tracker
+try:
+    from .error_tracker import ErrorCategory, ErrorSeverity, track_api_error
+except ImportError:
+    try:
+        from error_tracker import ErrorCategory, ErrorSeverity, track_api_error
+    except ImportError:
+        print("Warning: error_tracker not available")
+        # Create placeholder classes
+        class ErrorCategory:
+            AI_API = "ai_api"
+        class ErrorSeverity:
+            HIGH = "high"
+        def track_api_error(message, **kwargs):
+            print(f"API error: {message}")
 
-# Try to import OpenAI - handle version compatibility
+# Try to import OpenAI
 try:
     import openai
-    from openai import OpenAI
-
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
@@ -22,7 +35,7 @@ class FeedbackEngine:
         if self.api_key and OPENAI_AVAILABLE:
             try:
                 # Try new OpenAI client first
-                self.client = OpenAI(api_key=self.api_key)
+                self.client = openai.OpenAI(api_key=self.api_key)
                 self.use_new_api = True
             except Exception:
                 # Fallback to old API

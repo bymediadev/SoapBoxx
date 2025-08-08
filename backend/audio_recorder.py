@@ -3,7 +3,22 @@ import queue
 
 import numpy as np
 import sounddevice as sd
-from error_tracker import ErrorCategory, ErrorSeverity, track_audio_error
+
+# Try to import error tracker
+try:
+    from .error_tracker import ErrorCategory, ErrorSeverity, track_audio_error
+except ImportError:
+    try:
+        from error_tracker import ErrorCategory, ErrorSeverity, track_audio_error
+    except ImportError:
+        print("Warning: error_tracker not available")
+        # Create placeholder classes
+        class ErrorCategory:
+            AUDIO = "audio"
+        class ErrorSeverity:
+            MEDIUM = "medium"
+        def track_audio_error(message, **kwargs):
+            print(f"Audio error: {message}")
 
 
 class AudioRecorder:
@@ -36,76 +51,45 @@ class AudioRecorder:
         self.stream.start()
 
     def start_recording(self):
-        """Start recording and collect audio data"""
+        """Start recording and return success status"""
         try:
-            self.recording_chunks = []  # Reset chunks
             self.start()
             return True
         except Exception as e:
-            track_audio_error(
-                f"Failed to start recording: {e}",
-                component="audio_recorder",
-                severity=ErrorSeverity.HIGH,
-            )
+            track_audio_error(f"Failed to start recording: {str(e)}")
             return False
 
-    def read_chunk(self, timeout=1):
-        try:
-            return self.q.get(timeout=timeout)
-        except queue.Empty:
-            return None
-
-    def stop(self):
-        """Stop audio recording stream"""
-        if self.stream:
-            self.stream.stop()
-            self.stream.close()
-
     def stop_recording(self):
-        """Stop recording and return collected audio data"""
-        try:
-            # Stop the stream first to prevent new data being enqueued
-            self.stop()
-
-            # Drain remaining chunks with a short time limit to avoid blocking
-            import time as _time
-            drain_start = _time.time()
-            max_drain_seconds = 1.0
-            while _time.time() - drain_start < max_drain_seconds:
-                chunk = self.read_chunk(timeout=0.05)
-                if chunk is not None:
-                    self.recording_chunks.append(chunk)
-                else:
-                    break
-            
-            # Combine all chunks into single audio data
-            if self.recording_chunks:
-                combined_audio = np.concatenate(self.recording_chunks, axis=0)
-                return combined_audio.tobytes()
-            else:
-                return b""
-                
-        except Exception as e:
-            track_audio_error(
-                f"Failed to stop recording: {e}",
-                component="audio_recorder",
-                severity=ErrorSeverity.HIGH,
-            )
-            return b""
-
-    def cleanup(self):
-        """Clean up resources"""
+        """Stop recording and return success status"""
         try:
             if self.stream:
                 self.stream.stop()
                 self.stream.close()
                 self.stream = None
+            return True
         except Exception as e:
-            track_audio_error(
-                f"Cleanup error: {e}",
-                component="audio_recorder",
-                severity=ErrorSeverity.LOW,
-            )
+            track_audio_error(f"Failed to stop recording: {str(e)}")
+            return False
+
+    def get_chunk(self):
+        """Get the next audio chunk from the queue"""
+        try:
+            return self.q.get_nowait()
+        except queue.Empty:
+            return None
+
+    def cleanup(self):
+        """Clean up resources"""
+        try:
+            self.stop_recording()
+            # Clear the queue
+            while not self.q.empty():
+                try:
+                    self.q.get_nowait()
+                except queue.Empty:
+                    break
+        except Exception as e:
+            track_audio_error(f"Failed to cleanup: {str(e)}")
 
 
 # Example usage
@@ -115,7 +99,7 @@ if __name__ == "__main__":
     print("Recording... (Ctrl+C to stop)")
     try:
         for _ in range(5):
-            chunk = rec.read_chunk()
+            chunk = rec.get_chunk()
             print(f"Chunk shape: {chunk.shape if chunk is not None else None}")
     finally:
-        rec.stop()
+        rec.cleanup()

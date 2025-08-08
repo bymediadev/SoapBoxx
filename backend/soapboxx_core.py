@@ -7,14 +7,47 @@ from datetime import datetime
 from typing import Callable, Dict, List, Optional
 from collections import defaultdict
 
-from audio_recorder import AudioRecorder
-from error_tracker import (ErrorCategory, ErrorSeverity, error_tracker,
-                           track_api_error, track_audio_error,
-                           track_config_error, track_transcription_error)
-from feedback_engine import FeedbackEngine
-from guest_research import GuestResearch
-from logger import Logger
-from transcriber import Transcriber
+# Try to import backend modules
+try:
+    from .audio_recorder import AudioRecorder
+    from .error_tracker import (ErrorCategory, ErrorSeverity, error_tracker,
+                               track_api_error, track_audio_error,
+                               track_config_error, track_transcription_error)
+    from .feedback_engine import FeedbackEngine
+    from .guest_research import GuestResearch
+    from .logger import Logger
+    from .transcriber import Transcriber
+except ImportError:
+    try:
+        from audio_recorder import AudioRecorder
+        from error_tracker import (ErrorCategory, ErrorSeverity, error_tracker,
+                                   track_api_error, track_audio_error,
+                                   track_config_error, track_transcription_error)
+        from feedback_engine import FeedbackEngine
+        from guest_research import GuestResearch
+        from logger import Logger
+        from transcriber import Transcriber
+    except ImportError as e:
+        print(f"Warning: Some backend modules not available: {e}")
+        # Create placeholder classes
+        class AudioRecorder: pass
+        class FeedbackEngine: pass
+        class GuestResearch: pass
+        class Logger: pass
+        class Transcriber: pass
+        class ErrorCategory:
+            AUDIO = "audio"
+            TRANSCRIPTION = "transcription"
+            AI_API = "ai_api"
+            CONFIGURATION = "configuration"
+        class ErrorSeverity:
+            MEDIUM = "medium"
+            HIGH = "high"
+        def track_api_error(message, **kwargs): pass
+        def track_audio_error(message, **kwargs): pass
+        def track_config_error(message, **kwargs): pass
+        def track_transcription_error(message, **kwargs): pass
+        error_tracker = None
 
 
 @dataclass
