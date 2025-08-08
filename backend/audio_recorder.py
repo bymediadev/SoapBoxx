@@ -64,16 +64,19 @@ class AudioRecorder:
     def stop_recording(self):
         """Stop recording and return collected audio data"""
         try:
-            # Collect any remaining chunks
-            while True:
-                chunk = self.read_chunk(timeout=0.1)
+            # Stop the stream first to prevent new data being enqueued
+            self.stop()
+
+            # Drain remaining chunks with a short time limit to avoid blocking
+            import time as _time
+            drain_start = _time.time()
+            max_drain_seconds = 1.0
+            while _time.time() - drain_start < max_drain_seconds:
+                chunk = self.read_chunk(timeout=0.05)
                 if chunk is not None:
                     self.recording_chunks.append(chunk)
                 else:
                     break
-            
-            # Stop the stream
-            self.stop()
             
             # Combine all chunks into single audio data
             if self.recording_chunks:

@@ -189,15 +189,26 @@ class Transcriber:
             audio_file = io.BytesIO(wav_data)
             audio_file.name = "audio.wav"
 
-            # CRITICAL: Make OpenAI API call
+            # CRITICAL: Make OpenAI Whisper API call (v1 client if available)
             print("🔑 CRITICAL: Making OpenAI Whisper API call...")
-            
-            response = openai.Audio.transcribe(
-                model=self.model,
-                file=audio_file,
-                language="en",
-                temperature=0.0
-            )
+            response = None
+            try:
+                from openai import OpenAI  # v1 client
+                client = OpenAI(api_key=self.api_key)
+                resp = client.audio.transcriptions.create(
+                    model=self.model,
+                    file=audio_file,
+                    response_format="text",
+                )
+                response = {"text": resp if isinstance(resp, str) else str(resp)}
+            except Exception:
+                # Fallback to legacy API
+                response = openai.Audio.transcribe(
+                    model=self.model,
+                    file=audio_file,
+                    language="en",
+                    temperature=0.0
+                )
 
             # Validate response
             if not response or not response.get("text"):
