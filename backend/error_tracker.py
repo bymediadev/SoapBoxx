@@ -86,9 +86,14 @@ class ErrorTracker:
         context: Optional[Dict] = None,
         user_id: Optional[str] = None,
         session_id: Optional[str] = None,
+        **metadata: Any,
     ) -> ErrorEvent:
         """Track a new error"""
         try:
+            # Merge any extra metadata into context for storage
+            if metadata:
+                context = {**(context or {}), **metadata}
+
             # Create error event
             error = ErrorEvent(
                 timestamp=datetime.now(),
@@ -273,14 +278,14 @@ def track_error(error_type: str, message: str, **kwargs):
         return None
 
 
-def track_api_error(message: str, **kwargs):
-    """Track API-related errors"""
+def track_api_error(message: str, severity: ErrorSeverity = ErrorSeverity.HIGH, **kwargs):
+    """Track API-related errors (allows custom severity without collision)"""
     try:
         return get_error_tracker().track_error(
             error_type="APIError",
             message=message,
             category=ErrorCategory.AI_API,
-            severity=ErrorSeverity.HIGH,
+            severity=severity,
             **kwargs,
         )
     except Exception as e:

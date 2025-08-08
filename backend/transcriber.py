@@ -133,25 +133,40 @@ class Transcriber:
             return False
 
     def _convert_audio_to_wav(self, audio_data: bytes) -> bytes:
-        """Convert audio data to WAV format for OpenAI"""
+        """Convert audio data to WAV format for OpenAI.
+        Falls back to wrapping raw PCM as WAV if decoding fails.
+        """
         try:
             from pydub import AudioSegment
             import io
             
-            # Try to load audio data
+            # Try to load input via pydub/ffmpeg
             audio = AudioSegment.from_file(io.BytesIO(audio_data))
+            # Ensure mono 16kHz for Whisper
+            audio = audio.set_channels(1).set_frame_rate(16000)
             
-            # Convert to WAV format
+            # Export to WAV bytes
             wav_buffer = io.BytesIO()
             audio.export(wav_buffer, format="wav")
             return wav_buffer.getvalue()
             
-        except ImportError:
-            print("⚠️ pydub not available, using raw audio data")
-            return audio_data
         except Exception as e:
-            print(f"⚠️ Audio conversion failed: {e}, using raw audio data")
-            return audio_data
+            # Fallback: treat input as raw PCM s16le 16kHz mono and wrap as WAV
+            try:
+                import wave
+                import io as _io
+                
+                pcm_bytes = audio_data
+                wav_io = _io.BytesIO()
+                with wave.open(wav_io, 'wb') as wf:
+                    wf.setnchannels(1)
+                    wf.setsampwidth(2)  # s16le
+                    wf.setframerate(16000)
+                    wf.writeframes(pcm_bytes)
+                return wav_io.getvalue()
+            except Exception as wrap_e:
+                print(f"⚠️ Audio conversion failed: {e}; raw PCM wrap failed: {wrap_e}")
+                return audio_data
 
     def _transcribe_openai(self, audio_data: bytes) -> str:
         """Transcribe using OpenAI Whisper API with comprehensive error handling - CRITICAL OPERATION"""

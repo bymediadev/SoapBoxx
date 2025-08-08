@@ -482,7 +482,7 @@ Format the response as a well-structured business summary.
                 severity=ErrorSeverity.MEDIUM
             )
             return self._get_fallback_web_results(query)
-            
+
         except Exception as e:
             print(f"Web search error: {e}")
             track_api_error(

@@ -161,11 +161,11 @@ class Config:
         value = self.config
 
         try:
-            for k in keys:
+        for k in keys:
                 value = value[k]
             return value
         except (KeyError, TypeError):
-            return default
+                return default
 
     def set(self, key: str, value):
         """Set configuration value by key (supports dot notation)"""
@@ -221,7 +221,7 @@ class Config:
         """Get OpenAI API key with validation - CRITICAL FOR SYSTEM OPERATION"""
         api_key = self.get("openai_api_key") or os.getenv("OPENAI_API_KEY")
         if api_key and self._validate_api_key_format(api_key, "openai"):
-            return api_key
+        return api_key
         return None
 
     def set_openai_api_key(self, api_key: str):
@@ -267,7 +267,7 @@ class Config:
             print("🔑 OpenAI API key format validated - CRITICAL COMPONENT")
             print(f"   Key length: {len(api_key_clean)} characters")
             return True
-            
+
         elif key_type == "google":
             # Google API keys are typically 39 characters
             return bool(re.match(r"^AIza[a-zA-Z0-9]{35}$", api_key.strip()))
@@ -287,7 +287,7 @@ class Config:
         print("   - Guest Research")
         print("   - Podcast Coaching")
         print()
-        
+
         while True:
             api_key = input("Enter your OpenAI API key (CRITICAL - or press Enter to skip): ").strip()
             
@@ -475,7 +475,7 @@ class Config:
     def export_config(self) -> Dict:
         """Export configuration (excluding sensitive data)"""
         export_config = self.config.copy()
-        
+
         # Remove sensitive data
         sensitive_fields = [
             "openai_api_key", "google_api_key", "news_api_key",
@@ -485,7 +485,7 @@ class Config:
         for field in sensitive_fields:
             if field in export_config:
                 export_config[field] = "[HIDDEN]"
-        
+
         return export_config
 
     def reset_to_defaults(self):
