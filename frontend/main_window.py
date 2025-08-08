@@ -6,6 +6,7 @@ Main application window with tabbed interface
 
 import os
 import sys
+import traceback
 import webbrowser
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -307,16 +308,77 @@ class BookingDialog(QDialog):
 
 
 class MainWindow(QMainWindow):
-    """Main application window"""
+    """Main application window with robust error handling"""
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("SoapBoxx - Podcast Production Studio")
-        self.setGeometry(100, 100, 1200, 800)
+        try:
+            self.setWindowTitle("SoapBoxx - Podcast Production Studio")
+            self.setGeometry(100, 100, 1200, 800)
 
-        # Initialize components
-        self.init_components()
-        self.setup_ui()
+            # Initialize components with error handling
+            self.init_components()
+            self.setup_ui()
+            
+            # Set up global exception handling
+            self.setup_exception_handling()
+            
+        except Exception as e:
+            self._handle_critical_error("Application Initialization Failed", str(e))
+    
+    def setup_exception_handling(self):
+        """Set up global exception handling for the application"""
+        # Install global exception handler
+        sys.excepthook = self._global_exception_handler
+    
+    def _global_exception_handler(self, exc_type, exc_value, exc_traceback):
+        """Handle uncaught exceptions globally"""
+        if issubclass(exc_type, KeyboardInterrupt):
+            # Allow keyboard interrupt to work normally
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
+        
+        # Format the error message
+        error_msg = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+        print(f"Uncaught exception: {error_msg}")
+        
+        # Show user-friendly error dialog
+        self._show_user_friendly_error(
+            "Unexpected Error",
+            "An unexpected error occurred. The application will continue running, but some features may not work correctly.",
+            error_msg
+        )
+    
+    def _handle_critical_error(self, title: str, message: str):
+        """Handle critical errors that prevent the application from starting"""
+        try:
+            QMessageBox.critical(None, title, f"{message}\n\nThe application cannot start properly.")
+        except:
+            # If even QMessageBox fails, fall back to console
+            print(f"CRITICAL ERROR - {title}: {message}")
+        
+        sys.exit(1)
+    
+    def _show_user_friendly_error(self, title: str, message: str, detailed_error: str = None):
+        """Show user-friendly error messages with optional technical details"""
+        try:
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Icon.Warning)
+            msg_box.setWindowTitle(title)
+            msg_box.setText(message)
+            
+            if detailed_error:
+                msg_box.setDetailedText(f"Technical details:\n{detailed_error}")
+            
+            msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+            msg_box.exec()
+            
+        except Exception as e:
+            # Fallback to console if UI error display fails
+            print(f"Error displaying error message: {e}")
+            print(f"Original error - {title}: {message}")
+            if detailed_error:
+                print(f"Details: {detailed_error}")
         self.setup_menu()
         self.setup_status_bar()
         self.setup_shortcuts()
@@ -328,25 +390,63 @@ class MainWindow(QMainWindow):
         self.show_welcome_message()
 
     def init_components(self):
-        """Initialize all components"""
-        # Theme manager
-        self.theme_manager = ThemeManager(self)
+        """Initialize all components with error handling"""
+        try:
+            # Theme manager
+            self.theme_manager = ThemeManager(self)
+            print("✅ Theme manager initialized")
 
-        # Export manager
-        self.export_manager = ExportManager(self)
-        self.export_manager.export_completed.connect(self.on_export_completed)
-        self.export_manager.export_failed.connect(self.on_export_failed)
+            # Export manager
+            try:
+                self.export_manager = ExportManager(self)
+                self.export_manager.export_completed.connect(self.on_export_completed)
+                self.export_manager.export_failed.connect(self.on_export_failed)
+                print("✅ Export manager initialized")
+            except Exception as e:
+                print(f"⚠️ Export manager initialization failed: {e}")
+                self.export_manager = None
 
-        # Shortcut handler
-        self.shortcut_handler = ShortcutHandler(self)
+            # Shortcut handler
+            try:
+                self.shortcut_handler = ShortcutHandler(self)
+                print("✅ Shortcut handler initialized")
+            except Exception as e:
+                print(f"⚠️ Shortcut handler initialization failed: {e}")
+                self.shortcut_handler = None
 
-        # Batch processor
-        self.batch_processor = BatchProcessorDialog(self)
+            # Batch processor
+            try:
+                self.batch_processor = BatchProcessorDialog(self)
+                print("✅ Batch processor initialized")
+            except Exception as e:
+                print(f"⚠️ Batch processor initialization failed: {e}")
+                self.batch_processor = None
+                
+        except Exception as e:
+            print(f"❌ Component initialization failed: {e}")
+            raise
 
-        # Tab widgets
-        self.soapboxx_tab = SoapBoxxTab()
-        self.reverb_tab = ReverbTab()
-        self.scoop_tab = ScoopTab()
+        # Tab widgets with error handling
+        try:
+            self.soapboxx_tab = SoapBoxxTab()
+            print("✅ SoapBoxx tab initialized")
+        except Exception as e:
+            print(f"⚠️ SoapBoxx tab initialization failed: {e}")
+            self.soapboxx_tab = None
+            
+        try:
+            self.reverb_tab = ReverbTab()
+            print("✅ Reverb tab initialized")
+        except Exception as e:
+            print(f"⚠️ Reverb tab initialization failed: {e}")
+            self.reverb_tab = None
+            
+        try:
+            self.scoop_tab = ScoopTab()
+            print("✅ Scoop tab initialized")
+        except Exception as e:
+            print(f"⚠️ Scoop tab initialization failed: {e}")
+            self.scoop_tab = None
 
     def setup_ui(self):
         """Setup the main UI with modern design"""
@@ -430,10 +530,42 @@ class MainWindow(QMainWindow):
             }
         """)
         
-        # Add tabs with modern icons
-        self.tab_widget.addTab(self.soapboxx_tab, "🎤 SoapBoxx")
-        self.tab_widget.addTab(self.reverb_tab, "🎯 Reverb")
-        self.tab_widget.addTab(self.scoop_tab, "📰 Scoop")
+        # Add tabs with modern icons and error handling
+        if self.soapboxx_tab:
+            self.tab_widget.addTab(self.soapboxx_tab, "🎤 SoapBoxx")
+        else:
+            # Create placeholder tab if SoapBoxx tab failed to initialize
+            placeholder_widget = QWidget()
+            placeholder_layout = QVBoxLayout(placeholder_widget)
+            error_label = QLabel("⚠️ SoapBoxx tab failed to initialize")
+            error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            error_label.setStyleSheet("color: #DC3545; font-size: 16px; padding: 20px;")
+            placeholder_layout.addWidget(error_label)
+            self.tab_widget.addTab(placeholder_widget, "⚠️ SoapBoxx")
+            
+        if self.reverb_tab:
+            self.tab_widget.addTab(self.reverb_tab, "🎯 Reverb")
+        else:
+            # Create placeholder tab if Reverb tab failed to initialize
+            placeholder_widget = QWidget()
+            placeholder_layout = QVBoxLayout(placeholder_widget)
+            error_label = QLabel("⚠️ Reverb tab failed to initialize")
+            error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            error_label.setStyleSheet("color: #DC3545; font-size: 16px; padding: 20px;")
+            placeholder_layout.addWidget(error_label)
+            self.tab_widget.addTab(placeholder_widget, "⚠️ Reverb")
+            
+        if self.scoop_tab:
+            self.tab_widget.addTab(self.scoop_tab, "📰 Scoop")
+        else:
+            # Create placeholder tab if Scoop tab failed to initialize
+            placeholder_widget = QWidget()
+            placeholder_layout = QVBoxLayout(placeholder_widget)
+            error_label = QLabel("⚠️ Scoop tab failed to initialize")
+            error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            error_label.setStyleSheet("color: #DC3545; font-size: 16px; padding: 20px;")
+            placeholder_layout.addWidget(error_label)
+            self.tab_widget.addTab(placeholder_widget, "⚠️ Scoop")
 
         layout.addWidget(self.tab_widget)
 

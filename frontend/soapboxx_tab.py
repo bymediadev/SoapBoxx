@@ -162,15 +162,17 @@ class ModernButton(QPushButton):
 
 
 class AudioLevelThread(QThread):
-    """Thread for monitoring audio levels"""
+    """Thread for monitoring audio levels with robust error handling"""
 
     level_updated = pyqtSignal(float)
+    error_occurred = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
         self.is_monitoring = False
         self.last_update_time = 0
         self.update_interval = 0.1  # Update every 100ms to prevent overflow
+        self.audio_stream = None
 
     def run(self):
         """Monitor audio levels"""
@@ -214,22 +216,39 @@ class AudioLevelThread(QThread):
                 while self.is_monitoring:
                     time_module.sleep(0.05)  # Shorter sleep time for responsiveness
 
-        except ImportError:
-            print("sounddevice not available for audio level monitoring")
+        except ImportError as import_error:
+            self.error_occurred.emit(f"Required audio libraries not available: {str(import_error)}")
         except Exception as e:
-            print(f"Audio level monitoring error: {e}")
+            self.error_occurred.emit(f"Audio monitoring failed: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def start_monitoring(self):
         """Start audio level monitoring"""
         self.is_monitoring = True
         self.last_update_time = 0
-        self.start()
-
+        if not self.isRunning():
+            self.start()
+    
     def stop_monitoring(self):
-        """Stop audio level monitoring"""
+        """Stop audio level monitoring and cleanup resources"""
         self.is_monitoring = False
+        
+        # Close audio stream if it exists
+        if hasattr(self, 'audio_stream') and self.audio_stream:
+            try:
+                self.audio_stream.stop()
+                self.audio_stream.close()
+            except Exception as e:
+                print(f"Error closing audio stream: {e}")
+            finally:
+                self.audio_stream = None
+        
+        # Wait for thread to finish
         if self.isRunning():
-            self.wait()
+            self.wait(2000)  # Wait max 2 seconds
+
+
 
 
 class RecordingThread(QThread):
@@ -247,41 +266,66 @@ class RecordingThread(QThread):
         self.is_recording = False
 
     def run(self):
-        """Start recording"""
+        """Start recording with comprehensive error handling"""
         try:
             self.is_recording = True
-            self.status_updated.emit("Recording started...")
+            self.status_updated.emit("Initializing recording...")
 
-            # Start recording
-            if self.core.start_recording("SoapBoxx Session"):
-                self.status_updated.emit("Recording in progress...")
+            # Validate core is available
+            if not self.core:
+                self.error_occurred.emit("Backend core not available")
+                return
 
-                # Simulate recording for 10 seconds (for demo)
-                for i in range(10):
-                    if not self.is_recording:
-                        break
+            # Start recording with timeout protection
+            self.status_updated.emit("Starting recording...")
+            try:
+                if self.core.start_recording("SoapBoxx Session"):
+                    self.status_updated.emit("Recording in progress...")
+                else:
+                    self.error_occurred.emit("Failed to start recording - check microphone availability")
+                    return
+            except Exception as start_error:
+                self.error_occurred.emit(f"Recording start failed: {str(start_error)}")
+                return
+
+            # Recording loop with error checking
+            for i in range(10):
+                if not self.is_recording:
+                    self.status_updated.emit("Recording cancelled by user")
+                    break
+                try:
                     time.sleep(1)
                     self.status_updated.emit(f"Recording... {10-i}s remaining")
+                except Exception as loop_error:
+                    print(f"Recording loop error: {loop_error}")
 
-                # Stop recording
-                if self.is_recording:
+            # Stop recording with error handling
+            if self.is_recording:
+                try:
+                    self.status_updated.emit("Stopping recording...")
                     results = self.core.stop_recording()
                     self.status_updated.emit("Processing results...")
 
-                    # Emit results
-                    if results.get("transcript"):
-                        self.transcript_updated.emit(results["transcript"])
-                    if results.get("feedback"):
-                        self.feedback_updated.emit(results["feedback"])
-
-                    self.status_updated.emit("Recording completed!")
-            else:
-                self.error_occurred.emit("Failed to start recording")
+                    # Validate and emit results
+                    if results and isinstance(results, dict):
+                        if results.get("transcript"):
+                            self.transcript_updated.emit(results["transcript"])
+                        if results.get("feedback"):
+                            self.feedback_updated.emit(results["feedback"])
+                        self.status_updated.emit("Recording completed successfully!")
+                    else:
+                        self.error_occurred.emit("Invalid recording results received")
+                        
+                except Exception as stop_error:
+                    self.error_occurred.emit(f"Failed to stop recording properly: {str(stop_error)}")
 
         except Exception as e:
-            self.error_occurred.emit(f"Recording error: {str(e)}")
+            self.error_occurred.emit(f"Unexpected recording error: {str(e)}")
+            import traceback
+            traceback.print_exc()
         finally:
             self.is_recording = False
+            self.status_updated.emit("Recording session ended")
 
     def stop_recording(self):
         """Stop recording"""
@@ -717,7 +761,11 @@ class SoapBoxxTab(QWidget):
             print(f"🎤 Selected device: {device_name}")
 
     def test_microphone(self):
-        """Test the selected microphone"""
+        """Test the selected microphone with robust error handling"""
+        # Prevent double-clicks during testing
+        if not self.test_mic_btn.isEnabled():
+            return
+            
         try:
             import numpy as np
             import sounddevice as sd
@@ -727,30 +775,42 @@ class SoapBoxxTab(QWidget):
                 "Error" in device_name
                 or "not available" in device_name
                 or "Loading" in device_name
+                or not device_name.strip()
             ):
-                QMessageBox.warning(self, "Error", "No valid microphone selected")
+                self._show_user_friendly_error("No valid microphone selected", "Please select a valid microphone device first.")
                 return
 
-            # Start audio monitoring if not already running
-            if self.audio_level_thread is None or not self.audio_level_thread.isRunning():
-                self.start_audio_monitoring()
-            else:
-                print("Audio monitoring already running")
-
+            # Disable button immediately to prevent double-clicks
+            self.test_mic_btn.setEnabled(False)
+            self.test_mic_btn.setText("🎤 Testing...")
+            
             # Show test message
             self.status_label.setText("Testing microphone...")
             self.status_label.setStyleSheet("color: #FFC107; font-weight: bold; padding: 5px 10px; background: #FFF3CD; border-radius: 4px;")
-            
-            # Enable the test button to show it's working
-            self.test_mic_btn.setEnabled(False)
-            self.test_mic_btn.setText("🎤 Testing...")
+
+            # Start audio monitoring if not already running
+            if self.audio_level_thread is None or not self.audio_level_thread.isRunning():
+                try:
+                    self.start_audio_monitoring()
+                except Exception as monitor_error:
+                    self._show_user_friendly_error("Audio monitoring failed", f"Could not start audio monitoring: {str(monitor_error)}")
+                    self._finish_microphone_test()
+                    return
+            else:
+                print("Audio monitoring already running")
             
             # Re-enable after 3 seconds
             QTimer.singleShot(3000, self._finish_microphone_test)
 
+        except ImportError as e:
+            self._show_user_friendly_error("Missing Audio Libraries", "Required audio libraries are not installed. Please install sounddevice and numpy.")
+            self._finish_microphone_test()
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Microphone test failed: {str(e)}")
+            self._show_user_friendly_error("Microphone Test Failed", f"An unexpected error occurred: {str(e)}")
             print(f"Microphone test error: {e}")
+            import traceback
+            traceback.print_exc()
+            self._finish_microphone_test()
 
     def _finish_microphone_test(self):
         """Finish the microphone test"""
@@ -758,6 +818,31 @@ class SoapBoxxTab(QWidget):
         self.test_mic_btn.setText("🎤 Test Microphone")
         self.status_label.setText("Microphone test completed")
         self.status_label.setStyleSheet("color: #28A745; font-weight: bold; padding: 5px 10px; background: #D4EDDA; border-radius: 4px;")
+    
+    def _show_user_friendly_error(self, title: str, message: str, detailed_error: str = None):
+        """Show user-friendly error messages with optional technical details"""
+        try:
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Icon.Warning)
+            msg_box.setWindowTitle(title)
+            msg_box.setText(message)
+            
+            if detailed_error:
+                msg_box.setDetailedText(f"Technical details:\n{detailed_error}")
+            
+            msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+            msg_box.exec()
+            
+            # Update status label to show error state
+            self.status_label.setText(f"Error: {title}")
+            self.status_label.setStyleSheet("color: #DC3545; font-weight: bold; padding: 5px 10px; background: #F8D7DA; border-radius: 4px;")
+            
+        except Exception as e:
+            # Fallback to console if UI error display fails
+            print(f"Error displaying error message: {e}")
+            print(f"Original error - {title}: {message}")
+            if detailed_error:
+                print(f"Details: {detailed_error}")
         
         # Stop audio monitoring after test
         self.stop_audio_monitoring()
@@ -908,21 +993,54 @@ class SoapBoxxTab(QWidget):
             print(f"OBS stop recording error: {e}")
 
     def start_audio_monitoring(self):
-        """Start audio level monitoring"""
+        """Start audio level monitoring with robust error handling"""
         try:
+            # Import check before creating thread
+            try:
+                import sounddevice as sd
+                import numpy as np
+            except ImportError as e:
+                raise ImportError(f"Required audio libraries not available: {e}")
+
             # Stop any existing monitoring first
             if self.audio_level_thread and self.audio_level_thread.isRunning():
                 self.audio_level_thread.stop_monitoring()
-                self.audio_level_thread.wait()  # Wait for thread to finish
+                self.audio_level_thread.wait(2000)  # Wait max 2 seconds for thread to finish
             
             # Only start if not already running
             if self.audio_level_thread is None or not self.audio_level_thread.isRunning():
                 self.audio_level_thread = AudioLevelThread()
                 self.audio_level_thread.level_updated.connect(self.update_audio_level)
+                self.audio_level_thread.error_occurred.connect(self._handle_audio_thread_error)
                 self.audio_level_thread.start_monitoring()
                 print("✅ Audio level monitoring started")
+        except ImportError as e:
+            print(f"❌ Audio libraries not available: {e}")
+            self._show_user_friendly_error("Audio Libraries Missing", "Required audio libraries are not installed. Please install sounddevice and numpy.")
+            raise
         except Exception as e:
-            print(f"Failed to start audio monitoring: {e}")
+            print(f"❌ Failed to start audio monitoring: {e}")
+            self._show_user_friendly_error("Audio Monitoring Failed", f"Could not start audio monitoring: {str(e)}")
+            raise
+    
+    def _handle_audio_thread_error(self, error_message: str):
+        """Handle errors from audio monitoring thread"""
+        print(f"❌ Audio thread error: {error_message}")
+        self.status_label.setText("Audio monitoring error")
+        self.status_label.setStyleSheet("color: #DC3545; font-weight: bold; padding: 5px 10px; background: #F8D7DA; border-radius: 4px;")
+        
+        # Try to restart audio monitoring after error
+        QTimer.singleShot(2000, self._restart_audio_monitoring)
+    
+    def _restart_audio_monitoring(self):
+        """Attempt to restart audio monitoring after an error"""
+        try:
+            print("🔄 Attempting to restart audio monitoring...")
+            self.start_audio_monitoring()
+        except Exception as e:
+            print(f"❌ Failed to restart audio monitoring: {e}")
+            self.status_label.setText("Audio monitoring disabled")
+            self.status_label.setStyleSheet("color: #DC3545; font-weight: bold; padding: 5px 10px; background: #F8D7DA; border-radius: 4px;")
 
     def update_audio_level(self, level):
         """Update the audio level display with throttling"""
@@ -1069,8 +1187,12 @@ class SoapBoxxTab(QWidget):
 
     def start_recording(self):
         """Start recording"""
+        # Prevent double-clicks
+        if not self.record_button.isEnabled():
+            return
+            
         if not self.core:
-            QMessageBox.warning(self, "Error", "Backend not available")
+            self._show_user_friendly_error("Backend Not Available", "The backend service is not available. Please check the application setup.")
             return
 
         try:
@@ -1091,15 +1213,34 @@ class SoapBoxxTab(QWidget):
 
             self.recording_thread.start()
 
+            # Disable button immediately to prevent double-clicks
+            self.record_button.setEnabled(False)
+            self.record_button.setText("Starting...")
+            
+            # Check if already recording
+            if hasattr(self, 'recording_thread') and self.recording_thread and self.recording_thread.isRunning():
+                self._show_user_friendly_error("Already Recording", "A recording session is already in progress.")
+                self._reset_recording_ui()
+                return
+
             # Update UI
             self.record_button.setText("Recording...")
-            self.record_button.setEnabled(False)
             self.stop_button.setEnabled(True)
             # self.progress_bar.setVisible(True) # Removed progress bar as it's not in the new UI
             # self.progress_bar.setRange(0, 10) # Removed progress bar as it's not in the new UI
 
         except Exception as e:
-            self.handle_error(f"Failed to start recording: {str(e)}")
+            self._show_user_friendly_error("Recording Start Failed", f"An unexpected error occurred: {str(e)}")
+            print(f"Recording start error: {e}")
+            import traceback
+            traceback.print_exc()
+            self._reset_recording_ui()
+    
+    def _reset_recording_ui(self):
+        """Reset recording UI to initial state"""
+        self.record_button.setEnabled(True)
+        self.record_button.setText("Start Recording")
+        self.stop_button.setEnabled(False)
 
     def stop_recording(self):
         """Stop recording"""

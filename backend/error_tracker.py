@@ -333,5 +333,83 @@ def track_config_error(message: str, **kwargs):
         return None
 
 
+def track_ui_error(message: str, **kwargs):
+    """Track UI-related errors and user experience issues"""
+    try:
+        return get_error_tracker().track_error(
+            error_type="UIError",
+            message=message,
+            category=ErrorCategory.CONFIGURATION,  # UI errors affect user config/experience
+            severity=ErrorSeverity.MEDIUM,
+            **kwargs,
+        )
+    except Exception as e:
+        print(f"Failed to track UI error: {e}")
+        return None
+
+
+def track_user_action(action: str, duration: float = None, success: bool = True, **kwargs):
+    """Track user actions for UX analytics"""
+    try:
+        # Convert user action to error tracking format for monitoring
+        severity = ErrorSeverity.LOW if success else ErrorSeverity.MEDIUM
+        message = f"User action: {action} {'succeeded' if success else 'failed'}"
+        if duration:
+            message += f" (duration: {duration:.2f}s)"
+        
+        return get_error_tracker().track_error(
+            error_type="UserAction",
+            message=message,
+            category=ErrorCategory.CONFIGURATION,  # User actions affect configuration/workflow
+            severity=severity,
+            action=action,
+            duration=duration,
+            success=success,
+            **kwargs,
+        )
+    except Exception as e:
+        print(f"Failed to track user action: {e}")
+        return None
+
+
+def get_ui_performance_metrics():
+    """Get UI performance and user experience metrics"""
+    try:
+        tracker = get_error_tracker()
+        if not tracker.errors:
+            return {
+                "total_ui_errors": 0,
+                "total_user_actions": 0,
+                "success_rate": 1.0,
+                "average_action_duration": 0.0
+            }
+        
+        ui_errors = [e for e in tracker.errors if e.error_type in ["UIError"]]
+        user_actions = [e for e in tracker.errors if e.error_type == "UserAction"]
+        
+        successful_actions = [a for a in user_actions if a.metadata.get("success", True)]
+        failed_actions = [a for a in user_actions if not a.metadata.get("success", True)]
+        
+        success_rate = len(successful_actions) / len(user_actions) if user_actions else 1.0
+        
+        # Calculate average duration for successful actions
+        durations = [a.metadata.get("duration", 0) for a in successful_actions if a.metadata.get("duration")]
+        average_duration = sum(durations) / len(durations) if durations else 0.0
+        
+        return {
+            "total_ui_errors": len(ui_errors),
+            "total_user_actions": len(user_actions),
+            "successful_actions": len(successful_actions),
+            "failed_actions": len(failed_actions),
+            "success_rate": success_rate,
+            "average_action_duration": average_duration,
+            "recent_errors": [e.message for e in ui_errors[-5:]]  # Last 5 errors
+        }
+        
+    except Exception as e:
+        print(f"Failed to get UI performance metrics: {e}")
+        return {}
+
+
 # Backward compatibility
 error_tracker = get_error_tracker()
