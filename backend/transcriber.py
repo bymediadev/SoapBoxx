@@ -6,14 +6,29 @@ from typing import Optional, Union
 
 import numpy as np
 import requests
-from error_tracker import (ErrorCategory, ErrorSeverity,
-                           track_transcription_error)
 from pydub import AudioSegment
+
+# Try to import error tracker
+try:
+    from .error_tracker import (ErrorCategory, ErrorSeverity,
+                               track_transcription_error)
+except ImportError:
+    try:
+        from error_tracker import (ErrorCategory, ErrorSeverity,
+                                   track_transcription_error)
+    except ImportError:
+        print("Warning: error_tracker not available")
+        # Create placeholder classes
+        class ErrorCategory:
+            TRANSCRIPTION = "transcription"
+        class ErrorSeverity:
+            HIGH = "high"
+        def track_transcription_error(message, **kwargs):
+            print(f"Transcription error: {message}")
 
 # Try to import OpenAI - handle version compatibility
 try:
     import openai
-
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
@@ -22,7 +37,6 @@ except ImportError:
 # Try to import Whisper for local transcription
 try:
     import whisper
-
     WHISPER_AVAILABLE = True
 except ImportError:
     WHISPER_AVAILABLE = False
