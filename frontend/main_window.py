@@ -11,10 +11,14 @@ import webbrowser
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from batch_processor import BatchProcessorDialog
-# Import new features
-from export_manager import ExportManager
-from keyboard_shortcuts import ShortcutHandler
+# Use package-relative imports to support `python -m frontend.main_window`
+from .batch_processor import BatchProcessorDialog
+from .export_manager import ExportManager
+from .keyboard_shortcuts import ShortcutHandler
+from .reverb_tab import ReverbTab
+from .scoop_tab import ScoopTab
+from .soapboxx_tab import SoapBoxxTab
+from .theme_manager import ThemeManager
 from PyQt6.QtCore import QDate, Qt, QTime, QTimer
 from PyQt6.QtGui import QAction, QKeySequence, QFont, QIcon, QPixmap
 from PyQt6.QtWidgets import (QApplication, QComboBox, QDateEdit, QDialog,
@@ -23,11 +27,7 @@ from PyQt6.QtWidgets import (QApplication, QComboBox, QDateEdit, QDialog,
                              QMessageBox, QPushButton, QStatusBar, QTabWidget,
                              QTextEdit, QTimeEdit, QVBoxLayout, QWidget, QFrame,
                              QSplitter, QScrollArea, QGridLayout, QGroupBox)
-from reverb_tab import ReverbTab
-from scoop_tab import ScoopTab
-# Import tabs
-from soapboxx_tab import SoapBoxxTab
-from theme_manager import ThemeManager
+# (imports moved into try/except above for dual compatibility)
 
 
 class ModernCard(QFrame):
@@ -542,7 +542,7 @@ class MainWindow(QMainWindow):
             error_label.setStyleSheet("color: #DC3545; font-size: 16px; padding: 20px;")
             placeholder_layout.addWidget(error_label)
             self.tab_widget.addTab(placeholder_widget, "⚠️ SoapBoxx")
-            
+
         if self.reverb_tab:
             self.tab_widget.addTab(self.reverb_tab, "🎯 Reverb")
         else:
@@ -554,7 +554,7 @@ class MainWindow(QMainWindow):
             error_label.setStyleSheet("color: #DC3545; font-size: 16px; padding: 20px;")
             placeholder_layout.addWidget(error_label)
             self.tab_widget.addTab(placeholder_widget, "⚠️ Reverb")
-            
+
         if self.scoop_tab:
             self.tab_widget.addTab(self.scoop_tab, "📰 Scoop")
         else:

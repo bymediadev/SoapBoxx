@@ -161,11 +161,11 @@ class Config:
         value = self.config
 
         try:
-            for k in keys:
+        for k in keys:
                 value = value[k]
             return value
         except (KeyError, TypeError):
-            return default
+                return default
 
     def set(self, key: str, value):
         """Set configuration value by key (supports dot notation)"""
@@ -221,7 +221,7 @@ class Config:
         """Get OpenAI API key with validation - CRITICAL FOR SYSTEM OPERATION"""
         api_key = self.get("openai_api_key") or os.getenv("OPENAI_API_KEY")
         if api_key and self._validate_api_key_format(api_key, "openai"):
-            return api_key
+        return api_key
         return None
 
     def set_openai_api_key(self, api_key: str):

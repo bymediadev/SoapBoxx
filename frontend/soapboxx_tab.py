@@ -14,7 +14,7 @@ sys.path.insert(0, backend_dir)
 
 from dotenv import load_dotenv
 from PyQt6.QtCore import QThread, QTimer, pyqtSignal, Qt
-from PyQt6.QtWidgets import (QComboBox, QFrame, QGridLayout, QGroupBox,
+from PyQt6.QtWidgets import (QCheckBox, QComboBox, QFrame, QGridLayout, QGroupBox,
                              QHBoxLayout, QLabel, QMessageBox, QProgressBar,
                              QPushButton, QSlider, QTextEdit, QVBoxLayout,
                              QWidget, QScrollArea)
@@ -345,6 +345,12 @@ class SoapBoxxTab(QWidget):
         self.obs_websocket = None
         self.last_audio_update = 0
         self.audio_update_interval = 0.1  # Update UI every 100ms
+        # Guest questions state
+        self.questions = []  # list of dicts: {"text": str, "status": "pending|approved|denied"}
+        self._known_questions = set()
+        self._questions_timer = QTimer(self)
+        self._questions_timer.setInterval(2000)  # 2s
+        self._questions_timer.timeout.connect(self._scan_transcript_for_questions)
         self.setup_backend()
 
     def setup_ui(self):
@@ -693,10 +699,93 @@ class SoapBoxxTab(QWidget):
 
         scroll_layout.addWidget(feedback_card)
 
+        # Guest Questions Approval - Modern Card Design
+        questions_card = ModernCard()
+        questions_layout = QVBoxLayout(questions_card)
+
+        # Card header
+        questions_header = QLabel("👥 Guest Questions Approval")
+        questions_header.setStyleSheet("""
+            font-size: 18px; 
+            font-weight: bold; 
+            color: #2C3E50;
+            margin-bottom: 15px;
+        """)
+        questions_layout.addWidget(questions_header)
+
+        # Input area to add questions (one per line)
+        self.questions_input = QTextEdit()
+        self.questions_input.setPlaceholderText("Enter questions here (one per line) or paste from your notes...")
+        self.questions_input.setStyleSheet("""
+            QTextEdit {
+                border: 2px solid #E0E0E0;
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                background: white;
+            }
+            QTextEdit:focus {
+                border: 2px solid #3498DB;
+            }
+        """)
+        self.questions_input.setMinimumHeight(120)
+        questions_layout.addWidget(self.questions_input)
+
+        # Buttons row
+        q_btn_row = QHBoxLayout()
+        # Auto extract toggle
+        self.auto_extract_checkbox = QCheckBox("Auto-extract from transcript")
+        self.auto_extract_checkbox.setChecked(True)
+        self.auto_extract_checkbox.toggled.connect(self._toggle_auto_extract)
+        q_btn_row.addWidget(self.auto_extract_checkbox)
+
+        self.add_questions_btn = ModernButton("➕ Add Questions", style="primary")
+        self.add_questions_btn.clicked.connect(self._add_questions_from_input)
+        q_btn_row.addWidget(self.add_questions_btn)
+
+        self.add_from_transcript_btn = ModernButton("📝 Add from Transcript", style="secondary")
+        self.add_from_transcript_btn.clicked.connect(self._add_questions_from_transcript)
+        q_btn_row.addWidget(self.add_from_transcript_btn)
+
+        self.approve_all_btn = ModernButton("✅ Approve All", style="success")
+        self.approve_all_btn.clicked.connect(lambda: self._bulk_update_questions_status("approved"))
+        q_btn_row.addWidget(self.approve_all_btn)
+
+        self.deny_all_btn = ModernButton("❌ Deny All", style="secondary")
+        self.deny_all_btn.clicked.connect(lambda: self._bulk_update_questions_status("denied"))
+        q_btn_row.addWidget(self.deny_all_btn)
+
+        q_btn_row.addStretch()
+        questions_layout.addLayout(q_btn_row)
+
+        # List area for questions with approval controls
+        self.questions_list_container = QWidget()
+        self.questions_list_layout = QVBoxLayout(self.questions_list_container)
+        self.questions_list_layout.setSpacing(8)
+        self.questions_list_layout.setContentsMargins(0, 0, 0, 0)
+        questions_layout.addWidget(self.questions_list_container)
+
+        # Export/Copy row
+        export_row = QHBoxLayout()
+        self.export_questions_btn = ModernButton("💾 Export JSON", style="secondary")
+        self.export_questions_btn.clicked.connect(self._export_questions_json)
+        export_row.addWidget(self.export_questions_btn)
+
+        self.copy_questions_btn = ModernButton("📋 Copy", style="secondary")
+        self.copy_questions_btn.clicked.connect(self._copy_questions_to_clipboard)
+        export_row.addWidget(self.copy_questions_btn)
+
+        export_row.addStretch()
+        questions_layout.addLayout(export_row)
+
+        scroll_layout.addWidget(questions_card)
+
         # Set up scroll area
         scroll_area.setWidget(scroll_content)
         layout.addWidget(scroll_area)
         self.setLayout(layout)
+        # Start background extraction
+        self._questions_timer.start()
 
         # Initialize OBS connection
         self.obs_connected = False
@@ -1274,6 +1363,168 @@ class SoapBoxxTab(QWidget):
             self.feedback_text.setText(feedback_text)
         else:
             self.feedback_text.setText(str(feedback))
+
+    # ----- Guest Questions Panel Logic -----
+    def _add_questions_from_input(self):
+        """Parse input box lines and add to the questions list."""
+        text = (self.questions_input.toPlainText() or "").strip()
+        if not text:
+            QMessageBox.information(self, "Guest Questions", "Please enter at least one question.")
+            return
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        added = 0
+        for ln in lines:
+            added += self._append_question_row(ln)
+        if added:
+            self.questions_input.clear()
+
+    def _add_questions_from_transcript(self):
+        """Attempt to extract question-like sentences from current transcript."""
+        transcript = (self.transcript_text.toPlainText() or "").strip()
+        if not transcript:
+            QMessageBox.information(self, "No Transcript", "Transcript is empty. Record or paste transcript first.")
+            return
+        # Simple heuristic: split on '?'
+        parts = transcript.split('?')
+        candidates = []
+        for p in parts:
+            p = p.strip()
+            if len(p) >= 8:  # basic length filter
+                candidates.append(p + '?')
+        if not candidates:
+            QMessageBox.information(self, "No Questions Found", "Couldn't find question-like sentences in the transcript.")
+            return
+        added = 0
+        for q in candidates:
+            added += self._append_question_row(q)
+        QMessageBox.information(self, "Guest Questions", f"Added {added} question(s) from transcript.")
+
+    def _scan_transcript_for_questions(self):
+        """Periodic scan to auto-extract questions in near real time."""
+        if not self.auto_extract_checkbox.isChecked():
+            return
+        transcript = (self.transcript_text.toPlainText() or "").strip()
+        if not transcript:
+            return
+        parts = transcript.split('?')
+        for p in parts:
+            p = p.strip()
+            if len(p) < 8:
+                continue
+            q = p + '?'
+            if q not in self._known_questions:
+                if self._append_question_row(q):
+                    self._known_questions.add(q)
+
+    def _append_question_row(self, question_text: str) -> int:
+        """Create a row widget for the question with approve/deny controls."""
+        # Prevent duplicates
+        if any(q.get("text") == question_text for q in self.questions):
+            return 0
+        row = QHBoxLayout()
+        label = QLabel(question_text)
+        label.setWordWrap(True)
+        label.setStyleSheet("color: #2C3E50;")
+        row.addWidget(label, stretch=1)
+
+        # Status label
+        status_label = QLabel("pending")
+        status_label.setStyleSheet("color: #6C757D; font-weight: bold; padding: 4px 8px; background: #F8F9FA; border-radius: 4px;")
+        row.addWidget(status_label)
+
+        # Approve / Deny buttons
+        approve_btn = ModernButton("Approve", style="success")
+        deny_btn = ModernButton("Deny", style="secondary")
+        row.addWidget(approve_btn)
+        row.addWidget(deny_btn)
+
+        # Handlers
+        def set_status(new_status: str):
+            for q in self.questions:
+                if q["text"] == question_text:
+                    q["status"] = new_status
+                    break
+            if new_status == "approved":
+                status_label.setText("approved")
+                status_label.setStyleSheet("color: white; font-weight: bold; padding: 4px 8px; background: #28A745; border-radius: 4px;")
+            elif new_status == "denied":
+                status_label.setText("denied")
+                status_label.setStyleSheet("color: white; font-weight: bold; padding: 4px 8px; background: #DC3545; border-radius: 4px;")
+            else:
+                status_label.setText("pending")
+                status_label.setStyleSheet("color: #6C757D; font-weight: bold; padding: 4px 8px; background: #F8F9FA; border-radius: 4px;")
+
+        approve_btn.clicked.connect(lambda: set_status("approved"))
+        deny_btn.clicked.connect(lambda: set_status("denied"))
+
+        # Add to layout and model
+        container = QFrame()
+        container.setFrameStyle(QFrame.Shape.NoFrame)
+        container.setStyleSheet("QFrame { background: white; border: 1px solid #E9ECEF; border-radius: 8px; padding: 8px; }")
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(8, 8, 8, 8)
+        container_layout.addLayout(row)
+        self.questions_list_layout.addWidget(container)
+
+        self.questions.append({"text": question_text, "status": "pending"})
+        return 1
+
+    def _bulk_update_questions_status(self, status: str):
+        """Set status for all questions and refresh labels."""
+        for i in range(self.questions_list_layout.count()):
+            item = self.questions_list_layout.itemAt(i).widget()
+            if not item:
+                continue
+            # The first child layout contains [label, status_label, approve, deny]
+            lay = item.layout().itemAt(0).layout() if item.layout() else None
+            if not lay:
+                continue
+            status_label = lay.itemAt(1).widget()
+            if isinstance(status_label, QLabel):
+                if status == "approved":
+                    status_label.setText("approved")
+                    status_label.setStyleSheet("color: white; font-weight: bold; padding: 4px 8px; background: #28A745; border-radius: 4px;")
+                elif status == "denied":
+                    status_label.setText("denied")
+                    status_label.setStyleSheet("color: white; font-weight: bold; padding: 4px 8px; background: #DC3545; border-radius: 4px;")
+                else:
+                    status_label.setText("pending")
+                    status_label.setStyleSheet("color: #6C757D; font-weight: bold; padding: 4px 8px; background: #F8F9FA; border-radius: 4px;")
+        # Update backing model
+        for q in self.questions:
+            q["status"] = status
+
+    def _export_questions_json(self):
+        """Export current questions with statuses to JSON in Exports/ folder."""
+        try:
+            from pathlib import Path
+            export_dir = Path("Exports")
+            export_dir.mkdir(parents=True, exist_ok=True)
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            out_path = export_dir / f"guest_questions_{ts}.json"
+            with open(out_path, "w", encoding="utf-8") as f:
+                json.dump(self.questions, f, indent=2, ensure_ascii=False)
+            QMessageBox.information(self, "Exported", f"Saved questions to:\n{out_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", f"Failed to export questions: {e}")
+
+    def _copy_questions_to_clipboard(self):
+        """Copy questions JSON to clipboard for external sharing."""
+        try:
+            from PyQt6.QtWidgets import QApplication
+            clipboard = QApplication.clipboard()
+            clipboard.setText(json.dumps(self.questions, indent=2, ensure_ascii=False))
+            self.status_label.setText("Questions copied to clipboard")
+            self.status_label.setStyleSheet("color: #28A745; font-weight: bold;")
+        except Exception as e:
+            QMessageBox.critical(self, "Copy Error", f"Failed to copy questions: {e}")
+
+    def _toggle_auto_extract(self, checked: bool):
+        """Start/stop the periodic question extraction."""
+        if checked:
+            self._questions_timer.start()
+        else:
+            self._questions_timer.stop()
 
     def update_status(self, status):
         """Update status display"""
