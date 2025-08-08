@@ -5,6 +5,7 @@ import requests
 import time
 from typing import Dict, List, Optional
 from datetime import datetime
+from urllib.parse import urlparse, quote
 
 # Try to import error tracker
 try:

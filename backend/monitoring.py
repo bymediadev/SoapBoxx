@@ -26,10 +26,10 @@ except ImportError:
 
 # Try to import error tracker
 try:
-    from .error_tracker import ErrorTracker, ErrorEvent, ErrorSeverity, ErrorCategory
+    from .error_tracker import ErrorTracker, ErrorEvent, ErrorSeverity, ErrorCategory, get_error_tracker
 except ImportError:
     try:
-        from error_tracker import ErrorTracker, ErrorEvent, ErrorSeverity, ErrorCategory
+        from error_tracker import ErrorTracker, ErrorEvent, ErrorSeverity, ErrorCategory, get_error_tracker
     except ImportError:
         print("Warning: error_tracker not available")
         # Create placeholder classes
@@ -52,6 +52,10 @@ except ImportError:
             UI = "ui"
             SYSTEM = "system"
             UNKNOWN = "unknown"
+        
+        # Define get_error_tracker function
+        def get_error_tracker():
+            return ErrorTracker()
 
 
 @dataclass
@@ -327,7 +331,7 @@ class SystemMonitor:
             
             # Error count (from error tracker)
             try:
-                error_tracker = ErrorTracker()
+                error_tracker = get_error_tracker()
                 error_count = len(error_tracker.get_errors(hours=1))
             except:
                 error_count = 0
@@ -385,7 +389,7 @@ class TelemetryManager:
         self.performance_monitor = PerformanceMonitor()
         self.user_analytics = UserAnalytics()
         self.system_monitor = SystemMonitor()
-        self.error_tracker = ErrorTracker()
+        self.error_tracker = get_error_tracker()
         
         # Start monitoring thread
         self._monitoring_active = True

@@ -142,7 +142,22 @@ class ReverbTab(QWidget):
         super().__init__()
         self.uploaded_episodes = []
         self.analysis_thread = None
-        self.init_ui()
+        # Defer UI setup until widget is shown
+        self._ui_initialized = False
+        
+        # Connect show event to initialize UI
+        self.showEvent = self._on_show_event
+
+    def _on_show_event(self, event):
+        """Initialize UI when widget is first shown"""
+        if not self._ui_initialized:
+            print("🎨 ReverbTab: Initializing UI...")
+            self.init_ui()
+            self._ui_initialized = True
+            print("✅ ReverbTab: UI initialized")
+        
+        # Call the original showEvent if it exists
+        super().showEvent(event)
 
     def init_ui(self):
         """Initialize the user interface"""

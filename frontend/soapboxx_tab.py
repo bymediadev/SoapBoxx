@@ -36,6 +36,7 @@ try:
     from backend.config import Config
     from backend.soapboxx_core import SoapBoxxCore
     from backend.transcriber import Transcriber
+    from backend.tts_generator import TTSGenerator
     BACKEND_AVAILABLE = True
 except ImportError as e:
     print(f"Backend not available: {e}")
@@ -46,6 +47,7 @@ except ImportError as e:
         from config import Config
         from soapboxx_core import SoapBoxxCore
         from transcriber import Transcriber
+        from tts_generator import TTSGenerator
         BACKEND_AVAILABLE = True
         print("✅ Backend imported using alternative method")
     except ImportError as e2:
@@ -56,6 +58,7 @@ except ImportError as e:
             from config import Config
             from soapboxx_core import SoapBoxxCore
             from transcriber import Transcriber
+            from tts_generator import TTSGenerator
             BACKEND_AVAILABLE = True
             print("✅ Backend imported using explicit path method")
         except ImportError as e3:
@@ -240,7 +243,7 @@ class AudioLevelThread(QThread):
         self.last_update_time = 0
         if not self.isRunning():
             self.start()
-    
+
     def stop_monitoring(self):
         """Stop audio level monitoring and cleanup resources"""
         self.is_monitoring = False
@@ -263,86 +266,209 @@ class AudioLevelThread(QThread):
 
 
 class RecordingThread(QThread):
-    """Thread for handling recording operations"""
+    """Thread for handling continuous recording with live transcription"""
 
     transcript_updated = pyqtSignal(str)
     feedback_updated = pyqtSignal(dict)
     status_updated = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
+    audio_chunk_ready = pyqtSignal(bytes)  # Signal for audio chunks
 
     def __init__(self, core, transcription_service="openai"):
         super().__init__()
         self.core = core
         self.transcription_service = transcription_service
         self.is_recording = False
+        self.audio_recorder = None
+        self.transcription_buffer = ""
+        self.last_transcription_time = 0
+        self.transcription_interval = 2.0  # Transcribe every 2 seconds for more responsive experience
+        self.audio_buffer = []  # Buffer for accumulating audio data
+        self.min_audio_length = 1.0  # Minimum audio length in seconds before transcribing
 
     def run(self):
-        """Start recording with comprehensive error handling"""
+        """Start continuous recording with live transcription"""
         try:
             self.is_recording = True
-            self.status_updated.emit("Initializing recording...")
+            self.status_updated.emit("Initializing live recording...")
 
-            # Validate core is available
-            if not self.core:
-                self.error_occurred.emit("Backend core not available")
-                return
-
-            # Start recording with timeout protection
-            self.status_updated.emit("Starting recording...")
+            # Import audio recorder
             try:
-                if self.core.start_recording("SoapBoxx Session"):
-                    self.status_updated.emit("Recording in progress...")
-                else:
-                    self.error_occurred.emit("Failed to start recording - check microphone availability")
-                    return
-            except Exception as start_error:
-                self.error_occurred.emit(f"Recording start failed: {str(start_error)}")
+                from backend.audio_recorder import AudioRecorder
+                self.audio_recorder = AudioRecorder()
+            except ImportError as e:
+                self.error_occurred.emit(f"Audio recorder not available: {e}")
                 return
 
-            # Recording loop with error checking
-            for i in range(10):
-                if not self.is_recording:
-                    self.status_updated.emit("Recording cancelled by user")
-                    break
-                try:
-                    time.sleep(1)
-                    self.status_updated.emit(f"Recording... {10-i}s remaining")
-                except Exception as loop_error:
-                    print(f"Recording loop error: {loop_error}")
+            # Start recording
+            self.status_updated.emit("Starting live recording...")
+            if not self.audio_recorder.start_recording():
+                self.error_occurred.emit("Failed to start audio recording")
+                return
 
-            # Stop recording with error handling
-            if self.is_recording:
+            self.status_updated.emit("Live recording in progress... Speak now!")
+            
+            # Continuous recording loop
+            start_time = time.time()
+            last_chunk_time = start_time
+            
+            while self.is_recording:
                 try:
-                    self.status_updated.emit("Stopping recording...")
-                    results = self.core.stop_recording()
-                    self.status_updated.emit("Processing results...")
-
-                    # Validate and emit results
-                    if results and isinstance(results, dict):
-                        if results.get("transcript"):
-                            self.transcript_updated.emit(results["transcript"])
-                        if results.get("feedback"):
-                            self.feedback_updated.emit(results["feedback"])
-                        self.status_updated.emit("Recording completed successfully!")
-                    else:
-                        self.error_occurred.emit("Invalid recording results received")
+                    # Get audio chunk
+                    chunk = self.audio_recorder.get_chunk()
+                    if chunk is not None:
+                        current_time = time.time()
                         
-                except Exception as stop_error:
-                    self.error_occurred.emit(f"Failed to stop recording properly: {str(stop_error)}")
+                        # Add chunk to buffer with timestamp
+                        self.audio_buffer.append((chunk, current_time))
+                        
+                        # Emit chunk for real-time processing
+                        self.audio_chunk_ready.emit(chunk.tobytes())
+                        
+                        # Debug: Print chunk info occasionally
+                        if len(self.audio_buffer) % 10 == 0:  # Every 10 chunks
+                            print(f"🎵 Audio buffer: {len(self.audio_buffer)} chunks, latest: {chunk.shape}")
+                        
+                        # Check if we have enough audio to transcribe
+                        if current_time - self.last_transcription_time >= self.transcription_interval:
+                            # Get audio chunks from the last interval
+                            recent_chunks = [chunk for chunk, timestamp in self.audio_buffer 
+                                           if timestamp >= self.last_transcription_time]
+                            
+                            print(f"⏰ Transcription interval reached: {len(recent_chunks)} chunks ready")
+                            
+                            if recent_chunks and len(recent_chunks) > 0:
+                                # Transcribe the recent audio
+                                self._transcribe_accumulated_audio(recent_chunks)
+                                self.last_transcription_time = current_time
+                                
+                                # Keep only recent chunks to prevent memory buildup
+                                cutoff_time = current_time - 10.0  # Keep last 10 seconds
+                                self.audio_buffer = [(chunk, timestamp) for chunk, timestamp in self.audio_buffer 
+                                                   if timestamp >= cutoff_time]
+                                print(f"🧹 Cleaned buffer: {len(self.audio_buffer)} chunks remaining")
+                    else:
+                        # No chunk available
+                        if len(self.audio_buffer) % 50 == 0:  # Every 50 empty checks
+                            print(f"⏳ Waiting for audio chunks... (buffer: {len(self.audio_buffer)} chunks)")
+                    
+                    time.sleep(0.05)  # Smaller delay for more responsive transcription
+                    
+                except Exception as chunk_error:
+                    print(f"❌ Audio chunk error: {chunk_error}")
+                    import traceback
+                    traceback.print_exc()
+                    continue
 
         except Exception as e:
-            self.error_occurred.emit(f"Unexpected recording error: {str(e)}")
+            self.error_occurred.emit(f"Live recording error: {str(e)}")
             import traceback
             traceback.print_exc()
         finally:
             self.is_recording = False
-            self.status_updated.emit("Recording session ended")
+            if self.audio_recorder:
+                self.audio_recorder.stop_recording()
+                self.audio_recorder.cleanup()
+            self.status_updated.emit("Live recording session ended")
+
+    def _transcribe_accumulated_audio(self, audio_chunks):
+        """Transcribe accumulated audio chunks"""
+        try:
+            if not audio_chunks:
+                print("⚠️ No audio chunks to transcribe")
+                return
+                
+            print(f"🎵 Transcribing {len(audio_chunks)} audio chunks...")
+                
+            # Combine audio chunks properly
+            combined_audio = self._combine_audio_chunks(audio_chunks)
+            if not combined_audio:
+                print("⚠️ Failed to combine audio chunks")
+                return
+                
+            print(f"🎵 Combined audio: {len(combined_audio)} bytes")
+                
+            # Create transcription thread
+            self.transcription_thread = TranscriptionThread(
+                combined_audio, 
+                self.transcription_service, 
+                "Live Recording"
+            )
+            self.transcription_thread.transcription_completed.connect(
+                self._on_live_transcription_completed
+            )
+            self.transcription_thread.transcription_failed.connect(
+                self._on_live_transcription_failed
+            )
+            self.transcription_thread.start()
+            
+        except Exception as e:
+            print(f"❌ Live transcription error: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _on_live_transcription_completed(self, transcript):
+        """Handle completed live transcription"""
+        if transcript and transcript.strip():
+            # Append to existing transcript
+            if self.transcription_buffer:
+                self.transcription_buffer += " " + transcript
+            else:
+                self.transcription_buffer = transcript
+            
+            # Emit updated transcript
+            self.transcript_updated.emit(self.transcription_buffer)
+            self.status_updated.emit("Live transcription updated")
+
+    def _on_live_transcription_failed(self, error):
+        """Handle failed live transcription"""
+        print(f"Live transcription failed: {error}")
+        self.status_updated.emit(f"Transcription error: {error}")
 
     def stop_recording(self):
-        """Stop recording"""
-        self.is_recording = False
-        if self.core.is_recording:
-            self.core.stop_recording()
+        """Stop continuous recording"""
+        try:
+            self.is_recording = False
+            self.status_updated.emit("Stopping live recording...")
+        except Exception as e:
+            self.error_occurred.emit(f"Failed to stop recording: {str(e)}")
+
+    def _combine_audio_chunks(self, chunks):
+        """Combine audio chunks into a single audio data"""
+        try:
+            if not chunks:
+                print("⚠️ No chunks to combine")
+                return b""
+            
+            print(f"🔧 Combining {len(chunks)} audio chunks...")
+            
+            # Convert numpy arrays to bytes and concatenate
+            combined_bytes = []
+            total_samples = 0
+            
+            for i, chunk in enumerate(chunks):
+                if chunk is not None:
+                    # Convert numpy array to bytes
+                    chunk_bytes = chunk.tobytes()
+                    combined_bytes.append(chunk_bytes)
+                    total_samples += len(chunk)
+                    print(f"  Chunk {i}: {chunk.shape} -> {len(chunk_bytes)} bytes")
+                else:
+                    print(f"  Chunk {i}: None (skipped)")
+            
+            if combined_bytes:
+                result = b"".join(combined_bytes)
+                print(f"✅ Combined {len(combined_bytes)} chunks: {total_samples} samples -> {len(result)} bytes")
+                return result
+            else:
+                print("⚠️ No valid chunks to combine")
+                return b""
+            
+        except Exception as e:
+            print(f"❌ Error combining audio chunks: {e}")
+            import traceback
+            traceback.print_exc()
+            return b""
 
 
 class SoapBoxxTab(QWidget):
@@ -352,21 +478,49 @@ class SoapBoxxTab(QWidget):
         self.transcriber = None
         self.audio_level_thread = None
         self.recording_thread = None
+        self.transcription_thread = None  # Add transcription thread
         self.obs_websocket = None
         self.last_audio_update = 0
         self.audio_update_interval = 0.1  # Update UI every 100ms
         # Guest questions state
         self.questions = []  # list of dicts: {"text": str, "status": "pending|approved|denied"}
         self._known_questions = set()
-        self._questions_timer = QTimer(self)
-        self._questions_timer.setInterval(2000)  # 2s
-        self._questions_timer.timeout.connect(self._scan_transcript_for_questions)
+        # Defer timer creation until widget is shown
+        self._questions_timer = None
         
-        self.setup_ui()
-        self.setup_backend()
+        # Defer UI setup until widget is shown
+        self._ui_initialized = False
+        self._backend_initialized = False
         
-        # Refresh devices after a short delay to ensure UI is fully loaded
-        QTimer.singleShot(500, self.refresh_devices)
+        # Connect show event to initialize UI
+        self.showEvent = self._on_show_event
+
+    def _on_show_event(self, event):
+        """Initialize UI when widget is first shown"""
+        if not self._ui_initialized:
+            print("🎨 SoapBoxxTab: Initializing UI...")
+            self.setup_ui()
+            self._ui_initialized = True
+            print("✅ SoapBoxxTab: UI initialized")
+        
+        if not self._backend_initialized:
+            print("🔧 SoapBoxxTab: Initializing backend...")
+            self.setup_backend()
+            self._backend_initialized = True
+            print("✅ SoapBoxxTab: Backend initialized")
+            
+            # Initialize timer after backend is ready
+            if self._questions_timer is None:
+                self._questions_timer = QTimer(self)
+                self._questions_timer.setInterval(2000)  # 2s
+                self._questions_timer.timeout.connect(self._scan_transcript_for_questions)
+                print("✅ SoapBoxxTab: Timer initialized")
+            
+            # Refresh devices after a short delay to ensure UI is fully loaded
+            QTimer.singleShot(500, self.refresh_devices)
+        
+        # Call the original showEvent if it exists
+        super().showEvent(event)
 
     def setup_ui(self):
         """Setup the user interface with modern design"""
@@ -649,18 +803,79 @@ class SoapBoxxTab(QWidget):
         transcript_layout = QVBoxLayout(transcript_card)
         
         # Card header
-        transcript_header = QLabel("📝 Live Transcript")
+        transcript_header = QLabel("📝 Live Transcript & Speech-to-Text")
         transcript_header.setStyleSheet("""
             font-size: 18px; 
-            font-weight: bold; 
+            font-weight: bold;
             color: #2C3E50;
             margin-bottom: 15px;
         """)
         transcript_layout.addWidget(transcript_header)
 
-        # Transcript text area with modern styling
+        # STT Service Selection (integrated into transcript section)
+        stt_service_layout = QHBoxLayout()
+        stt_service_label = QLabel("STT Service:")
+        stt_service_label.setStyleSheet("font-weight: bold; color: #495057;")
+        self.stt_service_combo = QComboBox()
+        self.stt_service_combo.addItems(["openai", "local", "azure", "assemblyai"])
+        self.stt_service_combo.setCurrentText("openai")
+        self.stt_service_combo.setStyleSheet("""
+            QComboBox {
+                padding: 8px;
+                border: 2px solid #E0E0E0;
+                border-radius: 6px;
+                font-size: 14px;
+                background: white;
+            }
+            QComboBox:focus {
+                border: 2px solid #3498DB;
+            }
+        """)
+        stt_service_layout.addWidget(stt_service_label)
+        stt_service_layout.addWidget(self.stt_service_combo)
+
+        # STT Status
+        self.stt_status_label = QLabel("Ready to transcribe speech")
+        self.stt_status_label.setStyleSheet("color: #6C757D; font-style: italic; padding: 5px;")
+        stt_service_layout.addWidget(self.stt_status_label)
+        stt_service_layout.addStretch()
+        transcript_layout.addLayout(stt_service_layout)
+
+        # STT Controls (integrated into transcript section)
+        stt_controls_layout = QHBoxLayout()
+        
+        # Upload Audio button
+        self.upload_audio_btn = ModernButton("📁 Upload Audio", style="primary")
+        self.upload_audio_btn.clicked.connect(self.upload_audio_for_transcription)
+        self.upload_audio_btn.setMaximumWidth(200)
+        stt_controls_layout.addWidget(self.upload_audio_btn)
+        
+        # Transcribe Recording button
+        self.transcribe_recording_btn = ModernButton("🎙️ Transcribe Recording", style="secondary")
+        self.transcribe_recording_btn.clicked.connect(self.transcribe_current_recording)
+        self.transcribe_recording_btn.setMaximumWidth(200)
+        self.transcribe_recording_btn.setEnabled(False)
+        stt_controls_layout.addWidget(self.transcribe_recording_btn)
+        
+        # Cancel Transcription button
+        self.cancel_transcription_btn = ModernButton("❌ Cancel", style="danger")
+        self.cancel_transcription_btn.clicked.connect(self.cancel_transcription)
+        self.cancel_transcription_btn.setMaximumWidth(120)
+        self.cancel_transcription_btn.setEnabled(False)
+        stt_controls_layout.addWidget(self.cancel_transcription_btn)
+        
+        # Clear button
+        self.clear_stt_btn = ModernButton("🗑️ Clear", style="secondary")
+        self.clear_stt_btn.clicked.connect(self.clear_stt_results)
+        self.clear_stt_btn.setMaximumWidth(100)
+        stt_controls_layout.addWidget(self.clear_stt_btn)
+        
+        stt_controls_layout.addStretch()
+        transcript_layout.addLayout(stt_controls_layout)
+
+        # Transcript text area with modern styling (now handles both live transcript and STT results)
         self.transcript_text = QTextEdit()
-        self.transcript_text.setPlaceholderText("Transcript will appear here as you record...")
+        self.transcript_text.setPlaceholderText("Live transcript will appear here as you record, or upload audio files for transcription...")
         self.transcript_text.setStyleSheet("""
             QTextEdit {
                 border: 2px solid #E0E0E0;
@@ -679,6 +894,98 @@ class SoapBoxxTab(QWidget):
 
         scroll_layout.addWidget(transcript_card)
 
+        # Text-to-Speech Section - Modern Card Design
+        tts_card = ModernCard()
+        tts_layout = QVBoxLayout(tts_card)
+        
+        # Card header
+        tts_header = QLabel("🔊 Text-to-Speech")
+        tts_header.setStyleSheet("""
+            font-size: 18px; 
+            font-weight: bold;
+            color: #2C3E50;
+            margin-bottom: 15px;
+        """)
+        tts_layout.addWidget(tts_header)
+
+        # TTS Service Selection
+        tts_service_layout = QHBoxLayout()
+        tts_service_label = QLabel("TTS Service:")
+        tts_service_label.setStyleSheet("font-weight: bold; color: #495057;")
+        self.tts_service_combo = QComboBox()
+        self.tts_service_combo.addItems(["openai", "local", "google", "azure"])
+        self.tts_service_combo.setCurrentText("openai")
+        self.tts_service_combo.setStyleSheet("""
+            QComboBox {
+                padding: 8px;
+                border: 2px solid #E0E0E0;
+                border-radius: 6px;
+                font-size: 14px;
+                background: white;
+            }
+            QComboBox:focus {
+                border: 2px solid #3498DB;
+            }
+        """)
+        tts_service_layout.addWidget(tts_service_label)
+        tts_service_layout.addWidget(self.tts_service_combo)
+
+        # Voice Selection
+        voice_label = QLabel("Voice:")
+        voice_label.setStyleSheet("font-weight: bold; color: #495057;")
+        self.tts_voice_combo = QComboBox()
+        self.tts_voice_combo.addItems(["alloy", "echo", "fable", "onyx", "nova", "shimmer"])
+        self.tts_voice_combo.setCurrentText("alloy")
+        self.tts_voice_combo.setStyleSheet("""
+            QComboBox {
+                padding: 8px;
+                border: 2px solid #E0E0E0;
+                border-radius: 6px;
+                font-size: 14px;
+                background: white;
+            }
+            QComboBox:focus {
+                border: 2px solid #3498DB;
+            }
+        """)
+        tts_service_layout.addWidget(voice_label)
+        tts_service_layout.addWidget(self.tts_voice_combo)
+        tts_service_layout.addStretch()
+        tts_layout.addLayout(tts_service_layout)
+
+        # TTS Controls
+        tts_controls_layout = QHBoxLayout()
+        
+        # Generate TTS button
+        self.generate_tts_btn = ModernButton("🔊 Generate Speech", style="primary")
+        self.generate_tts_btn.clicked.connect(self.generate_tts_from_transcript)
+        self.generate_tts_btn.setMaximumWidth(200)
+        tts_controls_layout.addWidget(self.generate_tts_btn)
+        
+        # Play TTS button
+        self.play_tts_btn = ModernButton("▶️ Play Audio", style="secondary")
+        self.play_tts_btn.clicked.connect(self.play_tts_audio)
+        self.play_tts_btn.setMaximumWidth(150)
+        self.play_tts_btn.setEnabled(False)
+        tts_controls_layout.addWidget(self.play_tts_btn)
+        
+        # Save TTS button
+        self.save_tts_btn = ModernButton("💾 Save Audio", style="secondary")
+        self.save_tts_btn.clicked.connect(self.save_tts_audio)
+        self.save_tts_btn.setMaximumWidth(150)
+        self.save_tts_btn.setEnabled(False)
+        tts_controls_layout.addWidget(self.save_tts_btn)
+        
+        tts_controls_layout.addStretch()
+        tts_layout.addLayout(tts_controls_layout)
+
+        # TTS Status
+        self.tts_status_label = QLabel("Ready to generate speech from transcript")
+        self.tts_status_label.setStyleSheet("color: #6C757D; font-style: italic; padding: 5px;")
+        tts_layout.addWidget(self.tts_status_label)
+
+        scroll_layout.addWidget(tts_card)
+
         # Feedback Display - Modern Card Design
         feedback_card = ModernCard()
         feedback_layout = QVBoxLayout(feedback_card)
@@ -687,7 +994,7 @@ class SoapBoxxTab(QWidget):
         feedback_header = QLabel("💡 AI Feedback")
         feedback_header.setStyleSheet("""
             font-size: 18px; 
-            font-weight: bold; 
+                font-weight: bold;
             color: #2C3E50;
             margin-bottom: 15px;
         """)
@@ -929,7 +1236,7 @@ class SoapBoxxTab(QWidget):
                 except Exception as monitor_error:
                     self._show_user_friendly_error("Audio monitoring failed", f"Could not start audio monitoring: {str(monitor_error)}")
                     self._finish_microphone_test()
-                    return
+                return
             else:
                 print("Audio monitoring already running")
             
@@ -970,7 +1277,7 @@ class SoapBoxxTab(QWidget):
             # Update status label to show error state
             self.status_label.setText(f"Error: {title}")
             self.status_label.setStyleSheet("color: #DC3545; font-weight: bold; padding: 5px 10px; background: #F8D7DA; border-radius: 4px;")
-            
+
         except Exception as e:
             # Fallback to console if UI error display fails
             print(f"Error displaying error message: {e}")
@@ -1161,8 +1468,8 @@ class SoapBoxxTab(QWidget):
                         print(f"Could not parse device ID from '{device_name}': {e}")
                         # Continue without device selection (will use default)
                 
-                self.audio_level_thread.start_monitoring()
-                print("✅ Audio level monitoring started")
+            self.audio_level_thread.start_monitoring()
+            print("✅ Audio level monitoring started")
         except ImportError as e:
             print(f"❌ Audio libraries not available: {e}")
             self._show_user_friendly_error("Audio Libraries Missing", "Required audio libraries are not installed. Please install sounddevice and numpy.")
@@ -1224,11 +1531,21 @@ class SoapBoxxTab(QWidget):
     def closeEvent(self, event):
         """Clean up when closing"""
         try:
+            # Stop audio monitoring
             if self.audio_level_thread and self.audio_level_thread.isRunning():
                 self.audio_level_thread.stop_monitoring()
                 print("✅ Audio level monitoring stopped")
         except Exception as e:
             print(f"Error stopping audio monitoring: {e}")
+        
+        try:
+            # Stop transcription thread
+            if self.transcription_thread and self.transcription_thread.isRunning():
+                self.transcription_thread.stop_transcription()
+                self.transcription_thread.wait(2000)  # Wait up to 2 seconds
+                print("✅ Transcription thread stopped")
+        except Exception as e:
+            print(f"Error stopping transcription thread: {e}")
         
         super().closeEvent(event)
 
@@ -1353,56 +1670,121 @@ class SoapBoxxTab(QWidget):
             service = self.service_combo.currentText()
             self.core.set_transcription_service(service)
 
-            # Start recording thread
+            # Initialize recording thread
             self.recording_thread = RecordingThread(self.core, service)
             self.recording_thread.transcript_updated.connect(self.update_transcript)
             self.recording_thread.feedback_updated.connect(self.update_feedback)
             self.recording_thread.status_updated.connect(self.update_status)
             self.recording_thread.error_occurred.connect(self.handle_error)
 
+            # Start recording
             self.recording_thread.start()
 
-            # Disable button immediately to prevent double-clicks
-            self.record_button.setEnabled(False)
-            self.record_button.setText("Starting...")
-            
-            # Check if already recording
-            if hasattr(self, 'recording_thread') and self.recording_thread and self.recording_thread.isRunning():
-                self._show_user_friendly_error("Already Recording", "A recording session is already in progress.")
-                self._reset_recording_ui()
-                return
-
             # Update UI
-            self.record_button.setText("Recording...")
-            self.stop_button.setEnabled(True)
-            # self.progress_bar.setVisible(True) # Removed progress bar as it's not in the new UI
-            # self.progress_bar.setRange(0, 10) # Removed progress bar as it's not in the new UI
+            self.record_button.setText("⏹️ Stop Recording")
+            self.record_button.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                        stop:0 #DC3545, stop:1 #C82333);
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    padding: 12px 24px;
+                    font-weight: bold;
+                    font-size: 14px;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                        stop:0 #E74C3C, stop:1 #DC3545);
+                }
+            """)
+            self.record_button.setEnabled(True)
+
+            # Enable transcribe recording button
+            self.transcribe_recording_btn.setEnabled(True)
 
         except Exception as e:
-            self._show_user_friendly_error("Recording Start Failed", f"An unexpected error occurred: {str(e)}")
-            print(f"Recording start error: {e}")
-            import traceback
-            traceback.print_exc()
+            self._show_user_friendly_error("Recording Error", f"Failed to start recording: {str(e)}")
             self._reset_recording_ui()
     
     def _reset_recording_ui(self):
         """Reset recording UI to initial state"""
         self.record_button.setEnabled(True)
-        self.record_button.setText("Start Recording")
-        self.stop_button.setEnabled(False)
+        self.record_button.setText("🎙️ Start Recording")
+        self.record_button.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #28A745, stop:1 #20C997);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 12px 24px;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #20C997, stop:1 #17A2B8);
+            }
+        """)
+        self.transcribe_recording_btn.setEnabled(False)
 
     def stop_recording(self):
         """Stop recording"""
-        if self.recording_thread:
-            self.recording_thread.stop_recording()
-            self.recording_thread.wait()
+        try:
+            if self.recording_thread and self.recording_thread.isRunning():
+                self.recording_thread.stop_recording()
+                self.recording_thread.wait(5000)  # Wait up to 5 seconds
+                
+                # Store the recording data for STT
+                if hasattr(self.core, 'current_session') and self.core.current_session:
+                    if hasattr(self.core.current_session, 'audio_chunks') and self.core.current_session.audio_chunks:
+                        # Combine audio chunks
+                        combined_audio = self._combine_audio_chunks(self.core.current_session.audio_chunks)
+                        self.current_recording_data = combined_audio
+                        print(f"✅ Recording data stored for STT: {len(combined_audio)} bytes")
+                
+                # Update UI
+                self.record_button.setText("🎙️ Start Recording")
+                self.record_button.setStyleSheet("""
+                    QPushButton {
+                        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                            stop:0 #28A745, stop:1 #20C997);
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        padding: 12px 24px;
+                        font-weight: bold;
+                        font-size: 14px;
+                    }
+                    QPushButton:hover {
+                        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                            stop:0 #20C997, stop:1 #17A2B8);
+                    }
+                """)
+                self.record_button.setEnabled(True)
+                
+                # Enable transcribe recording button if we have data
+                if hasattr(self, 'current_recording_data') and self.current_recording_data:
+                    self.transcribe_recording_btn.setEnabled(True)
+                
+        except Exception as e:
+            self._show_user_friendly_error("Stop Recording Error", f"Failed to stop recording: {str(e)}")
+            self._reset_recording_ui()
 
-        # Update UI
-        self.record_button.setText("Start Recording")
-        self.record_button.setEnabled(True)
-        self.stop_button.setEnabled(False)
-        # self.progress_bar.setVisible(False) # Removed progress bar as it's not in the new UI
-        self.status_label.setText("Ready")
+    def _combine_audio_chunks(self, chunks):
+        """Combine audio chunks into a single audio data"""
+        try:
+            if not chunks:
+                return b""
+            
+            # Simple concatenation for now - in a real implementation you'd want proper audio format handling
+            combined = b"".join(chunks)
+            return combined
+            
+        except Exception as e:
+            print(f"Error combining audio chunks: {e}")
+            return b""
 
     def update_transcript(self, transcript):
         """Update transcript display"""
@@ -1597,12 +1979,383 @@ class SoapBoxxTab(QWidget):
         #         pass
 
     def handle_error(self, error):
-        """Handle errors"""
-        self.status_label.setText(f"Error: {error}")
-        self.status_label.setStyleSheet("font-weight: bold; color: red;")
-        self.record_button.setText("Start Recording")
-        self.record_button.setEnabled(True)
-        self.stop_button.setEnabled(False)
-        # self.progress_bar.setVisible(False) # Removed progress bar as it's not in the new UI
+        """Handle errors with user-friendly messages"""
+        self._show_user_friendly_error("Error", str(error))
 
-        QMessageBox.critical(self, "Error", error)
+    # TTS Methods
+    def generate_tts_from_transcript(self):
+        """Generate speech from the current transcript"""
+        try:
+            # Get transcript text
+            transcript = self.transcript_text.toPlainText().strip()
+            if not transcript:
+                self._show_user_friendly_error("No Transcript", "Please record or paste a transcript first.")
+                return
+            
+            # Get TTS settings
+            service = self.tts_service_combo.currentText()
+            voice = self.tts_voice_combo.currentText()
+            
+            # Update status
+            self.tts_status_label.setText("Generating speech...")
+            self.tts_status_label.setStyleSheet("color: #FFC107; font-weight: bold; padding: 5px; background: #FFF3CD; border-radius: 4px;")
+            self.generate_tts_btn.setEnabled(False)
+            
+            # Create TTS generator
+            try:
+                tts_generator = TTSGenerator(service=service)
+                status = tts_generator.get_service_status()
+                
+                if not status["available"]:
+                    self._show_user_friendly_error("TTS Service Unavailable", 
+                                                  f"The {service} TTS service is not available or not configured.")
+                    self._reset_tts_ui()
+                    return
+                
+                # Generate speech
+                timestamp = int(time.time())
+                output_path = f"tts_output_{timestamp}.mp3"
+                
+                result = tts_generator.generate_speech(transcript, voice, output_path)
+                
+                if result and os.path.exists(result):
+                    self.current_tts_file = result
+                    self.tts_status_label.setText(f"✅ Speech generated successfully: {os.path.basename(result)}")
+                    self.tts_status_label.setStyleSheet("color: #28A745; font-weight: bold; padding: 5px; background: #D4EDDA; border-radius: 4px;")
+                    
+                    # Enable play and save buttons
+                    self.play_tts_btn.setEnabled(True)
+                    self.save_tts_btn.setEnabled(True)
+                    
+                    print(f"✅ TTS generated: {result}")
+                else:
+                    self._show_user_friendly_error("TTS Generation Failed", "Failed to generate speech. Please check your TTS service configuration.")
+                    self._reset_tts_ui()
+                    
+            except Exception as e:
+                self._show_user_friendly_error("TTS Error", f"Error generating speech: {str(e)}")
+                self._reset_tts_ui()
+                
+        except Exception as e:
+            self._show_user_friendly_error("TTS Error", f"Unexpected error: {str(e)}")
+            self._reset_tts_ui()
+    
+    def play_tts_audio(self):
+        """Play the generated TTS audio"""
+        try:
+            if not hasattr(self, 'current_tts_file') or not self.current_tts_file:
+                self._show_user_friendly_error("No Audio", "No TTS audio file available. Please generate speech first.")
+                return
+            
+            if not os.path.exists(self.current_tts_file):
+                self._show_user_friendly_error("File Not Found", "TTS audio file not found. Please regenerate speech.")
+                return
+            
+            # Try to play the audio file
+            try:
+                import subprocess
+                import platform
+                
+                system = platform.system()
+                if system == "Windows":
+                    os.startfile(self.current_tts_file)
+                elif system == "Darwin":  # macOS
+                    subprocess.run(["open", self.current_tts_file])
+                else:  # Linux
+                    subprocess.run(["xdg-open", self.current_tts_file])
+                
+                self.tts_status_label.setText("🎵 Playing audio...")
+                self.tts_status_label.setStyleSheet("color: #17A2B8; font-weight: bold; padding: 5px; background: #D1ECF1; border-radius: 4px;")
+                
+            except Exception as e:
+                self._show_user_friendly_error("Playback Error", f"Could not play audio file: {str(e)}")
+                
+        except Exception as e:
+            self._show_user_friendly_error("Playback Error", f"Error playing audio: {str(e)}")
+    
+    def save_tts_audio(self):
+        """Save the TTS audio file to a user-selected location"""
+        try:
+            if not hasattr(self, 'current_tts_file') or not self.current_tts_file:
+                self._show_user_friendly_error("No Audio", "No TTS audio file available. Please generate speech first.")
+                return
+            
+            if not os.path.exists(self.current_tts_file):
+                self._show_user_friendly_error("File Not Found", "TTS audio file not found. Please regenerate speech.")
+                return
+            
+            # Import QFileDialog for file saving
+            from PyQt6.QtWidgets import QFileDialog
+            
+            # Get save location
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save TTS Audio",
+                f"tts_audio_{int(time.time())}.mp3",
+                "Audio Files (*.mp3 *.wav *.m4a);;All Files (*)"
+            )
+            
+            if file_path:
+                # Copy the file to the selected location
+                import shutil
+                shutil.copy2(self.current_tts_file, file_path)
+                
+                self.tts_status_label.setText(f"✅ Audio saved to: {os.path.basename(file_path)}")
+                self.tts_status_label.setStyleSheet("color: #28A745; font-weight: bold; padding: 5px; background: #D4EDDA; border-radius: 4px;")
+                
+                print(f"✅ TTS audio saved: {file_path}")
+            else:
+                self.tts_status_label.setText("Save cancelled")
+                self.tts_status_label.setStyleSheet("color: #6C757D; font-style: italic; padding: 5px;")
+                
+        except Exception as e:
+            self._show_user_friendly_error("Save Error", f"Error saving audio file: {str(e)}")
+    
+    def _reset_tts_ui(self):
+        """Reset TTS UI to initial state"""
+        self.tts_status_label.setText("Ready to generate speech from transcript")
+        self.tts_status_label.setStyleSheet("color: #6C757D; font-style: italic; padding: 5px;")
+        self.generate_tts_btn.setEnabled(True)
+        self.play_tts_btn.setEnabled(False)
+        self.save_tts_btn.setEnabled(False)
+
+    # STT Methods
+    def upload_audio_for_transcription(self):
+        """Upload an audio file for transcription"""
+        try:
+            from PyQt6.QtWidgets import QFileDialog
+            
+            # Get audio file
+            file_path, _ = QFileDialog.getOpenFileName(
+                self,
+                "Select Audio File",
+                "",
+                "Audio Files (*.mp3 *.wav *.m4a *.flac *.ogg);;All Files (*)"
+            )
+            
+            if not file_path:
+                return
+            
+            # Check file size
+            file_size = os.path.getsize(file_path)
+            if file_size > 25 * 1024 * 1024:  # 25MB limit
+                self._show_user_friendly_error("File Too Large", 
+                                              f"Audio file is too large ({file_size / (1024*1024):.1f}MB). Maximum size is 25MB.")
+                return
+            
+            # Update status
+            self.stt_status_label.setText("Reading audio file...")
+            self.stt_status_label.setStyleSheet("color: #FFC107; font-weight: bold; padding: 5px; background: #FFF3CD; border-radius: 4px;")
+            self.upload_audio_btn.setEnabled(False)
+            
+            # Read audio file
+            try:
+                with open(file_path, 'rb') as f:
+                    audio_data = f.read()
+                
+                # Transcribe the audio
+                self._transcribe_audio_data(audio_data, f"Uploaded file: {os.path.basename(file_path)}")
+                
+            except Exception as e:
+                self._show_user_friendly_error("File Read Error", f"Could not read audio file: {str(e)}")
+                self._reset_stt_ui()
+                
+        except Exception as e:
+            self._show_user_friendly_error("Upload Error", f"Error uploading audio file: {str(e)}")
+            self._reset_stt_ui()
+    
+    def transcribe_current_recording(self):
+        """Transcribe the current recording if available"""
+        try:
+            if not hasattr(self, 'current_recording_data') or not self.current_recording_data:
+                self._show_user_friendly_error("No Recording", "No recording available. Please record audio first.")
+                return
+            
+            # Transcribe the current recording
+            self._transcribe_audio_data(self.current_recording_data, "Current recording")
+            
+        except Exception as e:
+            self._show_user_friendly_error("Transcription Error", f"Error transcribing recording: {str(e)}")
+            self._reset_stt_ui()
+    
+    def _transcribe_audio_data(self, audio_data: bytes, source_name: str = "Audio"):
+        """Transcribe audio data using the selected service in background thread"""
+        try:
+            # Get selected service
+            service = self.stt_service_combo.currentText()
+            
+            # Update status
+            self.stt_status_label.setText(f"Transcribing {source_name} using {service}...")
+            self.stt_status_label.setStyleSheet("color: #FFC107; font-weight: bold; padding: 5px; background: #FFF3CD; border-radius: 4px;")
+            
+            # Disable buttons during transcription
+            self.upload_audio_btn.setEnabled(False)
+            self.transcribe_recording_btn.setEnabled(False)
+            self.cancel_transcription_btn.setEnabled(True)  # Enable cancel button
+            
+            # Stop any existing transcription thread
+            if self.transcription_thread and self.transcription_thread.isRunning():
+                self.transcription_thread.stop_transcription()
+                self.transcription_thread.wait(2000)  # Wait up to 2 seconds
+            
+            # Create and start transcription thread
+            self.transcription_thread = TranscriptionThread(audio_data, service, source_name)
+            self.transcription_thread.transcription_completed.connect(self._on_transcription_completed)
+            self.transcription_thread.transcription_failed.connect(self._on_transcription_failed)
+            self.transcription_thread.status_updated.connect(self._on_transcription_status_updated)
+            self.transcription_thread.start()
+            
+        except Exception as e:
+            self._show_user_friendly_error("Transcription Error", f"Unexpected error: {str(e)}")
+            self._reset_stt_ui()
+    
+    def _on_transcription_completed(self, result: str):
+        """Handle successful transcription completion"""
+        try:
+            # Display results in the main transcript area
+            self.transcript_text.setText(result)
+            self.stt_status_label.setText(f"✅ Transcription completed")
+            self.stt_status_label.setStyleSheet("color: #28A745; font-weight: bold; padding: 5px; background: #D4EDDA; border-radius: 4px;")
+            
+            # Enable clear button
+            self.clear_stt_btn.setEnabled(True)
+            
+            # Re-enable buttons and disable cancel
+            self.upload_audio_btn.setEnabled(True)
+            self.cancel_transcription_btn.setEnabled(False)
+            if hasattr(self, 'current_recording_data') and self.current_recording_data:
+                self.transcribe_recording_btn.setEnabled(True)
+            
+            print(f"✅ STT completed: {len(result)} characters")
+            
+        except Exception as e:
+            self._show_user_friendly_error("Transcription Error", f"Error handling transcription result: {str(e)}")
+            self._reset_stt_ui()
+    
+    def _on_transcription_failed(self, error_message: str):
+        """Handle transcription failure"""
+        try:
+            self._show_user_friendly_error("Transcription Failed", error_message)
+            self._reset_stt_ui()
+        except Exception as e:
+            print(f"Error handling transcription failure: {e}")
+            self._reset_stt_ui()
+    
+    def _on_transcription_status_updated(self, status: str):
+        """Handle transcription status updates"""
+        try:
+            self.stt_status_label.setText(status)
+        except Exception as e:
+            print(f"Error updating transcription status: {e}")
+    
+    def clear_stt_results(self):
+        """Clear transcript results"""
+        try:
+            self.transcript_text.clear()
+            self.stt_status_label.setText("Ready to transcribe speech")
+            self.stt_status_label.setStyleSheet("color: #6C757D; font-style: italic; padding: 5px;")
+            self.clear_stt_btn.setEnabled(False)
+            
+        except Exception as e:
+            print(f"Error clearing transcript results: {e}")
+    
+    def _reset_stt_ui(self):
+        """Reset STT UI to initial state"""
+        self.stt_status_label.setText("Ready to transcribe speech")
+        self.stt_status_label.setStyleSheet("color: #6C757D; font-style: italic; padding: 5px;")
+        self.upload_audio_btn.setEnabled(True)
+        self.transcribe_recording_btn.setEnabled(False)
+        self.cancel_transcription_btn.setEnabled(False)
+        self.clear_stt_btn.setEnabled(False)
+
+    def cancel_transcription(self):
+        """Cancel the current transcription operation"""
+        try:
+            if self.transcription_thread and self.transcription_thread.isRunning():
+                self.transcription_thread.stop_transcription()
+                self.transcription_thread.wait(2000)  # Wait up to 2 seconds
+                print("✅ Transcription cancelled")
+                self.stt_status_label.setText("Transcription cancelled")
+                self.stt_status_label.setStyleSheet("color: #DC3545; font-weight: bold; padding: 5px; background: #F8D7DA; border-radius: 4px;")
+                self._reset_stt_ui()
+        except Exception as e:
+            print(f"Error cancelling transcription: {e}")
+            self._reset_stt_ui()
+
+
+class TranscriptionThread(QThread):
+    """Thread for handling transcription operations without freezing the UI"""
+
+    transcription_completed = pyqtSignal(str)
+    transcription_failed = pyqtSignal(str)
+    status_updated = pyqtSignal(str)
+
+    def __init__(self, audio_data: bytes, service: str, source_name: str = "Audio"):
+        super().__init__()
+        self.audio_data = audio_data
+        self.service = service
+        self.source_name = source_name
+        self.is_transcribing = False
+        self.timeout = 30  # Reduced timeout for live transcription
+
+    def run(self):
+        """Run transcription in background thread with timeout"""
+        try:
+            self.is_transcribing = True
+            self.status_updated.emit(f"Transcribing {self.source_name} using {self.service}...")
+            
+            # Validate audio data
+            if not self.audio_data or len(self.audio_data) == 0:
+                self.transcription_failed.emit("No audio data to transcribe")
+                return
+                
+            print(f"🎵 Transcribing {len(self.audio_data)} bytes of audio data using {self.service}")
+            
+            # Create transcriber
+            transcriber = Transcriber(service=self.service)
+            status = transcriber.get_available_services()
+            
+            if self.service not in status:
+                self.transcription_failed.emit(f"The {self.service} transcription service is not available or not configured.")
+                return
+            
+            # Transcribe audio with timeout protection
+            self.status_updated.emit("Making API call...")
+            
+            # Use a timer to implement timeout
+            import time
+            start_time = time.time()
+            
+            # Start transcription in a way that can be interrupted
+            result = None
+            try:
+                result = transcriber.transcribe(self.audio_data)
+                
+                # Check if we've exceeded timeout
+                if time.time() - start_time > self.timeout:
+                    self.transcription_failed.emit("Transcription timeout - the operation took too long. Please try again.")
+                    return
+                    
+            except Exception as e:
+                if "timeout" in str(e).lower():
+                    self.transcription_failed.emit("Transcription timeout - the API call took too long. Please try again.")
+                else:
+                    raise e
+            
+            if result and not result.startswith("Error:"):
+                print(f"✅ Transcription completed: {result[:100]}...")
+                self.transcription_completed.emit(result)
+            else:
+                error_msg = result if result else "Transcription failed with unknown error"
+                print(f"❌ Transcription failed: {error_msg}")
+                self.transcription_failed.emit(error_msg)
+                
+        except Exception as e:
+            print(f"❌ Transcription error: {str(e)}")
+            self.transcription_failed.emit(f"Transcription error: {str(e)}")
+        finally:
+            self.is_transcribing = False
+
+    def stop_transcription(self):
+        """Stop transcription"""
+        self.is_transcribing = False

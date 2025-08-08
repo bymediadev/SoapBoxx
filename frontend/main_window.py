@@ -11,6 +11,11 @@ import webbrowser
 from datetime import datetime, timedelta
 from pathlib import Path
 
+# Add backend directory to path
+backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend'))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+
 # Use package-relative imports to support `python -m frontend.main_window`
 try:
     from .batch_processor import BatchProcessorDialog
@@ -136,13 +141,13 @@ class ModernButton(QPushButton):
 
 class BookingDialog(QDialog):
     """Modern booking dialog with enhanced error handling"""
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Book Guest")
         self.setModal(True)
         self.setup_ui()
-        
+
     def setup_ui(self):
         """Setup UI with modern design and error handling"""
         try:
@@ -156,19 +161,19 @@ class BookingDialog(QDialog):
             self.guest_name = QLineEdit()
             self.guest_name.setPlaceholderText("Enter guest name")
             card_layout.addRow("Guest Name:", self.guest_name)
-            
-            # Date picker
+
+        # Date picker
             self.date_picker = QDateEdit()
             self.date_picker.setDate(QDate.currentDate())
             self.date_picker.setCalendarPopup(True)
             card_layout.addRow("Date:", self.date_picker)
-            
-            # Time picker
+
+        # Time picker
             self.time_picker = QTimeEdit()
             self.time_picker.setTime(QTime.currentTime())
             card_layout.addRow("Time:", self.time_picker)
-            
-            # Notes
+
+        # Notes
             self.notes = QTextEdit()
             self.notes.setMaximumHeight(100)
             self.notes.setPlaceholderText("Add notes about the guest...")
@@ -176,8 +181,8 @@ class BookingDialog(QDialog):
             
             card.setLayout(card_layout)
             layout.addWidget(card)
-            
-            # Buttons
+
+        # Buttons
             button_layout = QHBoxLayout()
             self.cancel_button = ModernButton("Cancel", style="secondary")
             self.book_button = ModernButton("Book Guest", style="primary")
@@ -204,27 +209,45 @@ class BookingDialog(QDialog):
 
 class MainWindow(QMainWindow):
     """Main application window with enhanced resilience and error handling"""
-    
+
     def __init__(self):
-        super().__init__()
-        
-        # Initialize state tracking
-        self._is_initializing = True
-        self._tabs_loaded = {}
-        self._error_count = 0
-        self._last_error_time = None
-        
-        # Setup global exception handler
-        self._setup_global_exception_handler()
-        
-        # Initialize UI
-        self.setup_ui()
-        
-        # Mark initialization complete
-        self._is_initializing = False
-        
-        # Start health monitoring
-        self._start_health_monitoring()
+        try:
+            print("🏗️ MainWindow: Starting initialization...")
+            super().__init__()
+            print("✅ MainWindow: Super class initialized")
+            
+            # Initialize state tracking
+            self._is_initializing = True
+            self._tabs_loaded = {}
+            self._error_count = 0
+            self._last_error_time = None
+            print("✅ MainWindow: State tracking initialized")
+            
+            # Setup global exception handler
+            print("🔧 MainWindow: Setting up exception handler...")
+            self._setup_global_exception_handler()
+            print("✅ MainWindow: Exception handler setup complete")
+            
+            # Initialize UI
+            print("🎨 MainWindow: Setting up UI...")
+            self.setup_ui()
+            print("✅ MainWindow: UI setup complete")
+            
+            # Mark initialization complete
+            self._is_initializing = False
+            
+            # Start health monitoring
+            print("💚 MainWindow: Starting health monitoring...")
+            self._start_health_monitoring()
+            print("✅ MainWindow: Health monitoring started")
+            
+            print("✅ MainWindow: Initialization complete!")
+            
+        except Exception as e:
+            print(f"❌ MainWindow initialization failed: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
     
     def _setup_global_exception_handler(self):
         """Setup global exception handler for uncaught errors"""
@@ -251,7 +274,7 @@ class MainWindow(QMainWindow):
         
         # Set the global exception handler
         sys.excepthook = global_exception_handler
-    
+
     def setup_ui(self):
         """Setup main UI with enhanced error handling and resilience"""
         try:
@@ -264,7 +287,7 @@ class MainWindow(QMainWindow):
             # Setup central widget
             central_widget = QWidget()
             self.setCentralWidget(central_widget)
-            
+
             # Main layout
             layout = QVBoxLayout()
             central_widget.setLayout(layout)
@@ -335,13 +358,13 @@ class MainWindow(QMainWindow):
         try:
             header_card = ModernCard()
             header_layout = QHBoxLayout()
-            
+
             # Title
             title_label = QLabel("SoapBoxx")
             title_label.setStyleSheet("""
                 QLabel {
                     font-size: 24px;
-                    font-weight: bold;
+                font-weight: bold;
                     color: #2C3E50;
                 }
             """)
@@ -393,27 +416,33 @@ class MainWindow(QMainWindow):
         try:
             self.tab_widget = QTabWidget()
             
-            # Load tabs with error handling
-            tabs_to_load = [
+            # Create placeholder tabs first, defer actual tab creation
+            tab_definitions = [
                 ("SoapBoxx", self._create_soapboxx_tab),
                 ("Scoop", self._create_scoop_tab),
                 ("Reverb", self._create_reverb_tab),
             ]
             
-            for tab_name, tab_creator in tabs_to_load:
+            for tab_name, tab_creator in tab_definitions:
                 try:
-                    tab = tab_creator()
-                    if tab:
-                        self.tab_widget.addTab(tab, tab_name)
-                        self._tabs_loaded[tab_name] = True
-                    else:
-                        self._add_placeholder_tab(tab_name, f"Failed to load {tab_name} tab")
-                        self._tabs_loaded[tab_name] = False
+                    # Create placeholder tab
+                    placeholder = self._create_placeholder_tab(tab_name, f"Loading {tab_name}...")
+                    self.tab_widget.addTab(placeholder, tab_name)
+                    self._tabs_loaded[tab_name] = False
+                    
+                    # Store the creator function for later use
+                    if not hasattr(self, '_tab_creators'):
+                        self._tab_creators = {}
+                    self._tab_creators[tab_name] = tab_creator
+                    
                 except Exception as e:
-                    error_msg = f"Failed to create {tab_name} tab: {str(e)}"
-                    self._track_error("TabCreationError", error_msg)
+                    error_msg = f"Failed to create placeholder for {tab_name} tab: {str(e)}"
+                    self._track_error("TabPlaceholderError", error_msg)
                     self._add_placeholder_tab(tab_name, f"Error loading {tab_name} tab")
                     self._tabs_loaded[tab_name] = False
+            
+            # Connect tab change signal to lazy load tabs
+            self.tab_widget.currentChanged.connect(self._on_tab_changed)
             
             layout.addWidget(self.tab_widget)
             
@@ -423,6 +452,60 @@ class MainWindow(QMainWindow):
             fallback_label = QLabel("Application failed to load properly. Please restart.")
             fallback_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             layout.addWidget(fallback_label)
+
+    def _on_tab_changed(self, index):
+        """Handle tab changes and lazy load tabs as needed"""
+        try:
+            tab_name = self.tab_widget.tabText(index)
+            if not self._tabs_loaded.get(tab_name, False) and tab_name in self._tab_creators:
+                print(f"🔄 Lazy loading {tab_name} tab...")
+                
+                # Create the actual tab
+                tab_creator = self._tab_creators[tab_name]
+                actual_tab = tab_creator()
+                
+                if actual_tab:
+                    # Replace placeholder with actual tab
+                    self.tab_widget.removeTab(index)
+                    self.tab_widget.insertTab(index, actual_tab, tab_name)
+                    self.tab_widget.setCurrentIndex(index)
+                    self._tabs_loaded[tab_name] = True
+                    print(f"✅ {tab_name} tab loaded successfully")
+                else:
+                    print(f"❌ Failed to create {tab_name} tab")
+                    self._tabs_loaded[tab_name] = False
+                    
+        except Exception as e:
+            error_msg = f"Failed to lazy load tab {tab_name}: {str(e)}"
+            self._track_error("TabLazyLoadError", error_msg)
+            print(f"❌ {error_msg}")
+
+    def _create_placeholder_tab(self, tab_name: str, message: str):
+        """Create a simple placeholder tab"""
+        try:
+            placeholder_widget = QWidget()
+            layout = QVBoxLayout()
+            
+            # Loading message
+            loading_label = QLabel(message)
+            loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            loading_label.setStyleSheet("""
+                QLabel {
+                    color: #3498DB;
+                    font-size: 16px;
+                    padding: 40px;
+                }
+            """)
+            
+            layout.addWidget(loading_label)
+            layout.addStretch()
+            
+            placeholder_widget.setLayout(layout)
+            return placeholder_widget
+            
+        except Exception as e:
+            self._track_error("PlaceholderTabError", f"Failed to create placeholder tab: {str(e)}")
+            return None
     
     def _create_soapboxx_tab(self):
         """Create SoapBoxx tab with error handling"""
@@ -675,7 +758,7 @@ class MainWindow(QMainWindow):
             failed_tabs = [name for name, loaded in self._tabs_loaded.items() if not loaded]
             if failed_tabs:
                 self._show_status_message(f"Some tabs failed to load: {', '.join(failed_tabs)}")
-                
+
         except Exception as e:
             print(f"Health check failed: {e}")
     
@@ -693,7 +776,7 @@ class MainWindow(QMainWindow):
                     tab.closeEvent(event)
             
             event.accept()
-            
+
         except Exception as e:
             print(f"Error during close: {e}")
             event.accept()
@@ -702,22 +785,32 @@ class MainWindow(QMainWindow):
 def main():
     """Main application entry point with enhanced error handling"""
     try:
-        app = QApplication(sys.argv)
+        print("🚀 Starting SoapBoxx application...")
         
+        print("📱 Creating QApplication...")
+        app = QApplication(sys.argv)
+
         # Set application properties
         app.setApplicationName("SoapBoxx")
         app.setApplicationVersion("1.0.0")
         app.setOrganizationName("SoapBoxx")
-        
+        print("✅ QApplication created successfully")
+
         # Create and show main window
+        print("🏗️ Creating main window...")
         window = MainWindow()
-        window.show()
+        print("✅ Main window created successfully")
         
+        print("👁️ Showing main window...")
+        window.show()
+        print("✅ Main window shown successfully")
+
         # Start application
+        print("🔄 Starting application event loop...")
         sys.exit(app.exec())
         
     except Exception as e:
-        print(f"Application failed to start: {e}")
+        print(f"❌ Application failed to start: {e}")
         traceback.print_exc()
         sys.exit(1)
 

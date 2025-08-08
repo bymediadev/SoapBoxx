@@ -110,7 +110,22 @@ class ModernButton(QPushButton):
 class ScoopTab(QWidget):
     def __init__(self):
         super().__init__()
-        self.setup_ui()
+        # Defer UI setup until widget is shown
+        self._ui_initialized = False
+        
+        # Connect show event to initialize UI
+        self.showEvent = self._on_show_event
+
+    def _on_show_event(self, event):
+        """Initialize UI when widget is first shown"""
+        if not self._ui_initialized:
+            print("🎨 ScoopTab: Initializing UI...")
+            self.setup_ui()
+            self._ui_initialized = True
+            print("✅ ScoopTab: UI initialized")
+        
+        # Call the original showEvent if it exists
+        super().showEvent(event)
 
     def setup_ui(self):
         """Setup the user interface with modern design"""
