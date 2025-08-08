@@ -510,10 +510,17 @@ class MainWindow(QMainWindow):
     def _create_soapboxx_tab(self):
         """Create SoapBoxx tab with error handling"""
         try:
-            return SoapBoxxTab()
+            print("🔧 MainWindow: Creating SoapBoxx tab...")
+            tab = SoapBoxxTab()
+            print("✅ MainWindow: SoapBoxx tab created successfully")
+            return tab
         except Exception as e:
+            print(f"❌ MainWindow: Failed to create SoapBoxx tab: {e}")
+            import traceback
+            traceback.print_exc()
             self._track_error("SoapBoxxTabError", f"Failed to create SoapBoxx tab: {str(e)}")
-            return None
+            # Return a placeholder tab instead
+            return self._create_placeholder_tab("SoapBoxx", f"Failed to load: {str(e)}")
     
     def _create_scoop_tab(self):
         """Create Scoop tab with error handling"""
@@ -798,15 +805,28 @@ def main():
 
         # Create and show main window
         print("🏗️ Creating main window...")
-        window = MainWindow()
-        print("✅ Main window created successfully")
+        try:
+            window = MainWindow()
+            print("✅ Main window created successfully")
+        except Exception as e:
+            print(f"❌ Main window creation failed: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
         
         print("👁️ Showing main window...")
-        window.show()
-        print("✅ Main window shown successfully")
+        try:
+            window.show()
+            print("✅ Main window shown successfully")
+        except Exception as e:
+            print(f"❌ Main window show failed: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
 
         # Start application
         print("🔄 Starting application event loop...")
+        print("💡 Application should now be visible and running...")
         sys.exit(app.exec())
         
     except Exception as e:
