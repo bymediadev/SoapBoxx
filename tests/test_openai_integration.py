@@ -46,7 +46,7 @@ def test_openai_integration():
 
         transcriber = Transcriber(api_key=config_key)
         if transcriber.api_key:
-            print(f"   ✅ Transcriber component: {transcriber.api_key[:8]}...")
+            print(f"   ✅ Transcriber component: [HIDDEN]")
         else:
             print("   ❌ Transcriber component failed")
             return False
@@ -57,7 +57,7 @@ def test_openai_integration():
 
         feedback_engine = FeedbackEngine(api_key=config_key)
         if feedback_engine.api_key:
-            print(f"   ✅ Feedback Engine component: {feedback_engine.api_key[:8]}...")
+            print(f"   ✅ Feedback Engine component: [HIDDEN]")
         else:
             print("   ❌ Feedback Engine component failed")
             return False
@@ -68,7 +68,7 @@ def test_openai_integration():
 
         guest_research = GuestResearch(openai_api_key=config_key)
         if guest_research.api_key:
-            print(f"   ✅ Guest Research component: {guest_research.api_key[:8]}...")
+            print(f"   ✅ Guest Research component: [HIDDEN]")
         else:
             print("   ❌ Guest Research component failed")
             return False
@@ -79,7 +79,7 @@ def test_openai_integration():
 
         core = SoapBoxxCore(api_key=config_key)
         if hasattr(core, "transcriber") and core.transcriber.api_key:
-            print(f"   ✅ SoapBoxx Core integration: {core.transcriber.api_key[:8]}...")
+            print(f"   ✅ SoapBoxx Core integration: [HIDDEN]")
         else:
             print("   ❌ SoapBoxx Core integration failed")
             return False

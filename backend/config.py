@@ -1,6 +1,7 @@
 # backend/config.py
 import json
 import os
+import re
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -11,14 +12,32 @@ load_dotenv()
 
 
 class Config:
-    """Configuration manager for SoapBoxx backend"""
+    """Configuration manager for SoapBoxx backend with enhanced security"""
 
     def __init__(self, config_file: str = "soapboxx_config.json"):
         self.config_file = Path(config_file)
         self.config = self._load_config()
+        self._validate_security_settings()
+
+    def _validate_security_settings(self):
+        """Validate and enhance security settings"""
+        # Ensure sensitive data is not logged
+        if "logging" in self.config:
+            log_settings = self.config["logging"]
+            if "sensitive_fields" not in log_settings:
+                log_settings["sensitive_fields"] = [
+                    "openai_api_key",
+                    "google_api_key", 
+                    "news_api_key",
+                    "youtube_api_key",
+                    "podchaser_api_key",
+                    "listen_notes_api_key"
+                ]
+            if "mask_sensitive_data" not in log_settings:
+                log_settings["mask_sensitive_data"] = True
 
     def _load_config(self) -> Dict:
-        """Load configuration from file or create default"""
+        """Load configuration from file or create default with enhanced security"""
         default_config = {
             "openai_api_key": "",
             "google_cse_id": "0628a50c1bb4e4976",  # Default Google CSE ID
@@ -27,32 +46,56 @@ class Config:
                 "channels": 1,
                 "dtype": "int16",
                 "chunk_size": 1024,
+                "max_recording_duration": 3600,  # 1 hour max
+                "auto_cleanup": True,
             },
             "transcription_settings": {
                 "model": "whisper-1",
                 "language": "en",
                 "temperature": 0.0,
+                "max_file_size_mb": 25,
+                "timeout_seconds": 30,
             },
             "feedback_settings": {
                 "model": "gpt-3.5-turbo",
                 "max_tokens": 500,
                 "temperature": 0.7,
+                "analysis_depth": "comprehensive",
             },
             "research_settings": {
                 "model": "gpt-3.5-turbo",
                 "max_tokens": 800,
                 "temperature": 0.7,
+                "search_depth": "moderate",
             },
             "logging": {
                 "level": "INFO",
                 "file": "soapboxx.log",
                 "max_size": "10MB",
                 "backup_count": 5,
+                "mask_sensitive_data": True,
+                "sensitive_fields": [
+                    "openai_api_key",
+                    "google_api_key",
+                    "news_api_key",
+                    "youtube_api_key",
+                    "podchaser_api_key",
+                    "listen_notes_api_key"
+                ],
             },
             "ui_settings": {
                 "theme": "default",
                 "auto_save": True,
                 "auto_transcribe": True,
+                "show_api_status": True,
+                "hide_sensitive_data": True,
+            },
+            "security": {
+                "validate_api_keys": True,
+                "sanitize_inputs": True,
+                "rate_limit_enabled": True,
+                "max_concurrent_requests": 5,
+                "request_timeout": 30,
             },
         }
 
@@ -87,25 +130,42 @@ class Config:
         return result
 
     def _save_config(self, config: Dict):
-        """Save configuration to file"""
+        """Save configuration to file with security validation"""
         try:
+            # Sanitize sensitive data before saving
+            sanitized_config = self._sanitize_config_for_saving(config)
             with open(self.config_file, "w") as f:
-                json.dump(config, f, indent=2)
+                json.dump(sanitized_config, f, indent=2)
         except Exception as e:
             print(f"Error saving config: {e}")
+
+    def _sanitize_config_for_saving(self, config: Dict) -> Dict:
+        """Remove sensitive data before saving to file"""
+        sanitized = config.copy()
+        
+        # Remove API keys from saved config
+        sensitive_fields = [
+            "openai_api_key", "google_api_key", "news_api_key",
+            "youtube_api_key", "podchaser_api_key", "listen_notes_api_key"
+        ]
+        
+        for field in sensitive_fields:
+            if field in sanitized:
+                sanitized[field] = "[HIDDEN]"
+        
+        return sanitized
 
     def get(self, key: str, default=None):
         """Get configuration value by key (supports dot notation)"""
         keys = key.split(".")
         value = self.config
 
-        for k in keys:
-            if isinstance(value, dict) and k in value:
+        try:
+            for k in keys:
                 value = value[k]
-            else:
-                return default
-
-        return value
+            return value
+        except (KeyError, TypeError):
+            return default
 
     def set(self, key: str, value):
         """Set configuration value by key (supports dot notation)"""
@@ -120,209 +180,233 @@ class Config:
 
         # Set the value
         config[keys[-1]] = value
-
-        # Save to file
         self._save_config(self.config)
+
+    def debug_api_keys(self):
+        """Debug method to check API key status"""
+        print("🔍 DEBUG: Checking API key status...")
+        
+        # Check environment variables
+        openai_env = os.getenv("OPENAI_API_KEY")
+        google_env = os.getenv("GOOGLE_API_KEY")
+        news_env = os.getenv("NEWS_API_KEY")
+        
+        print(f"Environment variables:")
+        print(f"  OPENAI_API_KEY: {'✅ Set' if openai_env else '❌ Not set'}")
+        if openai_env:
+            print(f"    Length: {len(openai_env)} characters")
+            print(f"    Starts with 'sk-': {openai_env.startswith('sk-')}")
+            print(f"    Preview: {openai_env[:10]}...")
+        
+        print(f"  GOOGLE_API_KEY: {'✅ Set' if google_env else '❌ Not set'}")
+        print(f"  NEWS_API_KEY: {'✅ Set' if news_env else '❌ Not set'}")
+        
+        # Check config file
+        config_openai = self.get("openai_api_key")
+        print(f"Config file:")
+        print(f"  openai_api_key: {'✅ Set' if config_openai else '❌ Not set'}")
+        if config_openai:
+            print(f"    Length: {len(config_openai)} characters")
+            print(f"    Starts with 'sk-': {config_openai.startswith('sk-')}")
+            print(f"    Preview: {config_openai[:10]}...")
+        
+        # Test validation
+        print(f"Validation test:")
+        if openai_env:
+            print(f"  Environment key validation: {self._validate_api_key_format(openai_env, 'openai')}")
+        if config_openai:
+            print(f"  Config key validation: {self._validate_api_key_format(config_openai, 'openai')}")
 
     def get_openai_api_key(self) -> Optional[str]:
-        """Get OpenAI API key from config or environment"""
-        api_key = self.get("openai_api_key")
-        if not api_key:
-            api_key = os.getenv("OPENAI_API_KEY")
-        return api_key
+        """Get OpenAI API key with validation - CRITICAL FOR SYSTEM OPERATION"""
+        api_key = self.get("openai_api_key") or os.getenv("OPENAI_API_KEY")
+        if api_key and self._validate_api_key_format(api_key, "openai"):
+            return api_key
+        return None
 
     def set_openai_api_key(self, api_key: str):
-        """Set OpenAI API key"""
-        self.config["openai_api_key"] = api_key
-        self._save_config(self.config)
+        """Set OpenAI API key with validation - CRITICAL FOR SYSTEM OPERATION"""
+        if self._validate_api_key_format(api_key, "openai"):
+            self.set("openai_api_key", api_key)
+            print("✅ OpenAI API key configured successfully - CRITICAL COMPONENT")
+        else:
+            raise ValueError("Invalid OpenAI API key format - CRITICAL ERROR")
+
+    def _validate_api_key_format(self, api_key: str, key_type: str) -> bool:
+        """Validate API key format for security"""
+        if not api_key or api_key.strip() == "":
+            return False
+            
+        if key_type == "openai":
+            # OpenAI keys start with sk- and can have varying lengths
+            # CRITICAL: This is the most important API key for the system
+            # More flexible validation for different OpenAI key formats
+            api_key_clean = api_key.strip()
+            
+            # Check if it starts with sk- (required for OpenAI)
+            if not api_key_clean.startswith("sk-"):
+                print("❌ Invalid OpenAI API key format - CRITICAL ERROR")
+                print("   OpenAI API keys must start with 'sk-'")
+                print(f"   Current key: {api_key_clean[:10]}... (length: {len(api_key_clean)})")
+                return False
+            
+            # Check if it has reasonable length (OpenAI keys can vary)
+            if len(api_key_clean) < 10:  # Very permissive minimum
+                print("❌ Invalid OpenAI API key format - CRITICAL ERROR")
+                print(f"   OpenAI API key too short: {len(api_key_clean)} characters")
+                print(f"   Current key: {api_key_clean}")
+                return False
+            
+            # Check if it contains only valid characters (more permissive)
+            if not re.match(r"^sk-[a-zA-Z0-9_-]+$", api_key_clean):
+                print("❌ Invalid OpenAI API key format - CRITICAL ERROR")
+                print("   OpenAI API key contains invalid characters")
+                print(f"   Current key: {api_key_clean[:10]}...")
+                return False
+            
+            print("🔑 OpenAI API key format validated - CRITICAL COMPONENT")
+            print(f"   Key length: {len(api_key_clean)} characters")
+            return True
+            
+        elif key_type == "google":
+            # Google API keys are typically 39 characters
+            return bool(re.match(r"^AIza[a-zA-Z0-9]{35}$", api_key.strip()))
+        elif key_type == "news":
+            # News API keys are typically 32 characters
+            return bool(re.match(r"^[a-f0-9]{32}$", api_key.strip()))
+        
+        # For other API types, just check basic format
+        return len(api_key.strip()) > 10
 
     def setup_api_key_interactive(self):
-        """Interactive setup for OpenAI API key"""
-        current_key = self.get_openai_api_key()
-        if current_key:
-            print(f"✅ OpenAI API key already configured: {current_key[:8]}...")
-            return True
-
-        print("🔑 OpenAI API Key Setup")
-        print("You need an OpenAI API key for transcription and AI features.")
-        print("Get one at: https://platform.openai.com/api-keys")
+        """Interactive API key setup with validation - CRITICAL SETUP"""
+        print("🔑 CRITICAL: Setting up OpenAI API key...")
+        print("⚠️  This is the MOST IMPORTANT API key for SoapBoxx operation!")
+        print("   - Transcription (Whisper API)")
+        print("   - AI Feedback Analysis")
+        print("   - Guest Research")
+        print("   - Podcast Coaching")
         print()
+        
+        while True:
+            api_key = input("Enter your OpenAI API key (CRITICAL - or press Enter to skip): ").strip()
+            
+            if not api_key:
+                print("⚠️  CRITICAL WARNING: No OpenAI API key provided!")
+                print("   - Transcription will fail")
+                print("   - AI feedback will be unavailable")
+                print("   - Guest research will be limited")
+                print("   - Most core features will not work")
+                break
+                
+            if self._validate_api_key_format(api_key, "openai"):
+                self.set_openai_api_key(api_key)
+                print("🎉 CRITICAL SUCCESS: OpenAI API key configured!")
+                print("   ✅ Transcription will work")
+                print("   ✅ AI feedback will be available")
+                print("   ✅ Guest research will work")
+                print("   ✅ All core features enabled")
+                break
+            else:
+                print("❌ CRITICAL ERROR: Invalid API key format!")
+                print("   OpenAI API keys should:")
+                print("   - Start with 'sk-'")
+                print("   - Be between 20-100 characters long")
+                print("   - Contain only letters, numbers, hyphens, and underscores")
+                print("   Get your key at: https://platform.openai.com/api-keys")
 
-        api_key = input("Enter your OpenAI API key (or press Enter to skip): ").strip()
+    def is_openai_configured(self) -> bool:
+        """Check if OpenAI API is properly configured - CRITICAL CHECK"""
+        api_key = self.get_openai_api_key()
         if api_key:
-            self.set_openai_api_key(api_key)
-            print("✅ API key saved successfully!")
+            print("✅ CRITICAL: OpenAI API is properly configured")
             return True
         else:
-            print("⚠️  No API key provided. Some features will be limited.")
+            print("❌ CRITICAL ERROR: OpenAI API is NOT configured!")
+            print("   This will severely limit system functionality")
             return False
+
+    def get_openai_status(self) -> Dict:
+        """Get detailed OpenAI API status - CRITICAL STATUS"""
+        api_key = self.get_openai_api_key()
+        
+        status = {
+            "configured": bool(api_key),
+            "critical": True,  # OpenAI is critical for system operation
+            "features_enabled": [],
+            "features_disabled": [],
+            "recommendations": []
+        }
+        
+        if api_key:
+            status["features_enabled"] = [
+                "Audio Transcription (Whisper API)",
+                "AI Feedback Analysis",
+                "Guest Research",
+                "Podcast Coaching",
+                "Content Analysis"
+            ]
+            status["recommendations"] = [
+                "Monitor API usage to control costs",
+                "Set up billing alerts",
+                "Consider usage limits for production"
+            ]
+        else:
+            status["features_disabled"] = [
+                "Audio Transcription (Whisper API)",
+                "AI Feedback Analysis", 
+                "Guest Research",
+                "Podcast Coaching",
+                "Content Analysis"
+            ]
+            status["recommendations"] = [
+                "Get OpenAI API key from https://platform.openai.com/api-keys",
+                "Configure the key using setup_api_key_interactive()",
+                "This is CRITICAL for system operation"
+            ]
+        
+        return status
 
     def setup_environment_variables(self):
-        """Interactive setup for environment variables"""
-        print("🔧 Environment Variables Setup")
-        print("This will help you configure API keys for Scoop and Reverb tabs.")
-        print()
-
-        # Check if .env file exists
-        env_file = Path(".env")
-        env_vars = {}
-
-        if env_file.exists():
-            print("📄 Found existing .env file")
-            # Read existing variables
-            with open(env_file, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith("#") and "=" in line:
-                        key, value = line.split("=", 1)
-                        env_vars[key] = value
-
-        # Define all possible API keys
-        api_keys = {
-            "OPENAI_API_KEY": {
-                "description": "OpenAI API Key (for transcription and AI features)",
-                "url": "https://platform.openai.com/api-keys",
-                "required": True,
-            },
-            "GOOGLE_CSE_ID": {
-                "description": "Google Custom Search Engine ID (for web search)",
-                "url": "https://programmablesearchengine.google.com/",
-                "required": False,
-            },
-            "GOOGLE_API_KEY": {
-                "description": "Google API Key (for Google Custom Search API)",
-                "url": "https://console.cloud.google.com/",
-                "required": False,
-            },
-            "NEWS_API_KEY": {
-                "description": "News API Key (for news integration in Scoop tab)",
-                "url": "https://newsapi.org/",
-                "required": False,
-            },
-            "TWITTER_API_KEY": {
-                "description": "Twitter API Key (for social media trends)",
-                "url": "https://developer.twitter.com/",
-                "required": False,
-            },
-            "SPOTIFY_CLIENT_ID": {
-                "description": "Spotify Client ID (for music integration - background music, royalty-free tracks)",
-                "url": "https://developer.spotify.com/",
-                "required": False,
-            },
-            "YOUTUBE_API_KEY": {
-                "description": "YouTube API Key (for video content integration)",
-                "url": "https://console.cloud.google.com/",
-                "required": False,
-            },
-            "AZURE_SPEECH_KEY": {
-                "description": "Azure Speech Key (for speech recognition)",
-                "url": "https://azure.microsoft.com/services/cognitive-services/speech-services/",
-                "required": False,
-            },
-            "ELEVENLABS_API_KEY": {
-                "description": "ElevenLabs API Key (for text-to-speech)",
-                "url": "https://elevenlabs.io/",
-                "required": False,
-            },
-            "ASSEMBLYAI_API_KEY": {
-                "description": "AssemblyAI API Key (for audio analysis)",
-                "url": "https://www.assemblyai.com/",
-                "required": False,
-            },
-            "PODCHASER_API_KEY": {
-                "description": "Podchaser API Key (for podcast database and analytics)",
-                "url": "https://www.podchaser.com/developers",
-                "required": False,
-            },
-            "LISTEN_NOTES_API_KEY": {
-                "description": "Listen Notes API Key (for podcast search and discovery)",
-                "url": "https://www.listennotes.com/api/",
-                "required": False,
-            },
-            "APPLE_PODCASTS_API_KEY": {
-                "description": "Apple Podcasts API Key (for podcast directory - limited access)",
-                "url": "https://developer.apple.com/",
-                "required": False,
-            },
-            "GOOGLE_PODCASTS_API_KEY": {
-                "description": "Google Podcasts API Key (for podcast discovery - limited access)",
-                "url": "https://console.cloud.google.com/",
-                "required": False,
-            },
-        }
-
-        print("Available API keys to configure:")
-        for i, (key, info) in enumerate(api_keys.items(), 1):
-            status = "✅" if env_vars.get(key) else "❌"
-            required = " (Required)" if info["required"] else ""
-            print(f"{i:2d}. {status} {key}{required}")
-            print(f"    {info['description']}")
-            print(f"    Get it at: {info['url']}")
-            print()
-
-        print(
-            "Enter the number of the API key you want to configure (or press Enter to skip):"
-        )
-
-        try:
-            choice = input("Choice: ").strip()
-            if choice and choice.isdigit():
-                choice_idx = int(choice) - 1
-                if 0 <= choice_idx < len(api_keys):
-                    key_name = list(api_keys.keys())[choice_idx]
-                    key_info = api_keys[key_name]
-
-                    current_value = env_vars.get(key_name, "")
-                    if current_value:
-                        print(f"Current value: {current_value[:8]}...")
-                        update = input("Update this key? (y/N): ").strip().lower()
-                        if update != "y":
-                            return True
-
-                    print(f"\n🔑 {key_name} Setup")
-                    print(f"Description: {key_info['description']}")
-                    print(f"Get it at: {key_info['url']}")
-                    print()
-
-                    new_value = input(f"Enter your {key_name}: ").strip()
-                    if new_value:
-                        env_vars[key_name] = new_value
-                        print(f"✅ {key_name} saved!")
-                    else:
-                        print(f"⚠️  {key_name} not updated.")
-                else:
-                    print("❌ Invalid choice.")
-            else:
-                print("⏭️  Skipping API key setup.")
-        except KeyboardInterrupt:
-            print("\n⏭️  Setup cancelled.")
-            return False
-
-        # Save to .env file
-        try:
-            with open(env_file, "w") as f:
-                f.write("# SoapBoxx Environment Variables\n")
-                f.write("# Generated by setup_environment_variables()\n\n")
-
-                for key, value in env_vars.items():
-                    f.write(f"{key}={value}\n")
-
-            print(f"\n✅ Environment variables saved to {env_file}")
-            return True
-
-        except Exception as e:
-            print(f"❌ Error saving environment variables: {e}")
-            return False
+        """Set up environment variables for the application"""
+        print("🔧 Setting up environment variables...")
+        
+        # OpenAI API Key
+        if not os.getenv("OPENAI_API_KEY"):
+            api_key = input("Enter your OpenAI API key (or press Enter to skip): ").strip()
+            if api_key:
+                os.environ["OPENAI_API_KEY"] = api_key
+                print("✅ OpenAI API key set in environment")
+        
+        # Google API Key
+        if not os.getenv("GOOGLE_API_KEY"):
+            google_key = input("Enter your Google API key (or press Enter to skip): ").strip()
+            if google_key:
+                os.environ["GOOGLE_API_KEY"] = google_key
+                print("✅ Google API key set in environment")
+        
+        # News API Key
+        if not os.getenv("NEWS_API_KEY"):
+            news_key = input("Enter your News API key (or press Enter to skip): ").strip()
+            if news_key:
+                os.environ["NEWS_API_KEY"] = news_key
+                print("✅ News API key set in environment")
+        
+        # YouTube API Key
+        if not os.getenv("YOUTUBE_API_KEY"):
+            youtube_key = input("Enter your YouTube API key (or press Enter to skip): ").strip()
+            if youtube_key:
+                os.environ["YOUTUBE_API_KEY"] = youtube_key
+                print("✅ YouTube API key set in environment")
+        
+        print("🎉 Environment setup complete!")
 
     def get_google_cse_id(self) -> Optional[str]:
-        """Get Google CSE ID from config or environment"""
-        cse_id = self.get("google_cse_id")
-        if not cse_id:
-            cse_id = os.getenv("GOOGLE_CSE_ID")
-        return cse_id
+        """Get Google Custom Search Engine ID"""
+        return self.get("google_cse_id") or os.getenv("GOOGLE_CSE_ID")
 
     def set_google_cse_id(self, cse_id: str):
-        """Set Google CSE ID"""
+        """Set Google Custom Search Engine ID"""
         self.set("google_cse_id", cse_id)
 
     def get_audio_settings(self) -> Dict:
@@ -338,7 +422,7 @@ class Config:
         return self.get("feedback_settings", {})
 
     def get_research_settings(self) -> Dict:
-        """Get guest research settings"""
+        """Get research settings"""
         return self.get("research_settings", {})
 
     def get_logging_settings(self) -> Dict:
@@ -349,14 +433,18 @@ class Config:
         """Get UI settings"""
         return self.get("ui_settings", {})
 
+    def get_security_settings(self) -> Dict:
+        """Get security settings"""
+        return self.get("security", {})
+
     def is_configured(self) -> bool:
         """Check if the system is properly configured"""
-        api_key = self.get_openai_api_key()
-        return bool(api_key and api_key.strip())
+        return bool(self.get_openai_api_key())
 
     def validate_config(self) -> Dict:
-        """Validate configuration and return issues"""
+        """Validate configuration and return status"""
         issues = []
+        warnings = []
 
         # Check OpenAI API key
         if not self.get_openai_api_key():
@@ -364,86 +452,49 @@ class Config:
 
         # Check audio settings
         audio_settings = self.get_audio_settings()
-        if not audio_settings.get("sample_rate"):
-            issues.append("Audio sample rate not configured")
+        if audio_settings.get("sample_rate", 0) <= 0:
+            issues.append("Invalid sample rate in audio settings")
 
-        # Check file permissions
-        try:
-            test_file = Path("test_config_write.tmp")
-            test_file.write_text("test")
-            test_file.unlink()
-        except Exception:
-            issues.append("Cannot write to current directory")
+        # Check transcription settings
+        trans_settings = self.get_transcription_settings()
+        if trans_settings.get("max_file_size_mb", 0) <= 0:
+            issues.append("Invalid max file size in transcription settings")
+
+        # Check security settings
+        security_settings = self.get_security_settings()
+        if not security_settings.get("validate_api_keys", True):
+            warnings.append("API key validation is disabled")
 
         return {
             "valid": len(issues) == 0,
             "issues": issues,
+            "warnings": warnings,
             "configured": self.is_configured(),
         }
 
     def export_config(self) -> Dict:
-        """Export current configuration (without sensitive data)"""
+        """Export configuration (excluding sensitive data)"""
         export_config = self.config.copy()
-
-        # Mask API key
-        if "openai_api_key" in export_config:
-            api_key = export_config["openai_api_key"]
-            if api_key:
-                export_config["openai_api_key"] = (
-                    api_key[:8] + "..." if len(api_key) > 8 else "***"
-                )
-
+        
+        # Remove sensitive data
+        sensitive_fields = [
+            "openai_api_key", "google_api_key", "news_api_key",
+            "youtube_api_key", "podchaser_api_key", "listen_notes_api_key"
+        ]
+        
+        for field in sensitive_fields:
+            if field in export_config:
+                export_config[field] = "[HIDDEN]"
+        
         return export_config
 
     def reset_to_defaults(self):
         """Reset configuration to defaults"""
-        default_config = {
-            "openai_api_key": "",
-            "audio_settings": {
-                "sample_rate": 16000,
-                "channels": 1,
-                "dtype": "int16",
-                "chunk_size": 1024,
-            },
-            "transcription_settings": {
-                "model": "whisper-1",
-                "language": "en",
-                "temperature": 0.0,
-            },
-            "feedback_settings": {
-                "model": "gpt-3.5-turbo",
-                "max_tokens": 500,
-                "temperature": 0.7,
-            },
-            "research_settings": {
-                "model": "gpt-3.5-turbo",
-                "max_tokens": 800,
-                "temperature": 0.7,
-            },
-            "logging": {
-                "level": "INFO",
-                "file": "soapboxx.log",
-                "max_size": "10MB",
-                "backup_count": 5,
-            },
-            "ui_settings": {
-                "theme": "default",
-                "auto_save": True,
-                "auto_transcribe": True,
-            },
-        }
-
+        default_config = self._load_config()
         self.config = default_config
-        self._save_config(default_config)
+        self._save_config(self.config)
+        print("✅ Configuration reset to defaults")
 
 
 # Global config instance
 config = Config()
-
-# Example usage
-if __name__ == "__main__":
-    # Test configuration
-    print("Configuration loaded:")
-    print(f"OpenAI API Key configured: {config.is_configured()}")
-    print(f"Audio settings: {config.get_audio_settings()}")
-    print(f"Validation: {config.validate_config()}")

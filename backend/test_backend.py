@@ -29,6 +29,48 @@ class BackendTester:
         self.config = Config()
         self.logger = Logger()
 
+    def test_openai_critical(self):
+        """Test OpenAI API - CRITICAL SYSTEM COMPONENT"""
+        print("🔑 CRITICAL: Testing OpenAI API configuration...")
+        try:
+            from config import config
+            
+            # Check if OpenAI is configured
+            if not config.is_openai_configured():
+                print("❌ CRITICAL ERROR: OpenAI API is NOT configured!")
+                print("   This will severely limit system functionality")
+                print("   - Transcription will fail")
+                print("   - AI feedback will be unavailable")
+                print("   - Guest research will be limited")
+                print("   - Most core features will not work")
+                return False
+            
+            # Get detailed OpenAI status
+            openai_status = config.get_openai_status()
+            
+            if openai_status["configured"]:
+                print("✅ CRITICAL SUCCESS: OpenAI API is properly configured!")
+                print("   Enabled features:")
+                for feature in openai_status["features_enabled"]:
+                    print(f"   ✅ {feature}")
+                print("   Recommendations:")
+                for rec in openai_status["recommendations"]:
+                    print(f"   💡 {rec}")
+                return True
+            else:
+                print("❌ CRITICAL ERROR: OpenAI API configuration failed!")
+                print("   Disabled features:")
+                for feature in openai_status["features_disabled"]:
+                    print(f"   ❌ {feature}")
+                print("   Recommendations:")
+                for rec in openai_status["recommendations"]:
+                    print(f"   💡 {rec}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ CRITICAL ERROR: OpenAI test failed: {e}")
+            return False
+
     def test_configuration(self):
         """Test configuration system"""
         print("🔧 Testing Configuration...")
@@ -37,13 +79,14 @@ class BackendTester:
             config = Config()
             assert config is not None, "Config should load"
 
-            # Test API key setup
+            # CRITICAL: Test OpenAI API key setup
             api_key = config.get_openai_api_key()
             if not api_key:
-                print("⚠️  No OpenAI API key configured")
+                print("⚠️  CRITICAL WARNING: No OpenAI API key configured")
+                print("   This will severely limit system functionality")
                 return False
             else:
-                print(f"✅ API key found: {api_key[:8]}...")
+                print(f"✅ CRITICAL SUCCESS: OpenAI API key found: [HIDDEN]")
 
             # Test config validation
             validation = config.validate_config()
@@ -176,6 +219,7 @@ class BackendTester:
         print("=" * 50)
 
         tests = [
+            ("OpenAI API (CRITICAL)", self.test_openai_critical),
             ("Configuration", self.test_configuration),
             ("Audio Recorder", self.test_audio_recorder),
             ("Transcriber", self.test_transcriber),

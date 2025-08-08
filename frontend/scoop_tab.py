@@ -966,20 +966,16 @@ class ScoopTab(QWidget):
     def get_api_keys(self) -> Dict[str, str]:
         """Get all relevant API keys from environment variables"""
         return {
-            "OpenAI API Key": os.environ.get("OPENAI_API_KEY", "Not set"),
-            "News API Key": os.environ.get("NEWS_API_KEY", "Not set"),
-            "Twitter API Key": os.environ.get("TWITTER_API_KEY", "Not set"),
-            "Google API Key": os.environ.get("GOOGLE_API_KEY", "Not set"),
-            "Google CSE ID": os.environ.get("GOOGLE_CSE_ID", "Not set"),
-            "YouTube API Key": os.environ.get("YOUTUBE_API_KEY", "Not set"),
-            "PODCHASER_API_KEY": os.environ.get("PODCHASER_API_KEY", "Not set"),
-            "LISTEN_NOTES_API_KEY": os.environ.get("LISTEN_NOTES_API_KEY", "Not set"),
-            "APPLE_PODCASTS_API_KEY": os.environ.get(
-                "APPLE_PODCASTS_API_KEY", "Not set"
-            ),
-            "GOOGLE_PODCASTS_API_KEY": os.environ.get(
-                "GOOGLE_PODCASTS_API_KEY", "Not set"
-            ),
+            "OpenAI API Key": "✅ Configured" if os.environ.get("OPENAI_API_KEY") else "❌ Not set",
+            "News API Key": "✅ Configured" if os.environ.get("NEWS_API_KEY") else "❌ Not set",
+            "Twitter API Key": "✅ Configured" if os.environ.get("TWITTER_API_KEY") else "❌ Not set",
+            "Google API Key": "✅ Configured" if os.environ.get("GOOGLE_API_KEY") else "❌ Not set",
+            "Google CSE ID": "✅ Configured" if os.environ.get("GOOGLE_CSE_ID") else "❌ Not set",
+            "YouTube API Key": "✅ Configured" if os.environ.get("YOUTUBE_API_KEY") else "❌ Not set",
+            "PODCHASER_API_KEY": "✅ Configured" if os.environ.get("PODCHASER_API_KEY") else "❌ Not set",
+            "LISTEN_NOTES_API_KEY": "✅ Configured" if os.environ.get("LISTEN_NOTES_API_KEY") else "❌ Not set",
+            "APPLE_PODCASTS_API_KEY": "✅ Configured" if os.environ.get("APPLE_PODCASTS_API_KEY") else "❌ Not set",
+            "GOOGLE_PODCASTS_API_KEY": "✅ Configured" if os.environ.get("GOOGLE_PODCASTS_API_KEY") else "❌ Not set",
         }
 
     def get_latest_news(self):

@@ -191,102 +191,69 @@ class Transcriber:
             return error_msg
 
     def _transcribe_openai(self, audio_data: bytes) -> str:
-        """Transcribe using OpenAI Whisper API with comprehensive error handling"""
+        """Transcribe using OpenAI Whisper API with comprehensive error handling - CRITICAL OPERATION"""
         if not self.api_key:
-            error_msg = "No OpenAI API key configured"
-            track_transcription_error(error_msg, {"service": "openai"})
-            return f"Error: {error_msg}"
+            error_msg = "CRITICAL ERROR: No OpenAI API key configured - Transcription will fail"
+            track_transcription_error(error_msg, {"service": "openai", "critical": True})
+            return f"Error: {error_msg} - Get your key at https://platform.openai.com/api-keys"
 
         try:
             # Validate audio data size again (defensive programming)
             if len(audio_data) > 25 * 1024 * 1024:  # 25MB limit
-                error_msg = f"Audio file too large ({len(audio_data) / (1024*1024):.1f}MB) for OpenAI API"
-                track_transcription_error(error_msg, {"service": "openai", "size": len(audio_data)})
-                return f"Error: {error_msg}"
+                error_msg = f"CRITICAL ERROR: Audio file too large ({len(audio_data) / (1024*1024):.1f}MB) for OpenAI API"
+                track_transcription_error(error_msg, {"service": "openai", "size": len(audio_data), "critical": True})
+                return f"Error: {error_msg} - Compress audio or use shorter recording"
 
-            # Use OpenAI API with version compatibility and robust error handling
-            try:
-                if hasattr(openai, "Audio") and hasattr(openai.Audio, "transcribe"):
-                    # New OpenAI API (v1.0.0+)
-                    try:
-                        from openai import OpenAI
+            # Convert audio to WAV format for OpenAI
+            wav_data = self._convert_audio_to_wav(audio_data)
+            
+            # Ensure the BytesIO object has a name attribute for OpenAI
+            audio_file = io.BytesIO(wav_data)
+            audio_file.name = "audio.wav"
 
-                        client = OpenAI(api_key=self.api_key)
-                        
-                        # Create BytesIO with proper filename for OpenAI
-                        audio_file = io.BytesIO(audio_data)
-                        audio_file.name = "audio.wav"  # OpenAI needs a filename
-                        
-                        response = client.audio.transcriptions.create(
-                            model=self.model,
-                            file=audio_file,
-                            response_format="text",
-                        )
-                        
-                        result = response.strip() if isinstance(response, str) else str(response).strip()
-                        if not result:
-                            error_msg = "OpenAI returned empty transcription"
-                            track_transcription_error(error_msg, {"service": "openai", "model": self.model})
-                            return f"Error: {error_msg}"
-                        
-                        return result
-                        
-                    except ImportError:
-                        # Fallback to old API
-                        audio_file = io.BytesIO(audio_data)
-                        audio_file.name = "audio.wav"
-                        
-                        response = openai.Audio.transcribe(
-                            model=self.model, 
-                            file=audio_file
-                        )
-                        
-                        result = response.get("text", "").strip()
-                        if not result:
-                            error_msg = "OpenAI returned empty transcription (legacy API)"
-                            track_transcription_error(error_msg, {"service": "openai", "model": self.model})
-                            return f"Error: {error_msg}"
-                        
-                        return result
-                else:
-                    # Legacy OpenAI API
-                    audio_file = io.BytesIO(audio_data)
-                    audio_file.name = "audio.wav"
-                    
-                    response = openai.Audio.transcribe(
-                        model=self.model, 
-                        file=audio_file
-                    )
-                    
-                    result = response.get("text", "").strip()
-                    if not result:
-                        error_msg = "OpenAI returned empty transcription (legacy API fallback)"
-                        track_transcription_error(error_msg, {"service": "openai", "model": self.model})
-                        return f"Error: {error_msg}"
-                    
-                    return result
-                    
-            except Exception as api_error:
-                # Handle specific OpenAI API errors
-                error_str = str(api_error)
-                if "413" in error_str or "Maximum content size limit" in error_str:
-                    error_msg = "File too large for OpenAI API (413 error). Please compress the audio file."
-                    track_transcription_error(error_msg, {"service": "openai", "api_error": error_str})
-                    return f"Error: {error_msg}"
-                elif "401" in error_str or "Invalid API key" in error_str:
-                    error_msg = "Invalid OpenAI API key. Please check your configuration."
-                    track_transcription_error(error_msg, {"service": "openai", "api_error": error_str})
-                    return f"Error: {error_msg}"
-                elif "429" in error_str or "rate limit" in error_str.lower():
-                    error_msg = "OpenAI API rate limit exceeded. Please try again later."
-                    track_transcription_error(error_msg, {"service": "openai", "api_error": error_str})
-                    return f"Error: {error_msg}"
-                else:
-                    error_msg = f"OpenAI API error: {error_str}"
-                    track_transcription_error(error_msg, {"service": "openai", "api_error": error_str})
-                    return f"Error: {error_msg}"
-        except Exception as e:
-            return f"OpenAI transcription failed: {str(e)}"
+            # CRITICAL: Make OpenAI API call
+            print("🔑 CRITICAL: Making OpenAI Whisper API call...")
+            
+            response = openai.Audio.transcribe(
+                model=self.model,
+                file=audio_file,
+                language="en",
+                temperature=0.0
+            )
+
+            # Validate response
+            if not response or not response.get("text"):
+                error_msg = "CRITICAL ERROR: OpenAI returned empty transcription"
+                track_transcription_error(error_msg, {"service": "openai", "critical": True})
+                return f"Error: {error_msg} - Try again or check audio quality"
+
+            transcript = response["text"].strip()
+            
+            if transcript:
+                print(f"✅ CRITICAL SUCCESS: OpenAI transcription completed ({len(transcript)} characters)")
+                return transcript
+            else:
+                error_msg = "CRITICAL ERROR: OpenAI returned empty transcript"
+                track_transcription_error(error_msg, {"service": "openai", "critical": True})
+                return f"Error: {error_msg} - Check audio quality or try again"
+
+        except Exception as api_error:
+            error_str = str(api_error)
+            
+            # CRITICAL: Handle specific OpenAI API errors
+            if "413" in error_str or "Maximum content size limit" in error_str:
+                error_msg = "CRITICAL ERROR: File too large for OpenAI API (413 error) - Compress audio"
+            elif "401" in error_str or "Invalid API key" in error_str:
+                error_msg = "CRITICAL ERROR: Invalid OpenAI API key - Check your configuration"
+            elif "429" in error_str or "rate limit" in error_str.lower():
+                error_msg = "CRITICAL ERROR: OpenAI API rate limit exceeded - Wait and try again"
+            elif "quota" in error_str.lower():
+                error_msg = "CRITICAL ERROR: OpenAI API quota exceeded - Check billing"
+            else:
+                error_msg = f"CRITICAL ERROR: OpenAI API error: {error_str}"
+            
+            track_transcription_error(error_msg, {"service": "openai", "api_error": error_str, "critical": True})
+            return f"Error: {error_msg} - This is a CRITICAL system component"
 
     def _transcribe_assemblyai(self, audio_data: bytes) -> str:
         """Transcribe using AssemblyAI API"""

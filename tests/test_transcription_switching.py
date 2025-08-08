@@ -45,7 +45,7 @@ def test_transcription_services():
         openai_transcriber = Transcriber(service="openai")
         api_key = os.getenv("OPENAI_API_KEY")
         if api_key:
-            print(f"   ✅ OpenAI API key configured: {api_key[:8]}...")
+            print(f"   ✅ OpenAI API key configured: [HIDDEN]")
         else:
             print("   ⚠️ OpenAI API key not configured")
     except Exception as e:
@@ -57,7 +57,7 @@ def test_transcription_services():
         assemblyai_transcriber = Transcriber(service="assemblyai")
         api_key = os.getenv("ASSEMBLYAI_API_KEY")
         if api_key:
-            print(f"   ✅ AssemblyAI API key configured: {api_key[:8]}...")
+            print(f"   ✅ AssemblyAI API key configured: [HIDDEN]")
         else:
             print("   ⚠️ AssemblyAI API key not configured")
     except Exception as e:
@@ -69,7 +69,7 @@ def test_transcription_services():
         azure_transcriber = Transcriber(service="azure")
         api_key = os.getenv("AZURE_SPEECH_KEY")
         if api_key:
-            print(f"   ✅ Azure Speech key configured: {api_key[:8]}...")
+            print(f"   ✅ Azure Speech key configured: [HIDDEN]")
         else:
             print("   ⚠️ Azure Speech key not configured")
     except Exception as e:

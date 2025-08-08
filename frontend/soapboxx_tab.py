@@ -1100,7 +1100,7 @@ class SoapBoxxTab(QWidget):
             api_key = config.get_openai_api_key()
 
             if api_key:
-                self.config_status.setText(f"✅ Configured (API: {api_key[:8]}...)")
+                self.config_status.setText("✅ OpenAI API configured")
                 self.record_button.setEnabled(True)
             else:
                 self.config_status.setText("⚠️ OpenAI API key not configured")

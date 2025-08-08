@@ -5,6 +5,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable, Dict, List, Optional
+from collections import defaultdict
 
 from audio_recorder import AudioRecorder
 from error_tracker import (ErrorCategory, ErrorSeverity, error_tracker,
@@ -26,6 +27,87 @@ class RecordingSession:
     transcript: str = ""
     feedback: Dict = None
     audio_chunks: List = None
+    performance_metrics: Dict = None
+
+
+class PerformanceMonitor:
+    """Monitor system performance and resource usage"""
+    
+    def __init__(self):
+        self.request_times = defaultdict(list)
+        self.error_counts = defaultdict(int)
+        self.resource_usage = {}
+        self.start_time = time.time()
+    
+    def track_request(self, operation: str, duration: float):
+        """Track request performance"""
+        self.request_times[operation].append(duration)
+        # Keep only last 100 requests per operation
+        if len(self.request_times[operation]) > 100:
+            self.request_times[operation] = self.request_times[operation][-100:]
+    
+    def track_error(self, operation: str):
+        """Track error occurrence"""
+        self.error_counts[operation] += 1
+    
+    def get_performance_summary(self) -> Dict:
+        """Get performance summary"""
+        summary = {
+            "uptime": time.time() - self.start_time,
+            "operations": {},
+            "error_rates": {},
+            "resource_usage": self.resource_usage
+        }
+        
+        for operation, times in self.request_times.items():
+            if times:
+                summary["operations"][operation] = {
+                    "avg_time": sum(times) / len(times),
+                    "min_time": min(times),
+                    "max_time": max(times),
+                    "total_requests": len(times)
+                }
+        
+        for operation, count in self.error_counts.items():
+            total_requests = len(self.request_times.get(operation, []))
+            if total_requests > 0:
+                summary["error_rates"][operation] = count / total_requests
+        
+        return summary
+
+
+class RateLimiter:
+    """Simple rate limiter for API calls"""
+    
+    def __init__(self, max_requests: int = 5, time_window: int = 60):
+        self.max_requests = max_requests
+        self.time_window = time_window
+        self.requests = defaultdict(list)
+        self._lock = threading.Lock()
+    
+    def can_make_request(self, operation: str) -> bool:
+        """Check if request can be made"""
+        with self._lock:
+            now = time.time()
+            # Clean old requests
+            self.requests[operation] = [
+                req_time for req_time in self.requests[operation]
+                if now - req_time < self.time_window
+            ]
+            
+            if len(self.requests[operation]) < self.max_requests:
+                self.requests[operation].append(now)
+                return True
+            return False
+    
+    def get_wait_time(self, operation: str) -> float:
+        """Get time to wait before next request"""
+        with self._lock:
+            if not self.requests[operation]:
+                return 0
+            
+            oldest_request = min(self.requests[operation])
+            return max(0, self.time_window - (time.time() - oldest_request))
 
 
 class SoapBoxxCore:
@@ -51,6 +133,13 @@ class SoapBoxxCore:
             openai_api_key=api_key, google_cse_id=google_cse_id
         )
 
+        # Performance monitoring and rate limiting
+        self.performance_monitor = PerformanceMonitor()
+        self.rate_limiter = RateLimiter(
+            max_requests=config.get_security_settings().get("max_concurrent_requests", 5),
+            time_window=60
+        )
+
         # Session management
         self.current_session: Optional[RecordingSession] = None
         self.is_recording = False
@@ -67,7 +156,7 @@ class SoapBoxxCore:
 
     def start_recording(self, session_name: str = None) -> bool:
         """
-        Start a new recording session
+        Start a new recording session with enhanced error handling
 
         Args:
             session_name: Optional name for the session
@@ -80,10 +169,13 @@ class SoapBoxxCore:
                 self.logger.log_warning("Recording already in progress")
                 return False
 
-            # Create new session
+            # Create new session with performance tracking
             session_id = f"session_{int(time.time())}"
             self.current_session = RecordingSession(
-                session_id=session_id, start_time=datetime.now(), audio_chunks=[]
+                session_id=session_id, 
+                start_time=datetime.now(), 
+                audio_chunks=[],
+                performance_metrics={}
             )
 
             # Start audio recording
@@ -99,26 +191,21 @@ class SoapBoxxCore:
             return True
 
         except Exception as e:
-            self.logger.log_error(f"Failed to start recording: {e}")
-            track_audio_error(
-                f"Failed to start recording: {e}",
-                component="audio_recorder",
-                exception=e,
-            )
-            if self.error_callback:
-                self.error_callback(f"Failed to start recording: {e}")
+            error_msg = f"Failed to start recording: {str(e)}"
+            track_audio_error(error_msg, {"session_name": session_name})
+            self.logger.log_error(error_msg)
             return False
 
     def stop_recording(self) -> Dict:
         """
-        Stop the current recording session and process results
+        Stop recording and process results with enhanced error handling
 
         Returns:
-            Dictionary containing session results
+            Dictionary containing transcript, feedback, and metadata
         """
         try:
-            if not self.is_recording or not self.current_session:
-                return {"error": "No active recording session"}
+            if not self.is_recording:
+                return {"error": "No recording in progress"}
 
             # Stop recording
             self.is_recording = False
@@ -126,214 +213,204 @@ class SoapBoxxCore:
 
             # Wait for recording thread to finish
             if self.recording_thread and self.recording_thread.is_alive():
-                self.recording_thread.join(timeout=5)
+                self.recording_thread.join(timeout=10)
 
             # Process the recording
-            self.current_session.end_time = datetime.now()
             results = self._process_recording()
+            
+            # Update session with end time
+            if self.current_session:
+                self.current_session.end_time = datetime.now()
+                self.current_session.transcript = results.get("transcript", "")
+                self.current_session.feedback = results.get("feedback", {})
+                self.current_session.performance_metrics = self.performance_monitor.get_performance_summary()
 
-            self.logger.logger.info(
-                f"Recording stopped: {self.current_session.session_id}"
-            )
             return results
 
         except Exception as e:
-            self.logger.log_error(f"Failed to stop recording: {e}")
-            track_audio_error(
-                f"Failed to stop recording: {e}",
-                component="audio_recorder",
-                exception=e,
-            )
-            if self.error_callback:
-                self.error_callback(f"Failed to stop recording: {e}")
-            return {"error": f"Failed to stop recording: {e}"}
+            error_msg = f"Failed to stop recording: {str(e)}"
+            track_audio_error(error_msg)
+            self.logger.log_error(error_msg)
+            return {"error": error_msg}
 
     def _recording_loop(self):
-        """Main recording loop that processes audio chunks"""
+        """Enhanced recording loop with performance monitoring"""
         try:
             while self.is_recording:
-                # Read audio chunk
-                chunk = self.audio_recorder.read_chunk(timeout=0.1)
-                if chunk is not None:
+                # Get audio chunk
+                chunk = self.audio_recorder.get_chunk()
+                if chunk and self.current_session:
                     self.current_session.audio_chunks.append(chunk)
-
-                    # Process chunks in batches for transcription
-                    if (
-                        len(self.current_session.audio_chunks) >= 10
-                    ):  # Process every 10 chunks
-                        self._process_audio_chunks()
+                
+                time.sleep(0.1)  # Small delay to prevent CPU overload
 
         except Exception as e:
-            self.logger.log_error(f"Recording loop error: {e}")
-            track_audio_error(
-                f"Recording loop error: {e}", component="audio_recorder", exception=e
-            )
-            if self.error_callback:
-                self.error_callback(f"Recording error: {e}")
+            error_msg = f"Recording loop error: {str(e)}"
+            track_audio_error(error_msg)
+            self.logger.log_error(error_msg)
 
     def _process_audio_chunks(self):
-        """Process accumulated audio chunks for transcription"""
+        """Process audio chunks with performance monitoring"""
+        start_time = time.time()
+        
         try:
-            if not self.current_session.audio_chunks:
-                return
+            if not self.current_session or not self.current_session.audio_chunks:
+                return None
 
-            # Combine chunks into single audio data
-            combined_audio = self._combine_audio_chunks(
-                self.current_session.audio_chunks
-            )
-
-            # Transcribe
-            transcript = self.transcriber.transcribe(combined_audio)
-
-            if transcript and transcript.strip():
-                self.current_session.transcript += " " + transcript.strip()
-
-                # Update UI with transcript
-                if self.transcript_callback:
-                    self.transcript_callback(self.current_session.transcript.strip())
-
-                # Clear processed chunks
-                self.current_session.audio_chunks = []
+            # Combine audio chunks
+            combined_audio = self._combine_audio_chunks(self.current_session.audio_chunks)
+            
+            # Track performance
+            duration = time.time() - start_time
+            self.performance_monitor.track_request("audio_processing", duration)
+            
+            return combined_audio
 
         except Exception as e:
-            self.logger.log_error(f"Audio processing error: {e}")
-            track_audio_error(
-                f"Audio processing error: {e}", component="audio_recorder", exception=e
-            )
+            self.performance_monitor.track_error("audio_processing")
+            error_msg = f"Audio processing failed: {str(e)}"
+            track_audio_error(error_msg)
+            self.logger.log_error(error_msg)
+            return None
 
     def _combine_audio_chunks(self, chunks: List) -> bytes:
-        """Combine multiple audio chunks into single audio data"""
-        import numpy as np
-
-        if not chunks:
-            return b""
-
-        # Convert chunks to numpy arrays and concatenate
-        arrays = [np.frombuffer(chunk, dtype=np.int16) for chunk in chunks]
-        combined = np.concatenate(arrays)
-
-        return combined.tobytes()
-
-    def _process_recording(self) -> Dict:
-        """Process the complete recording session"""
+        """Combine audio chunks with error handling"""
         try:
-            # Process any remaining audio chunks
-            if self.current_session.audio_chunks:
-                self._process_audio_chunks()
+            if not chunks:
+                return b""
 
-            # Get final transcript
-            final_transcript = self.current_session.transcript.strip()
-
-            # Generate feedback
-            feedback = self.feedback_engine.analyze(transcript=final_transcript)
-            self.current_session.feedback = feedback
-
-            # Prepare results
-            results = {
-                "session_id": self.current_session.session_id,
-                "start_time": self.current_session.start_time.isoformat(),
-                "end_time": self.current_session.end_time.isoformat(),
-                "duration": (
-                    self.current_session.end_time - self.current_session.start_time
-                ).total_seconds(),
-                "transcript": final_transcript,
-                "feedback": feedback,
-                "word_count": len(final_transcript.split()) if final_transcript else 0,
-            }
-
-            # Update UI with feedback
-            if self.feedback_callback:
-                self.feedback_callback(feedback)
-
-            return results
+            # Simple concatenation for now
+            combined = b"".join(chunks)
+            return combined
 
         except Exception as e:
-            self.logger.log_error(f"Failed to process recording: {e}")
-            track_audio_error(
-                f"Failed to process recording: {e}",
-                component="audio_recorder",
-                exception=e,
-            )
-            return {"error": f"Failed to process recording: {e}"}
+            error_msg = f"Failed to combine audio chunks: {str(e)}"
+            track_audio_error(error_msg)
+            self.logger.log_error(error_msg)
+            return b""
+
+    def _process_recording(self) -> Dict:
+        """Process recording with enhanced error handling and performance monitoring"""
+        try:
+            # Process audio chunks
+            audio_data = self._process_audio_chunks()
+            if not audio_data:
+                return {"error": "No audio data to process"}
+
+            # Transcribe audio
+            transcript_start = time.time()
+            transcript = self.transcribe_audio(audio_data)
+            transcript_duration = time.time() - transcript_start
+            self.performance_monitor.track_request("transcription", transcript_duration)
+
+            if transcript.startswith("Error:"):
+                return {"error": transcript, "transcript": ""}
+
+            # Generate feedback
+            feedback_start = time.time()
+            feedback = self.get_feedback(transcript)
+            feedback_duration = time.time() - feedback_start
+            self.performance_monitor.track_request("feedback_generation", feedback_duration)
+
+            return {
+                "transcript": transcript,
+                "feedback": feedback,
+                "session_id": self.current_session.session_id if self.current_session else None,
+                "duration": len(self.current_session.audio_chunks) * 0.1 if self.current_session else 0,
+                "performance_metrics": self.performance_monitor.get_performance_summary()
+            }
+
+        except Exception as e:
+            error_msg = f"Recording processing failed: {str(e)}"
+            track_audio_error(error_msg)
+            self.logger.log_error(error_msg)
+            return {"error": error_msg}
 
     def research_guest(
         self, guest_name: str, website: str = None, additional_info: str = None
     ) -> Dict:
-        """
-        Research a guest for interview preparation
+        """Research guest with rate limiting and performance monitoring"""
+        operation = "guest_research"
+        
+        # Check rate limiting
+        if not self.rate_limiter.can_make_request(operation):
+            wait_time = self.rate_limiter.get_wait_time(operation)
+            return {
+                "error": f"Rate limit exceeded. Please wait {wait_time:.1f} seconds.",
+                "wait_time": wait_time
+            }
 
-        Args:
-            guest_name: Name of the guest
-            website: Guest's website or social media
-            additional_info: Additional information about the guest
-
-        Returns:
-            Dictionary containing research results
-        """
+        start_time = time.time()
+        
         try:
-            self.logger.logger.info(f"Researching guest: {guest_name}")
-            research = self.guest_research.research(
-                guest_name, website, additional_info
-            )
-            return research
+            result = self.guest_research.research(guest_name, website, additional_info)
+            
+            # Track performance
+            duration = time.time() - start_time
+            self.performance_monitor.track_request(operation, duration)
+            
+            return result
 
         except Exception as e:
-            self.logger.log_error(f"Guest research error: {e}")
-            track_api_error(
-                f"Guest research failed: {e}", component="guest_research", exception=e
-            )
-            return {"error": f"Guest research failed: {e}"}
+            self.performance_monitor.track_error(operation)
+            error_msg = f"Guest research failed: {str(e)}"
+            track_api_error(error_msg, {"guest_name": guest_name})
+            return {"error": error_msg}
 
     def get_feedback(self, transcript: str, focus_area: str = None) -> Dict:
-        """
-        Get feedback for a specific transcript
+        """Get feedback with rate limiting and performance monitoring"""
+        operation = "feedback_generation"
+        
+        # Check rate limiting
+        if not self.rate_limiter.can_make_request(operation):
+            wait_time = self.rate_limiter.get_wait_time(operation)
+            return {
+                "error": f"Rate limit exceeded. Please wait {wait_time:.1f} seconds.",
+                "wait_time": wait_time
+            }
 
-        Args:
-            transcript: Text to analyze
-            focus_area: Specific area to focus on (optional)
-
-        Returns:
-            Dictionary containing feedback
-        """
+        start_time = time.time()
+        
         try:
-            if focus_area:
-                feedback = self.feedback_engine.get_specific_feedback(
-                    transcript, focus_area
-                )
-            else:
-                feedback = self.feedback_engine.analyze(transcript=transcript)
-
-            return feedback
+            result = self.feedback_engine.analyze(transcript, focus_area)
+            
+            # Track performance
+            duration = time.time() - start_time
+            self.performance_monitor.track_request(operation, duration)
+            
+            return result
 
         except Exception as e:
-            self.logger.log_error(f"Feedback analysis error: {e}")
-            track_api_error(
-                f"Feedback analysis failed: {e}",
-                component="feedback_engine",
-                exception=e,
-            )
-            return {"error": f"Feedback analysis failed: {e}"}
+            self.performance_monitor.track_error(operation)
+            error_msg = f"Feedback generation failed: {str(e)}"
+            track_api_error(error_msg, {"transcript_length": len(transcript)})
+            return {"error": error_msg}
 
     def transcribe_audio(self, audio_data: bytes) -> str:
-        """
-        Transcribe audio data to text
+        """Transcribe audio with rate limiting and performance monitoring"""
+        operation = "transcription"
+        
+        # Check rate limiting
+        if not self.rate_limiter.can_make_request(operation):
+            wait_time = self.rate_limiter.get_wait_time(operation)
+            return f"Error: Rate limit exceeded. Please wait {wait_time:.1f} seconds."
 
-        Args:
-            audio_data: Audio data as bytes
-
-        Returns:
-            Transcribed text
-        """
+        start_time = time.time()
+        
         try:
-            transcript = self.transcriber.transcribe(audio_data)
-            return transcript
+            result = self.transcriber.transcribe(audio_data)
+            
+            # Track performance
+            duration = time.time() - start_time
+            self.performance_monitor.track_request(operation, duration)
+            
+            return result
 
         except Exception as e:
-            self.logger.log_error(f"Transcription error: {e}")
-            track_transcription_error(
-                f"Transcription failed: {e}", component="transcriber", exception=e
-            )
-            return f"Transcription failed: {e}"
+            self.performance_monitor.track_error(operation)
+            error_msg = f"Transcription failed: {str(e)}"
+            track_transcription_error(error_msg, {"audio_size": len(audio_data)})
+            return f"Error: {error_msg}"
 
     def set_callbacks(
         self,
@@ -341,60 +418,75 @@ class SoapBoxxCore:
         feedback_callback: Callable = None,
         error_callback: Callable = None,
     ):
-        """Set callback functions for UI updates"""
+        """Set UI callbacks for real-time updates"""
         self.transcript_callback = transcript_callback
         self.feedback_callback = feedback_callback
         self.error_callback = error_callback
 
     def get_status(self) -> Dict:
-        """Get current system status"""
-        return {
-            "is_recording": self.is_recording,
-            "current_session": (
-                self.current_session.session_id if self.current_session else None
-            ),
-            "components": {
-                "audio_recorder": "initialized",
-                "transcriber": "initialized",
-                "feedback_engine": "initialized",
-                "guest_research": "initialized",
-                "logger": "initialized",
-                "error_tracker": "initialized",
-            },
-            "error_summary": error_tracker.get_error_summary(),
-            "health_score": error_tracker.get_health_score(),
-        }
+        """Get comprehensive system status"""
+        try:
+            status = {
+                "recording": self.is_recording,
+                "transcription_service": self.transcription_service,
+                "session_id": self.current_session.session_id if self.current_session else None,
+                "performance": self.performance_monitor.get_performance_summary(),
+                "rate_limits": {
+                    "can_make_request": self.rate_limiter.can_make_request("transcription"),
+                    "wait_time": self.rate_limiter.get_wait_time("transcription")
+                },
+                "components": {
+                    "audio_recorder": self.audio_recorder is not None,
+                    "transcriber": self.transcriber is not None,
+                    "feedback_engine": self.feedback_engine is not None,
+                    "guest_research": self.guest_research is not None,
+                }
+            }
+            
+            return status
+
+        except Exception as e:
+            error_msg = f"Failed to get status: {str(e)}"
+            track_config_error(error_msg)
+            return {"error": error_msg}
 
     def cleanup(self):
-        """Clean up resources"""
-        if self.is_recording:
-            self.stop_recording()
+        """Cleanup resources with enhanced error handling"""
+        try:
+            if self.is_recording:
+                self.stop_recording()
+            
+            if self.audio_recorder:
+                self.audio_recorder.cleanup()
+            
+            # Clear callbacks
+            self.transcript_callback = None
+            self.feedback_callback = None
+            self.error_callback = None
+            
+            self.logger.logger.info("SoapBoxxCore cleanup completed")
 
-        if self.audio_recorder:
-            self.audio_recorder.stop()
+        except Exception as e:
+            error_msg = f"Cleanup failed: {str(e)}"
+            track_config_error(error_msg)
+            self.logger.log_error(error_msg)
 
     def set_transcription_service(self, service: str):
-        """Change the transcription service dynamically"""
+        """Set transcription service with validation"""
         try:
-            self.transcription_service = service
-
-            # Get appropriate API key for the service
-            api_key = None
-            if service == "openai":
-                api_key = os.getenv("OPENAI_API_KEY")
-            elif service == "assemblyai":
-                api_key = os.getenv("ASSEMBLYAI_API_KEY")
-            elif service == "azure":
-                api_key = os.getenv("AZURE_SPEECH_KEY")
-
-            # Create new transcriber with the appropriate service and API key
-            self.transcriber = Transcriber(service=service, api_key=api_key)
+            valid_services = ["openai", "local", "assemblyai", "azure"]
+            if service.lower() not in valid_services:
+                raise ValueError(f"Invalid service: {service}. Valid services: {valid_services}")
+            
+            self.transcription_service = service.lower()
+            self.transcriber = Transcriber(service=service.lower())
+            
             self.logger.logger.info(f"Transcription service changed to: {service}")
+
         except Exception as e:
-            self.logger.log_error(
-                f"Failed to change transcription service to {service}: {e}"
-            )
-            raise e
+            error_msg = f"Failed to set transcription service: {str(e)}"
+            track_config_error(error_msg, {"service": service})
+            self.logger.log_error(error_msg)
 
 
 # Example usage

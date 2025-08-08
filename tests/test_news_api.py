@@ -22,7 +22,7 @@ def test_news_api():
         print("❌ News API key not configured")
         return False
 
-    print(f"✅ News API key found: {news_api_key[:8]}...")
+            print(f"✅ News API key found: [HIDDEN]")
 
     try:
         # News API endpoint
