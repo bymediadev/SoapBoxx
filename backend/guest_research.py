@@ -38,6 +38,15 @@ except ImportError:
     print("Warning: OpenAI package not available. Install with: pip install openai")
 
 
+# Try to import social media scraper for richer fallbacks
+try:
+    from .social_media_scraper import SocialMediaScraper
+except Exception:
+    try:
+        from social_media_scraper import SocialMediaScraper
+    except Exception:
+        SocialMediaScraper = None
+
 class GuestResearch:
     def __init__(
         self, openai_api_key: Optional[str] = None, google_cse_id: Optional[str] = None
@@ -325,6 +334,11 @@ class GuestResearch:
                     result["type"] = "news"
                     news_results.append(result)
 
+            # Augment with richer fallbacks if needed
+            news_results = self._augment_with_fallbacks_if_needed(
+                news_results, f"{company_name} news"
+            )
+
             return news_results[:10]  # Limit to top 10 news results
 
         except Exception as e:
@@ -523,19 +537,105 @@ Format the response as a well-structured business summary.
             return self._get_fallback_web_results(query)
 
     def _get_fallback_web_results(self, query: str) -> List[Dict]:
-        """Provide fallback results when web search fails"""
+        """Provide richer fallback results when web search fails."""
         print(f"🔄 Using fallback research for: {query}")
 
-        # Return basic fallback results
-        return [
-            {
-                "title": f"Research for {query}",
-                "snippet": f"Basic information about {query} - web search unavailable",
-                "link": "",
-                "displayLink": "",
-                "fallback": True,
-            }
-        ]
+        results: List[Dict] = []
+
+        # 1) Wikipedia open search (no API key required)
+        try:
+            wiki_resp = requests.get(
+                "https://en.wikipedia.org/w/api.php",
+                params={
+                    "action": "opensearch",
+                    "search": query,
+                    "limit": 3,
+                    "namespace": 0,
+                    "format": "json",
+                },
+                timeout=6,
+            )
+            if wiki_resp.status_code == 200:
+                data = wiki_resp.json()
+                if isinstance(data, list) and len(data) >= 4:
+                    titles = data[1] or []
+                    snippets = data[2] or []
+                    links = data[3] or []
+                    for t, s, l in zip(titles, snippets, links):
+                        if l:
+                            results.append(
+                                {
+                                    "title": t or query,
+                                    "snippet": s or "Wikipedia result",
+                                    "link": l,
+                                    "displayLink": "wikipedia.org",
+                                    "fallback": True,
+                                    "source": "wikipedia",
+                                }
+                            )
+        except Exception as e:
+            print(f"Fallback Wikipedia search failed: {e}")
+
+        # 2) Social media signals via snscrape (if available)
+        try:
+            if SocialMediaScraper is not None:
+                sm = SocialMediaScraper()
+                tw = sm.get_twitter_trends(query, limit=3)
+                for tweet in tw.get("tweets", [])[:3]:
+                    results.append(
+                        {
+                            "title": f"Tweet by @{tweet.get('username','user')}",
+                            "snippet": tweet.get("content", ""),
+                            "link": tweet.get("url", ""),
+                            "displayLink": "twitter.com",
+                            "fallback": True,
+                            "source": "twitter",
+                        }
+                    )
+                rd = sm.get_reddit_trends(query, limit=3)
+                for post in rd.get("posts", [])[:3]:
+                    results.append(
+                        {
+                            "title": post.get("title", "Reddit post"),
+                            "snippet": post.get("content", ""),
+                            "link": post.get("url", ""),
+                            "displayLink": "reddit.com",
+                            "fallback": True,
+                            "source": "reddit",
+                        }
+                    )
+        except Exception as e:
+            print(f"Fallback social search failed: {e}")
+
+        # 3) Basic placeholder if nothing gathered
+        if not results:
+            results = [
+                {
+                    "title": f"Research for {query}",
+                    "snippet": f"Basic information about {query} - web search unavailable",
+                    "link": "",
+                    "displayLink": "",
+                    "fallback": True,
+                }
+            ]
+
+        return results[:10]
+
+    def _augment_with_fallbacks_if_needed(self, items: List[Dict], query: str) -> List[Dict]:
+        """If items are empty or only placeholders, add richer fallback items and dedupe by link."""
+        if not items or all(it.get("fallback") for it in items):
+            extra = self._get_fallback_web_results(query)
+            seen = set()
+            merged: List[Dict] = []
+            for it in (items + extra):
+                link = it.get("link")
+                key = link or (it.get("title"), it.get("snippet"))
+                if key in seen:
+                    continue
+                seen.add(key)
+                merged.append(it)
+            return merged
+        return items
 
     def _validate_google_api_config(self) -> Dict:
         """Validate Google API configuration and provide recommendations"""
