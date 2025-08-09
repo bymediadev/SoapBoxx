@@ -23,8 +23,8 @@ Your SoapBoxx podcast recording system is now fully operational with enterprise-
 
 ### 1. Start the Application
 ```bash
-# Method 1: Direct launch (recommended)
-python frontend/main_window.py
+# Method 1: Module launch (recommended)
+python -m frontend.main_window
 
 # Method 2: Using the build script (includes environment setup)
 ./build_and_run.ps1
@@ -33,7 +33,9 @@ python frontend/main_window.py
 run_soapboxx.bat
 ```
 
-> **Note**: The application now includes comprehensive error handling and will display user-friendly messages if any components fail to initialize.
+> Note: The application includes comprehensive error handling and will display user-friendly messages if any components fail to initialize.
+> Tip (Windows): Set UTF-8 output if you see Unicode console errors:
+> `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` or `$env:PYTHONIOENCODING='utf-8'`.
 
 ### 2. Record Your First Podcast
 

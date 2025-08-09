@@ -32,6 +32,11 @@ SoapBoxx is a **comprehensively hardened** podcast recording system that combine
 - 🎯 **User-Friendly Errors** - Clear messages with expandable technical details
 - 📈 **Progress Tracking** - Visual feedback for all operations
 
+### 🕒 Semi‑Live Transcription & Questions
+- 🎧 Chunk-based transcription: 10–20s semi‑live windows (default 15s, 5s overlap)
+- 💬 Question surfacing: keyword matcher suggests host questions in near real time
+- 🧵 Background loader: non‑blocking backend init, device scan, and safe cleanup
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -73,8 +78,8 @@ SoapBoxx is a **comprehensively hardened** podcast recording system that combine
 ### Starting the Application
 
 ```bash
-# Method 1: Direct launch
-python frontend/main_window.py
+# Method 1: Module launch (recommended)
+python -m frontend.main_window
 
 # Method 2: Using the generated shortcut
 run_soapboxx.bat
@@ -156,6 +161,20 @@ This will test:
 ### Test Report
 
 Tests generate a report at `backend_test_report.json` with detailed results.
+
+### Test Mode and Rate Limiting
+
+For stable automated runs and to exercise fallbacks deterministically:
+
+```bash
+# Use stable mock transcripts for invalid audio
+export SOAPBOXX_TEST_MODE=1   # Windows PowerShell: $env:SOAPBOXX_TEST_MODE='1'
+
+# Optional: cap OpenAI calls per minute (simple token bucket in transcriber)
+export OPENAI_RATE_LIMIT_PER_MIN=60
+```
+
+In test mode, quick/e2e stress tests accept either standard errors or mock transcripts.
 
 ## 🏗️ Architecture
 
