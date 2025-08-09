@@ -1,8 +1,8 @@
 # backend/transcriber.py
 import io
 import os
-import time
 import tempfile
+import time
 from typing import Optional, Union
 
 import numpy as np

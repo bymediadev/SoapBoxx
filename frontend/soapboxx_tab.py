@@ -365,8 +365,8 @@ class RecordingThread(QThread):
         self.transcription_buffer = ""
         self.last_transcription_time = 0
         # Chunk-based semi-live transcription configuration
-        self.window_size_seconds = 15.0   # Analyze 15s windows
-        self.window_step_seconds = 10.0   # Emit every 10s (5s overlap)
+        self.window_size_seconds = 15.0  # Analyze 15s windows
+        self.window_step_seconds = 10.0  # Emit every 10s (5s overlap)
         self.transcription_interval = self.window_step_seconds
         self.audio_buffer = []  # Buffer for accumulating audio data
         self.min_audio_length = (
@@ -442,7 +442,9 @@ class RecordingThread(QThread):
                                 self.last_transcription_time = current_time
 
                                 # Keep only recent chunks to prevent memory buildup
-                                cutoff_time = current_time - (self.window_size_seconds + 5.0)
+                                cutoff_time = current_time - (
+                                    self.window_size_seconds + 5.0
+                                )
                                 self.audio_buffer = [
                                     (chunk, timestamp)
                                     for chunk, timestamp in self.audio_buffer
@@ -2351,7 +2353,9 @@ class SoapBoxxTab(QWidget):
             self.recording_thread = RecordingThread(self.core, service)
             self.recording_thread.transcript_updated.connect(self.update_transcript)
             # Semi-live: react to per-window transcripts
-            self.recording_thread.chunk_transcript_ready.connect(self._on_chunk_transcript)
+            self.recording_thread.chunk_transcript_ready.connect(
+                self._on_chunk_transcript
+            )
             self.recording_thread.feedback_updated.connect(self.update_feedback)
             self.recording_thread.status_updated.connect(self.update_status)
             self.recording_thread.error_occurred.connect(self.handle_error)

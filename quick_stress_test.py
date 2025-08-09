@@ -63,6 +63,7 @@ class QuickStressTester:
         try:
             # Force test mode to avoid flaky external errors
             import os
+
             os.environ["SOAPBOXX_TEST_MODE"] = "1"
             recorder = AudioRecorder()
             transcriber = Transcriber()
@@ -237,9 +238,8 @@ class QuickStressTester:
                         result = transcriber.transcribe(None)
 
                     # Accept standard error output and test-mode mock transcript
-                    handled = (
-                        isinstance(result, str)
-                        and (result.startswith("Error:") or "Mock transcript" in result)
+                    handled = isinstance(result, str) and (
+                        result.startswith("Error:") or "Mock transcript" in result
                     )
 
                     if handled:

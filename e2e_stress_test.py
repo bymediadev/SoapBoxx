@@ -684,6 +684,7 @@ def main():
     """Main E2E stress test runner"""
     # Enable test mode to reduce external API flakiness in CI/demo
     import os
+
     os.environ["SOAPBOXX_TEST_MODE"] = "1"
     tester = E2EStressTester()
     results = tester.run_complete_e2e_test()
