@@ -336,14 +336,30 @@ class SoapBoxxCore:
             return None
 
     def _combine_audio_chunks(self, chunks: List) -> bytes:
-        """Combine audio chunks with error handling"""
+        """Combine audio chunks robustly (supports numpy arrays or bytes)."""
         try:
             if not chunks:
                 return b""
 
-            # Simple concatenation for now
-            combined = b"".join(chunks)
-            return combined
+            # If chunks are numpy arrays, concatenate then tobytes
+            try:
+                import numpy as _np
+
+                if hasattr(chunks[0], "tobytes"):
+                    concatenated = _np.concatenate(chunks, axis=0)
+                    return concatenated.tobytes()
+            except Exception:
+                pass
+
+            # Fallback: join bytes, converting if needed
+            pieces = []
+            for c in chunks:
+                try:
+                    pieces.append(c.tobytes() if hasattr(c, "tobytes") else bytes(c))
+                except Exception:
+                    # Skip invalid pieces
+                    continue
+            return b"".join(pieces)
 
         except Exception as e:
             error_msg = f"Failed to combine audio chunks: {str(e)}"
@@ -487,11 +503,18 @@ class SoapBoxxCore:
         transcript_callback: Callable = None,
         feedback_callback: Callable = None,
         error_callback: Callable = None,
+        on_transcription_progress: Callable = None,
+        on_feedback_progress: Callable = None,
+        on_research_progress: Callable = None,
     ):
-        """Set UI callbacks for real-time updates"""
+        """Set UI callbacks for real-time updates and progress hooks."""
         self.transcript_callback = transcript_callback
         self.feedback_callback = feedback_callback
         self.error_callback = error_callback
+        # Optional progress callbacks (used by tests)
+        self.on_transcription_progress = on_transcription_progress
+        self.on_feedback_progress = on_feedback_progress
+        self.on_research_progress = on_research_progress
 
     def get_status(self) -> Dict:
         """Get comprehensive system status"""

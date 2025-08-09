@@ -111,17 +111,38 @@ class AudioRecorder:
             return False
 
     def stop_recording(self):
-        """Stop recording and return success status"""
+        """Stop recording and return captured audio bytes (PCM s16le 16kHz mono)."""
         try:
             self.is_recording = False
             if self.stream:
                 self.stream.stop()
                 self.stream.close()
                 self.stream = None
-            return True
+
+            # Drain any remaining chunks from the queue
+            chunks = self.get_all_chunks()
+            if not chunks:
+                return b""
+
+            try:
+                # Concatenate numpy int16 chunks into raw PCM bytes
+                import numpy as _np
+
+                concatenated = _np.concatenate(chunks, axis=0)
+                return concatenated.tobytes()
+            except Exception:
+                # Fallback: join chunk bytes
+                combined_bytes = []
+                for ch in chunks:
+                    try:
+                        combined_bytes.append(ch.tobytes())
+                    except Exception:
+                        pass
+                return b"".join(combined_bytes)
+
         except Exception as e:
             track_audio_error(f"Failed to stop recording: {str(e)}")
-            return False
+            return b""
 
     def get_chunk(self):
         """Get the next audio chunk from the queue"""

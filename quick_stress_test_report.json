@@ -1,37 +1,37 @@
 {
-  "timestamp": "2025-08-07T22:49:52.454468",
-  "total_time": 22.042701482772827,
+  "timestamp": "2025-08-09T07:49:58.498297",
+  "total_time": 15.577844381332397,
   "successful_tests": 3,
   "total_tests": 5,
   "success_rate": 85.71428571428571,
   "results": {
     "Critical Components": true,
     "Recording Workflow": {
-      "recording_time": 1.1451501846313477,
-      "transcription_time": 2.540766716003418,
-      "feedback_time": 1.993173360824585,
-      "total_time": 5.679090261459351,
+      "recording_time": 1.060401201248169,
+      "transcription_time": 1.140068769454956,
+      "feedback_time": 1.6626794338226318,
+      "total_time": 3.863149404525757,
       "success": true
     },
     "Guest Research": [
       {
         "guest": "Tech Expert",
-        "research_time": 4.669259548187256,
+        "research_time": 2.3402187824249268,
         "success": true
       },
       {
         "guest": "Business Leader",
-        "research_time": 4.243108749389648,
+        "research_time": 2.476454019546509,
         "success": true
       },
       {
         "guest": "Podcast Host",
-        "research_time": 3.822584390640259,
+        "research_time": 2.499222755432129,
         "success": true
       }
     ],
     "Concurrent Operations": {
-      "total_time": 3.4706451892852783,
+      "total_time": 4.241387605667114,
       "successful": 2,
       "total": 3,
       "success": false

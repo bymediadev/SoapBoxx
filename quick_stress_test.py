@@ -160,7 +160,8 @@ class QuickStressTester:
             def run_transcription():
                 transcriber = Transcriber()
                 dummy_audio = b"dummy_audio_data" * 50
-                return transcriber.transcribe(dummy_audio)
+                result = transcriber.transcribe(dummy_audio)
+                return result if isinstance(result, str) else str(result)
 
             def run_feedback():
                 engine = FeedbackEngine()

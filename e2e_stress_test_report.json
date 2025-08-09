@@ -1,0 +1,342 @@
+{
+  "timestamp": "2025-08-09T07:46:51.695621",
+  "total_time": 43.9980788230896,
+  "total_operations": 18,
+  "successful_operations": 12,
+  "failed_operations": 3,
+  "success_rate": 66.66666666666666,
+  "results": {
+    "System Initialization": true,
+    "Complete Recording Workflow": [
+      {
+        "recording_time": 2.0623128414154053,
+        "transcription_time": 3.208589553833008,
+        "feedback_time": 1.2078924179077148,
+        "total_time": 6.478794813156128,
+        "audio_size": 60800,
+        "transcript_length": 33,
+        "has_feedback": true,
+        "success": true
+      }
+    ],
+    "Guest Research Workflow": [
+      {
+        "guest": "Tech Expert",
+        "research_time": 3.3263156414031982,
+        "success": true,
+        "has_profile": "Tech Expert is a seasoned professional with over a decade of experience in the technology industry. They have a strong background in both hardware and software, with a focus on emerging technologies and digital trends. Tech Expert is known for their insightful analysis and ability to simplify complex tech topics for a wide audience.",
+        "has_talking_points": [
+          "Key trends in the tech industry and their impact on society",
+          "The future of artificial intelligence and machine learning",
+          "Cybersecurity challenges in the digital age",
+          "Tech innovations in healthcare and education",
+          "The role of tech ethics and responsible technology development"
+        ],
+        "has_questions": [
+          "What inspired you to pursue a career in the tech industry, and how has your journey evolved over the years?",
+          "Can you share a particularly challenging project you worked on and how you overcame obstacles to achieve success?",
+          "How do you stay updated on the latest tech trends and innovations in such a fast-paced industry?",
+          "In your opinion, what are the most exciting advancements in technology that will shape the future?",
+          "How do you approach the ethical considerations of technology development and implementation in your work?"
+        ],
+        "fallback_used": false
+      },
+      {
+        "guest": "Business Leader",
+        "research_time": 3.340651750564575,
+        "success": true,
+        "has_profile": "Business Leader is a seasoned executive with a proven track record of success in the corporate world. With years of experience in various industries, they have demonstrated exceptional leadership skills and strategic vision.",
+        "has_talking_points": [
+          "Successfully leading a major company through a period of growth and transformation",
+          "Implementing innovative strategies that have driven business success",
+          "Overcoming significant challenges in the industry and emerging stronger",
+          "Dedication to fostering a positive corporate culture and developing talent",
+          "Thought leadership in areas such as digital transformation, sustainability, or global expansion"
+        ],
+        "has_questions": [
+          "Can you share a pivotal moment in your career that significantly shaped your leadership style?",
+          "How do you approach balancing short-term business goals with long-term strategic vision?",
+          "What motivates you to drive innovation within your organization?",
+          "In what ways do you prioritize diversity and inclusion in the workplace?",
+          "How do you see the future of [industry/sector] evolving, and what opportunities do you foresee?"
+        ],
+        "fallback_used": false
+      },
+      {
+        "guest": "Podcast Host",
+        "research_time": 3.4387385845184326,
+        "success": true,
+        "has_profile": "Podcast Host is a seasoned professional in the podcasting industry, with a background in journalism and broadcasting. They have hosted several successful podcasts and are known for their engaging interviewing style and ability to bring out unique perspectives from their guests.",
+        "has_talking_points": [
+          "Experience in podcasting and journalism",
+          "Interviewing style and techniques",
+          "Notable guests they have interviewed",
+          "Podcasting industry trends and insights",
+          "Future plans and projects"
+        ],
+        "has_questions": [
+          "Can you share a bit about your journey in the podcasting industry and how you got started as a host?",
+          "What interviewing techniques do you find most effective in bringing out interesting insights from your guests?",
+          "Is there a particular guest or episode that stands out to you as a memorable or impactful experience?",
+          "How do you stay updated on podcasting industry trends and what do you think the future holds for this medium?",
+          "Are there any exciting projects or collaborations in the works that you can tell us about?"
+        ],
+        "fallback_used": false
+      },
+      {
+        "guest": "Industry Specialist",
+        "research_time": 2.3862147331237793,
+        "success": true,
+        "has_profile": "Industry Specialist is a seasoned professional with extensive experience in the industry. With a background in [specific field], they have made significant contributions and gained recognition for their expertise.",
+        "has_talking_points": [
+          "Pioneering work in [specific area of industry]",
+          "Successful collaborations with leading companies in the industry",
+          "Innovative strategies implemented to address industry challenges",
+          "Thought leadership in [specific industry trend or technology]",
+          "Impact on industry standards and best practices"
+        ],
+        "has_questions": [
+          "Can you share a pivotal moment in your career that shaped your approach to the industry?",
+          "How do you stay ahead of the curve in such a fast-paced industry landscape?",
+          "What advice would you give to aspiring professionals looking to enter this industry?",
+          "How do you foster innovation and creativity within your work?",
+          "Could you discuss a project or achievement that you are particularly proud of and why?"
+        ],
+        "fallback_used": false
+      },
+      {
+        "guest": "Thought Leader",
+        "research_time": 3.4761359691619873,
+        "success": true,
+        "has_profile": "Thought Leader is a highly respected expert in their field, known for pioneering work and innovative thinking. With a background in [specific field], they have been at the forefront of driving change and influencing industry trends.",
+        "has_talking_points": [
+          "Developing cutting-edge strategies for [specific industry]",
+          "Thought leadership in [specific area of expertise]",
+          "Impact of technology on [specific field]",
+          "Future trends and predictions in [industry]",
+          "Championing diversity and inclusion in the workplace"
+        ],
+        "has_questions": [
+          "Can you share with us a pivotal moment in your career that shaped your approach to [specific industry]?",
+          "How do you stay ahead of emerging trends and ensure your work remains innovative?",
+          "What inspired you to focus on [specific area of expertise] and how has that shaped your professional journey?",
+          "In what ways do you see technology transforming the landscape of [industry] in the next 5-10 years?",
+          "Could you discuss your efforts towards promoting diversity and inclusion within your field and the impact it has had?"
+        ],
+        "fallback_used": false
+      }
+    ],
+    "Concurrent Operations": [
+      {
+        "concurrency": 3,
+        "total_operations": 3,
+        "successful": 2,
+        "failed": 1,
+        "total_time": 3.629295587539673,
+        "avg_time_per_operation": 1.2097651958465576,
+        "results": [
+          {
+            "task_id": 0,
+            "type": "transcription",
+            "success": false,
+            "duration": 1.146608591079712,
+            "result_length": 536
+          },
+          {
+            "task_id": 1,
+            "type": "feedback",
+            "success": true,
+            "duration": 1.580308437347412,
+            "has_feedback": true
+          },
+          {
+            "task_id": 2,
+            "type": "research",
+            "success": true,
+            "duration": 3.609297275543213,
+            "has_results": true
+          }
+        ]
+      },
+      {
+        "concurrency": 5,
+        "total_operations": 5,
+        "successful": 3,
+        "failed": 2,
+        "total_time": 2.4779701232910156,
+        "avg_time_per_operation": 0.4955940246582031,
+        "results": [
+          {
+            "task_id": 0,
+            "type": "transcription",
+            "success": false,
+            "duration": 0.8359377384185791,
+            "result_length": 536
+          },
+          {
+            "task_id": 3,
+            "type": "transcription",
+            "success": false,
+            "duration": 1.2563421726226807,
+            "result_length": 536
+          },
+          {
+            "task_id": 1,
+            "type": "feedback",
+            "success": true,
+            "duration": 1.5399339199066162,
+            "has_feedback": true
+          },
+          {
+            "task_id": 2,
+            "type": "research",
+            "success": true,
+            "duration": 2.424971342086792,
+            "has_results": true
+          },
+          {
+            "task_id": 4,
+            "type": "feedback",
+            "success": true,
+            "duration": 2.454970598220825,
+            "has_feedback": true
+          }
+        ]
+      },
+      {
+        "concurrency": 10,
+        "total_operations": 10,
+        "successful": 6,
+        "failed": 4,
+        "total_time": 3.220003366470337,
+        "avg_time_per_operation": 0.3220003366470337,
+        "results": [
+          {
+            "task_id": 9,
+            "type": "transcription",
+            "success": false,
+            "duration": 0.6199984550476074,
+            "result_length": 536
+          },
+          {
+            "task_id": 6,
+            "type": "transcription",
+            "success": false,
+            "duration": 0.9170012474060059,
+            "result_length": 536
+          },
+          {
+            "task_id": 0,
+            "type": "transcription",
+            "success": false,
+            "duration": 0.939995527267456,
+            "result_length": 536
+          },
+          {
+            "task_id": 3,
+            "type": "transcription",
+            "success": false,
+            "duration": 0.9769971370697021,
+            "result_length": 536
+          },
+          {
+            "task_id": 1,
+            "type": "feedback",
+            "success": true,
+            "duration": 1.3960041999816895,
+            "has_feedback": true
+          },
+          {
+            "task_id": 4,
+            "type": "feedback",
+            "success": true,
+            "duration": 1.8439998626708984,
+            "has_feedback": true
+          },
+          {
+            "task_id": 7,
+            "type": "feedback",
+            "success": true,
+            "duration": 1.8989970684051514,
+            "has_feedback": true
+          },
+          {
+            "task_id": 2,
+            "type": "research",
+            "success": true,
+            "duration": 2.4399943351745605,
+            "has_results": true
+          },
+          {
+            "task_id": 5,
+            "type": "research",
+            "success": true,
+            "duration": 2.836991548538208,
+            "has_results": true
+          },
+          {
+            "task_id": 8,
+            "type": "research",
+            "success": true,
+            "duration": 3.1799988746643066,
+            "has_results": true
+          }
+        ]
+      }
+    ],
+    "Memory Stress Over Time": {
+      "note": "Memory monitoring not available"
+    },
+    "Error Recovery Scenarios": [
+      {
+        "scenario": "Invalid audio data",
+        "transcription_handled": true,
+        "feedback_handled": true,
+        "research_handled": true,
+        "duration": 0.0,
+        "success": true
+      },
+      {
+        "scenario": "Empty audio",
+        "transcription_handled": true,
+        "feedback_handled": true,
+        "research_handled": true,
+        "duration": 0.0,
+        "success": true
+      },
+      {
+        "scenario": "Very large audio",
+        "transcription_handled": false,
+        "feedback_handled": true,
+        "research_handled": true,
+        "duration": 11.818810939788818,
+        "success": false
+      },
+      {
+        "scenario": "None input",
+        "transcription_handled": true,
+        "feedback_handled": true,
+        "research_handled": true,
+        "duration": 0.0,
+        "success": true
+      },
+      {
+        "scenario": "Corrupted audio",
+        "transcription_handled": true,
+        "feedback_handled": true,
+        "research_handled": true,
+        "duration": 0.0,
+        "success": true
+      },
+      {
+        "scenario": "Unsupported format",
+        "transcription_handled": true,
+        "feedback_handled": true,
+        "research_handled": true,
+        "duration": 0.0,
+        "success": true
+      }
+    ],
+    "System Integration": false
+  }
+}

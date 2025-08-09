@@ -350,6 +350,7 @@ class RecordingThread(QThread):
     """Thread for handling continuous recording with live transcription"""
 
     transcript_updated = pyqtSignal(str)
+    chunk_transcript_ready = pyqtSignal(str)
     feedback_updated = pyqtSignal(dict)
     status_updated = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
@@ -363,9 +364,10 @@ class RecordingThread(QThread):
         self.audio_recorder = None
         self.transcription_buffer = ""
         self.last_transcription_time = 0
-        self.transcription_interval = (
-            2.0  # Transcribe every 2 seconds for more responsive experience
-        )
+        # Chunk-based semi-live transcription configuration
+        self.window_size_seconds = 15.0   # Analyze 15s windows
+        self.window_step_seconds = 10.0   # Emit every 10s (5s overlap)
+        self.transcription_interval = self.window_step_seconds
         self.audio_buffer = []  # Buffer for accumulating audio data
         self.min_audio_length = (
             1.0  # Minimum audio length in seconds before transcribing
@@ -422,11 +424,12 @@ class RecordingThread(QThread):
                             current_time - self.last_transcription_time
                             >= self.transcription_interval
                         ):
-                            # Get audio chunks from the last interval
+                            # Use a sliding window: last 15s with 5s overlap
+                            window_start = current_time - self.window_size_seconds
                             recent_chunks = [
-                                chunk
-                                for chunk, timestamp in self.audio_buffer
-                                if timestamp >= self.last_transcription_time
+                                buf_chunk
+                                for buf_chunk, timestamp in self.audio_buffer
+                                if timestamp >= window_start
                             ]
 
                             print(
@@ -439,9 +442,7 @@ class RecordingThread(QThread):
                                 self.last_transcription_time = current_time
 
                                 # Keep only recent chunks to prevent memory buildup
-                                cutoff_time = (
-                                    current_time - 10.0
-                                )  # Keep last 10 seconds
+                                cutoff_time = current_time - (self.window_size_seconds + 5.0)
                                 self.audio_buffer = [
                                     (chunk, timestamp)
                                     for chunk, timestamp in self.audio_buffer
@@ -516,6 +517,8 @@ class RecordingThread(QThread):
     def _on_live_transcription_completed(self, transcript):
         """Handle completed live transcription"""
         if transcript and transcript.strip():
+            # Emit the chunk transcript for semi-live question matching
+            self.chunk_transcript_ready.emit(transcript)
             # Append to existing transcript
             if self.transcription_buffer:
                 self.transcription_buffer += " " + transcript
@@ -2347,6 +2350,8 @@ class SoapBoxxTab(QWidget):
             # Initialize recording thread
             self.recording_thread = RecordingThread(self.core, service)
             self.recording_thread.transcript_updated.connect(self.update_transcript)
+            # Semi-live: react to per-window transcripts
+            self.recording_thread.chunk_transcript_ready.connect(self._on_chunk_transcript)
             self.recording_thread.feedback_updated.connect(self.update_feedback)
             self.recording_thread.status_updated.connect(self.update_status)
             self.recording_thread.error_occurred.connect(self.handle_error)
@@ -2384,6 +2389,29 @@ class SoapBoxxTab(QWidget):
                 "Recording Error", f"Failed to start recording: {str(e)}"
             )
             self._reset_recording_ui()
+
+    def _on_chunk_transcript(self, text: str):
+        """Handle semi-live chunk transcript for question surfacing."""
+        try:
+            if not text:
+                return
+            # Simple keyword-based matcher (extendable)
+            keywords_to_questions = {
+                "sponsor": "Can you tell us about your current sponsors and partnerships?",
+                "launch": "What’s the launch timeline and what milestones are you targeting?",
+                "roadmap": "What’s on your product roadmap over the next quarter?",
+                "growth": "What growth channels are working best right now?",
+                "challenge": "What’s been the hardest challenge recently and how did you handle it?",
+                "audience": "Who is your ideal audience and how do you engage them?",
+                "revenue": "What are your main revenue streams and how are they evolving?",
+                "hiring": "Are you hiring? What roles are most important right now?",
+            }
+            text_lower = text.lower()
+            hits = [q for k, q in keywords_to_questions.items() if k in text_lower]
+            for q in hits[:3]:  # limit spam
+                self._append_question_row(q)
+        except Exception as e:
+            print(f"Question matching error: {e}")
 
     def _reset_recording_ui(self):
         """Reset recording UI to initial state"""
