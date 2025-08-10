@@ -57,10 +57,22 @@ class Config:
                 "timeout_seconds": 30,
             },
             "feedback_settings": {
-                "model": "gpt-3.5-turbo",
-                "max_tokens": 500,
-                "temperature": 0.7,
+                "model": "gpt-4",
+                "max_tokens": 800,
+                "temperature": 0.3,
                 "analysis_depth": "comprehensive",
+                "enable_caching": True,
+                "cache_ttl": 3600,
+                "enable_quantitative_scoring": True,
+                "enable_comparative_analysis": True,
+                "default_focus_areas": ["clarity", "engagement", "structure", "energy", "professionalism"],
+                "scoring_weights": {
+                    "clarity": 0.25,
+                    "engagement": 0.25,
+                    "structure": 0.2,
+                    "energy": 0.15,
+                    "professionalism": 0.15
+                }
             },
             "research_settings": {
                 "model": "gpt-3.5-turbo",

@@ -259,10 +259,10 @@ class GuestResearch:
 
             # If we have meaningful results, return them
             if unique_results and not all(r.get("fallback") for r in unique_results):
-                return {
-                    "web_results": unique_results[:10],  # Limit to top 10 results
-                    "company_name": company_name,
-                    "search_queries": queries,
+            return {
+                "web_results": unique_results[:10],  # Limit to top 10 results
+                "company_name": company_name,
+                "search_queries": queries,
                 }
             
             # If all results are fallbacks or no results, enhance with better fallbacks
@@ -320,7 +320,7 @@ class GuestResearch:
 
             # If we have real LinkedIn results, return them
             if linkedin_results and not all(r.get("fallback") for r in linkedin_results):
-                return linkedin_results[:15]  # Limit to top 15 LinkedIn results
+            return linkedin_results[:15]  # Limit to top 15 LinkedIn results
             
             # If all results are fallbacks or no results, enhance with professional fallbacks
             print(f"🔄 Enhancing LinkedIn search with professional fallbacks for: {company_name}")
@@ -364,7 +364,7 @@ class GuestResearch:
 
             # If we have real executive results, return them
             if executive_results and not all(r.get("fallback") for r in executive_results):
-                return executive_results[:10]  # Limit to top 10 executive results
+            return executive_results[:10]  # Limit to top 10 executive results
             
             # If all results are fallbacks or no results, enhance with leadership fallbacks
             print(f"🔄 Enhancing executive search with leadership fallbacks for: {company_name}")
@@ -412,7 +412,7 @@ class GuestResearch:
                 news_results = self._augment_with_fallbacks_if_needed(
                     news_results, f"{company_name} news"
                 )
-                return news_results[:10]  # Limit to top 10 news results
+            return news_results[:10]  # Limit to top 10 news results
             
             # If all results are fallbacks or no results, enhance with news-specific fallbacks
             print(f"🔄 Enhancing news search with industry-specific fallbacks for: {company_name}")
@@ -614,7 +614,7 @@ Please provide a summary that includes:
 Format the response as a well-structured business summary, clearly indicating when information is based on industry analysis rather than specific company data.
 """
             else:
-                summary_prompt = f"""
+            summary_prompt = f"""
 Based on the following search results for {company_name}, provide a comprehensive business summary:
 
 {context}
@@ -869,9 +869,9 @@ Information about {company_name}'s notable achievements or challenges is not cur
                 results.append({
                     "title": f"{query} - Music Industry Company",
                     "snippet": f"{query} appears to be a music recording company or label. Music industry companies typically focus on artist development, recording, and music distribution.",
-                    "link": "",
+                "link": "",
                     "displayLink": "industry_analysis",
-                    "fallback": True,
+                "fallback": True,
                     "source": "industry_knowledge",
                 })
             elif any(term in company_terms for term in ["tech", "software", "ai", "digital"]):
