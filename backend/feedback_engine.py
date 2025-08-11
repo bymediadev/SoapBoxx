@@ -655,6 +655,12 @@ Provide expert analysis in this JSON format:
         scores1 = analysis1.get("scores", {})
         scores2 = analysis2.get("scores", {})
         
+        # Ensure scores are dictionaries
+        if hasattr(scores1, '__dict__'):
+            scores1 = scores1.__dict__
+        if hasattr(scores2, '__dict__'):
+            scores2 = scores2.__dict__
+        
         improvements = {}
         for key in ["clarity", "engagement", "structure", "energy", "professionalism", "overall"]:
             if key in scores1 and key in scores2:

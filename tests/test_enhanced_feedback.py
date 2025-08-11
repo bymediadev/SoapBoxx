@@ -22,6 +22,18 @@ except ImportError as e:
     sys.exit(1)
 
 
+def dataclass_to_dict(obj):
+    """Convert dataclass objects to dictionaries for JSON serialization"""
+    if hasattr(obj, '__dict__'):
+        return {k: dataclass_to_dict(v) for k, v in obj.__dict__.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [dataclass_to_dict(item) for item in obj]
+    elif isinstance(obj, dict):
+        return {k: dataclass_to_dict(v) for k, v in obj.items()}
+    else:
+        return obj
+
+
 def test_basic_functionality():
     """Test basic functionality with different analysis depths"""
     print("\n🧪 Testing Basic Functionality")
@@ -36,7 +48,9 @@ def test_basic_functionality():
     for depth in depths:
         print(f"\n{depth.title()} Analysis Result:")
         result = fe.analyze(transcript=sample_transcript, analysis_depth=depth)
-        print(json.dumps(result, indent=2))
+        # Convert dataclass objects to dictionaries for JSON serialization
+        serializable_result = dataclass_to_dict(result)
+        print(json.dumps(serializable_result, indent=2))
     
     return True
 
@@ -95,7 +109,14 @@ def test_focus_specific_feedback():
         result = fe.get_specific_feedback(sample_transcript, focus_area, "standard")
         
         print(f"  Focus-specific suggestions: {result.get('focus_specific_suggestions', [])}")
-        print(f"  Overall score: {result.get('scores', {}).get('overall', 'N/A')}")
+        
+        # Handle both dict and dataclass score objects
+        scores = result.get('scores', {})
+        if hasattr(scores, 'overall'):
+            overall_score = scores.overall
+        else:
+            overall_score = scores.get('overall', 'N/A')
+        print(f"  Overall score: {overall_score}")
     
     return True
 
@@ -116,7 +137,9 @@ def test_comparative_analysis():
     comparison = fe.get_comparative_analysis(transcript1, transcript2)
     
     print("Comparative Analysis Result:")
-    print(json.dumps(comparison, indent=2))
+    # Convert dataclass objects to dictionaries for JSON serialization
+    serializable_comparison = dataclass_to_dict(comparison)
+    print(json.dumps(serializable_comparison, indent=2))
     
     return True
 
