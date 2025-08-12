@@ -1,0 +1,5 @@
+[33mb2b92a3[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Refactor launch_SoapBoxx.bat for improved virtual environment activation
+[33m2136c37[m Remove obsolete SoapBoxx distribution files to streamline project structure
+[33m615a455[m Complete SoapBoxx setup: GitHub releases, security, documentation, and distribution
+[33m646c739[m Remove obsolete files from SoapBoxx distribution package
+[33mb070d09[m Update launch_SoapBoxx.bat to enhance virtual environment activation process
