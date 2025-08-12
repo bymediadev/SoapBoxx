@@ -34,7 +34,7 @@ jobs:
     - name: Create PyInstaller spec file
       run: |
         echo "Creating PyInstaller spec file..."
-        pyi-makespec --onefile --windowed --name SoapBoxx --add-data "backend;backend" --add-data "frontend;frontend" --add-data "logs;logs" --add-data "Exports;Exports" --hidden-import "backend" --hidden-import "frontend" --hidden-import "PyQt6" --hidden-import "pyaudio" --hidden-import "openai" --hidden-import "whisper" --hidden-import "gtts" frontend/main_window.py
+        pyi-makespec --onefile --windowed --name SoapBoxx --add-data "backend;backend" --add-data "frontend;frontend" --hidden-import "backend" --hidden-import "frontend" --hidden-import "PyQt6" --hidden-import "pyaudio" --hidden-import "openai" --hidden-import "whisper" --hidden-import "gtts" frontend/main_window.py
         
     - name: Build Windows executable
       run: |
@@ -68,7 +68,7 @@ jobs:
     - name: Create PyInstaller spec file
       run: |
         echo "Creating PyInstaller spec file..."
-        pyi-makespec --onefile --windowed --name SoapBoxx --add-data "backend:backend" --add-data "frontend:frontend" --add-data "logs:logs" --add-data "Exports:Exports" --hidden-import "backend" --hidden-import "frontend" --hidden-import "PyQt6" --hidden-import "pyaudio" --hidden-import "openai" --hidden-import "whisper" --hidden-import "gtts" frontend/main_window.py
+        pyi-makespec --onefile --windowed --name SoapBoxx --add-data "backend:backend" --add-data "frontend:frontend" --hidden-import "backend" --hidden-import "frontend" --hidden-import "PyQt6" --hidden-import "pyaudio" --hidden-import "openai" --hidden-import "whisper" --hidden-import "gtts" frontend/main_window.py
         
     - name: Build macOS app
       run: |
@@ -102,7 +102,7 @@ jobs:
     - name: Create PyInstaller spec file
       run: |
         echo "Creating PyInstaller spec file..."
-        pyi-makespec --onefile --name SoapBoxx --add-data "backend:backend" --add-data "frontend:frontend" --add-data "logs:logs" --add-data "Exports:Exports" --hidden-import "backend" --hidden-import "frontend" --hidden-import "PyQt6" --hidden-import "pyaudio" --hidden-import "openai" --hidden-import "whisper" --hidden-import "gtts" frontend/main_window.py
+        pyi-makespec --onefile --name SoapBoxx --add-data "backend:backend" --add-data "frontend:frontend" --hidden-import "backend" --hidden-import "frontend" --hidden-import "PyQt6" --hidden-import "pyaudio" --hidden-import "openai" --hidden-import "whisper" --hidden-import "gtts" frontend/main_window.py
         
     - name: Build Linux executable
       run: |
