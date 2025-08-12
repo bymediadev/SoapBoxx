@@ -54,8 +54,7 @@
 ## 🔧 Installation
 
 ### **Windows Users**
-1. Download `
-SoapBoxx-Distribution-v1.0.0.zip`
+1. Download `SoapBoxx-Distribution-v1.0.0.zip`
 2. Extract to any folder
 3. Double-click `launch_SoapBoxx.bat`
 4. **That's it!** - No Python installation required
