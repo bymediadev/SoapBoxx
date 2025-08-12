@@ -1,0 +1,66 @@
+{
+  "analysis_id": "demo_001",
+  "timestamp": "2025-08-12T13:45:00Z",
+  "transcript_length": "3 minutes 15 seconds",
+  "analysis_depth": "comprehensive",
+  "content_metrics": {
+    "word_count": 342,
+    "syllable_count": 456,
+    "average_sentence_length": 15.2,
+    "topic_coherence": 0.87,
+    "question_count": 8,
+    "engagement_indicators": ["direct_address", "rhetorical_questions", "personal_stories"]
+  },
+  "feedback_scores": {
+    "clarity": 8.5,
+    "engagement": 9.2,
+    "structure": 8.8,
+    "energy": 8.9,
+    "professionalism": 8.7,
+    "overall": 8.8
+  },
+  "detailed_feedback": {
+    "strengths": [
+      "Excellent use of direct questions to engage listeners",
+      "Clear structure with logical flow from problem to solution",
+      "Strong personal connection through storytelling",
+      "Practical, actionable advice for listeners"
+    ],
+    "areas_for_improvement": [
+      "Consider adding more specific examples for each AI implementation step",
+      "Could include brief mention of potential challenges or limitations",
+      "Might benefit from a quick recap of key points at the end"
+    ],
+    "specific_suggestions": [
+      "Add 1-2 concrete examples of AI tools for small businesses",
+      "Include a brief 'what to expect' section about implementation timeline",
+      "Consider ending with a call-to-action for listener engagement"
+    ]
+  },
+  "question_analysis": {
+    "extracted_questions": [
+      "What do you think is the biggest misconception about AI in business today?",
+      "How do you get started with AI if you're not a tech expert?",
+      "What's your biggest challenge when it comes to implementing AI in your business?",
+      "Where do you see AI having the biggest impact in your industry over the next five years?"
+    ],
+    "question_types": {
+      "rhetorical": 2,
+      "direct_audience": 3,
+      "reflective": 1
+    },
+    "engagement_potential": "High - Multiple opportunities for listener interaction"
+  },
+  "content_structure": {
+    "introduction": "Clear hook with topic introduction",
+    "main_content": "Well-organized with 3 practical steps",
+    "conclusion": "Strong closing with motivational message",
+    "transitions": "Smooth flow between sections"
+  },
+  "ai_insights": {
+    "topic_relevance": "Highly relevant to current business landscape",
+    "audience_appeal": "Broad appeal to business leaders and entrepreneurs",
+    "content_freshness": "Current and timely topic",
+    "actionability": "High - provides clear next steps"
+  }
+}

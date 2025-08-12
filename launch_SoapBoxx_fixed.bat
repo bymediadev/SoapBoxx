@@ -10,10 +10,10 @@ echo 🚀 Starting SoapBoxx...
 echo.
 
 REM Check if virtual environment exists in parent directory
-if not exist "..\..\.venv\Scripts\activate.bat" (
+if not exist "..\.venv\Scripts\activate.bat" (
     echo ❌ Virtual environment not found!
     echo.
-    echo Please run the setup first from the main SoapBoxx folder:
+    echo Please run the setup first from the parent SoapBoxx folder:
     echo python -m venv .venv
     echo .\.venv\Scripts\Activate.ps1
     echo pip install -r requirements.txt
@@ -22,13 +22,12 @@ if not exist "..\..\.venv\Scripts\activate.bat" (
     exit /b 1
 )
 
-REM Activate virtual environment and run
+REM Activate virtual environment from parent directory and run Python directly
 echo ✅ Virtual environment found
 echo 🔧 Activating environment...
 echo.
 
-REM Activate virtual environment from parent directory and run Python directly
-call "..\..\.venv\Scripts\activate.bat"
+call "..\.venv\Scripts\activate.bat"
 python frontend\main_window.py
 
 echo.

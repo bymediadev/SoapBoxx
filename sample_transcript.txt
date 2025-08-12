@@ -1,0 +1,31 @@
+Sample Podcast Transcript - "The Future of AI in Business"
+
+Welcome to TechTalk Today! I'm your host, Sarah Chen, and today we're diving into one of the most exciting topics in the business world: artificial intelligence and how it's transforming industries.
+
+[00:00:15] Let me start by asking: What do you think is the biggest misconception about AI in business today? Is it that AI will replace all jobs, or that it's too expensive for small companies?
+
+[00:00:30] I recently spoke with Dr. Michael Rodriguez, CEO of InnovateTech, and he had some fascinating insights. He said, "AI isn't about replacing humans—it's about augmenting human capabilities." That really resonated with me.
+
+[00:01:00] Here's what I think many business leaders are missing: AI isn't just for tech giants anymore. Small businesses can leverage AI tools for customer service, marketing, and even product development.
+
+[00:01:30] But here's the million-dollar question: How do you get started with AI if you're not a tech expert? That's exactly what we'll explore in today's episode.
+
+[00:02:00] Let me share three practical steps that any business can take right now. First, start with customer service chatbots. Second, implement basic data analytics. Third, explore AI-powered marketing tools.
+
+[00:02:30] Now, I want to hear from you: What's your biggest challenge when it comes to implementing AI in your business? Are you worried about the cost, the learning curve, or something else entirely?
+
+[00:03:00] Before we wrap up, let me ask one final question: Where do you see AI having the biggest impact in your industry over the next five years?
+
+[00:03:15] Thanks for joining me today! Remember, the future of AI in business isn't about being perfect—it's about being curious and willing to experiment. Until next time, keep innovating!
+
+---
+
+This transcript contains 8 questions that can be extracted:
+1. "What do you think is the biggest misconception about AI in business today?"
+2. "How do you get started with AI if you're not a tech expert?"
+3. "What's your biggest challenge when it comes to implementing AI in your business?"
+4. "Where do you see AI having the biggest impact in your industry over the next five years?"
+5. "Is it that AI will replace all jobs, or that it's too expensive for small companies?"
+6. "Are you worried about the cost, the learning curve, or something else entirely?"
+7. "What do you think is the biggest misconception about AI in business today?"
+8. "How do you get started with AI if you're not a tech expert?"
