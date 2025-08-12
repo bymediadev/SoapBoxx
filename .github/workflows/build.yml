@@ -25,15 +25,25 @@ jobs:
       with:
         python-version: '3.10'
         
-    - name: Install dependencies
+    - name: Install system dependencies
+      run: |
+        # Install Visual C++ build tools
+        choco install visualstudio2019buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --passive --norestart"
+        
+    - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pyinstaller
         
+    - name: Create PyInstaller spec file
+      run: |
+        echo "Creating PyInstaller spec file..."
+        pyi-makespec --onefile --windowed --name SoapBoxx --add-data "backend;backend" --add-data "frontend;frontend" --add-data "logs;logs" --add-data "Exports;Exports" --hidden-import "backend" --hidden-import "frontend" --hidden-import "PyQt6" --hidden-import "pyaudio" --hidden-import "openai" --hidden-import "whisper" --hidden-import "gtts" frontend/main_window.py
+        
     - name: Build Windows executable
       run: |
-        pyinstaller --onefile --windowed --name SoapBoxx frontend/main_window.py
+        pyinstaller SoapBoxx.spec
         
     - name: Upload Windows artifact
       uses: actions/upload-artifact@v3
@@ -54,15 +64,26 @@ jobs:
       with:
         python-version: '3.10'
         
-    - name: Install dependencies
+    - name: Install system dependencies
+      run: |
+        # Install portaudio and other dependencies
+        brew install portaudio
+        brew install ffmpeg
+        
+    - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pyinstaller
         
+    - name: Create PyInstaller spec file
+      run: |
+        echo "Creating PyInstaller spec file..."
+        pyi-makespec --onefile --windowed --name SoapBoxx --add-data "backend:backend" --add-data "frontend:frontend" --add-data "logs:logs" --add-data "Exports:Exports" --hidden-import "backend" --hidden-import "frontend" --hidden-import "PyQt6" --hidden-import "pyaudio" --hidden-import "openai" --hidden-import "whisper" --hidden-import "gtts" frontend/main_window.py
+        
     - name: Build macOS app
       run: |
-        pyinstaller --onefile --windowed --name SoapBoxx frontend/main_window.py
+        pyinstaller SoapBoxx.spec
         
     - name: Upload macOS artifact
       uses: actions/upload-artifact@v3
@@ -86,7 +107,7 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y python3-dev portaudio19-dev python3-pyaudio
+        sudo apt-get install -y python3-dev portaudio19-dev python3-pyaudio ffmpeg
         
     - name: Install Python dependencies
       run: |
@@ -94,9 +115,14 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
         
+    - name: Create PyInstaller spec file
+      run: |
+        echo "Creating PyInstaller spec file..."
+        pyi-makespec --onefile --name SoapBoxx --add-data "backend:backend" --add-data "frontend:frontend" --add-data "logs:logs" --add-data "Exports:Exports" --hidden-import "backend" --hidden-import "frontend" --hidden-import "PyQt6" --hidden-import "pyaudio" --hidden-import "openai" --hidden-import "whisper" --hidden-import "gtts" frontend/main_window.py
+        
     - name: Build Linux executable
       run: |
-        pyinstaller --onefile --name SoapBoxx frontend/main_window.py
+        pyinstaller SoapBoxx.spec
         
     - name: Upload Linux artifact
       uses: actions/upload-artifact@v3
