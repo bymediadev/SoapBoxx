@@ -1,6 +1,0 @@
-tree 63e8e5f1df31afcecaf63a99589650fe743d56a1
-parent 278f9a9674f0f10b5d4c40fbca7dc07d71e41214
-author BYMedia.dev <bymediadev@users.noreply.github.com> 1754743599 -0400
-committer BYMedia.dev <bymediadev@users.noreply.github.com> 1754743599 -0400
-
-Enable test mode in stress test scripts to reduce external API flakiness and improve reliability during CI runs. Update transcriber to return mock transcripts in test mode and implement rate limiting for API calls. Adjust quick stress test handling for error outputs and refine test report data.
