@@ -162,16 +162,22 @@ jobs:
       with:
         path: artifacts
         
-    - name: Check artifact sizes
+    - name: Check artifact sizes and filter large files
       run: |
-        echo "Checking artifact sizes..."
+        echo "Checking artifact sizes and filtering large files..."
+        mkdir -p artifacts/release-files
         for file in artifacts/*/*; do
           if [ -f "$file" ]; then
             size=$(stat -c%s "$file")
             sizeMB=$(echo "scale=2; $size/1024/1024" | bc)
+            filename=$(basename "$file")
             echo "$file: $sizeMB MB"
+            
             if [ $size -gt 2147483648 ]; then
-              echo "Warning: $file exceeds 2GB limit"
+              echo "Warning: $file exceeds 2GB limit - excluding from release"
+            else
+              echo "Including $file in release"
+              cp "$file" "artifacts/release-files/$filename"
             fi
           fi
         done
@@ -197,7 +203,7 @@ jobs:
           - **SoapBoxx** - Native macOS application
           
           ### Linux
-          - **SoapBoxx** - Linux executable
+          - **SoapBoxx** - Linux executable (if under 2GB)
           
           ## ⚠️ Note on Large Files
           
@@ -227,10 +233,7 @@ jobs:
           ---
           
           **Built with ❤️ using Python, PyQt6, and OpenAI**
-        files: |
-          artifacts/SoapBoxx-Windows/SoapBoxx.exe
-          artifacts/SoapBoxx-macOS/SoapBoxx
-          artifacts/SoapBoxx-Linux/SoapBoxx
+        files: artifacts/release-files/*
         draft: false
         prerelease: false
       env:
