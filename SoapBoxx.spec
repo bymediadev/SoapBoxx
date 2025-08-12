@@ -1,0 +1,131 @@
+# -*- mode: python ; coding: utf-8 -*-
+
+block_cipher = None
+
+# Collect all necessary data files
+datas = [
+    ('backend', 'backend'),
+    ('frontend', 'frontend'),
+    ('docs', 'docs'),
+    ('requirements.txt', '.'),
+    ('soapboxx_config.json', '.'),
+    ('logs', 'logs'),
+    ('Exports', 'Exports'),
+]
+
+# Hidden imports that PyInstaller might miss
+hiddenimports = [
+    'PyQt6.QtCore',
+    'PyQt6.QtGui', 
+    'PyQt6.QtWidgets',
+    'PyQt6.QtMultimedia',
+    'PyQt6.QtMultimediaWidgets',
+    'pyaudio',
+    'numpy',
+    'openai',
+    'requests',
+    'json',
+    'datetime',
+    'threading',
+    'queue',
+    'wave',
+    'tempfile',
+    'os',
+    'sys',
+    'time',
+    'logging',
+    'dataclasses',
+    'typing',
+    'pathlib',
+    'urllib.parse',
+    'base64',
+    'hashlib',
+    're',
+    'collections',
+    'functools',
+    'itertools',
+    'contextlib',
+    'backend',
+    'backend.audio_recorder',
+    'backend.config',
+    'backend.error_tracker',
+    'backend.feedback_engine',
+    'backend.guest_research',
+    'backend.logger',
+    'backend.monitoring',
+    'backend.podcast_apis',
+    'backend.soapboxx_core',
+    'backend.social_media_scraper',
+    'backend.transcriber',
+    'backend.tts_generator',
+    'frontend',
+    'frontend.batch_processor',
+    'frontend.export_manager',
+    'frontend.feedback_dialog',
+    'frontend.keyboard_shortcuts',
+    'frontend.main_window',
+    'frontend.reverb_tab',
+    'frontend.scoop_tab',
+    'frontend.soapboxx_tab',
+    'frontend.theme_manager',
+]
+
+# Exclude unnecessary modules to reduce size
+excludes = [
+    'matplotlib',
+    'scipy',
+    'pandas',
+    'jupyter',
+    'IPython',
+    'notebook',
+    'pytest',
+    'unittest',
+    'doctest',
+    'tkinter',
+    'wx',
+    'PySide',
+    'PySide2',
+    'PySide6',
+]
+
+a = Analysis(
+    ['frontend/main_window.py'],
+    pathex=[],
+    binaries=[],
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=excludes,
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    [],
+    name='SoapBoxx',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,  # No console window for GUI app
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=None,  # Add icon path here if you have one
+    version_file=None,
+)

@@ -1,0 +1,172 @@
+name: Build SoapBoxx
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    name: Build Windows Executable
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+        
+    - name: Build Windows executable
+      run: |
+        pyinstaller --onefile --windowed --name SoapBoxx frontend/main_window.py
+        
+    - name: Upload Windows artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: SoapBoxx-Windows
+        path: dist/SoapBoxx.exe
+        
+  build-macos:
+    runs-on: macos-latest
+    name: Build macOS App
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+        
+    - name: Build macOS app
+      run: |
+        pyinstaller --onefile --windowed --name SoapBoxx frontend/main_window.py
+        
+    - name: Upload macOS artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: SoapBoxx-macOS
+        path: dist/SoapBoxx
+        
+  build-linux:
+    runs-on: ubuntu-latest
+    name: Build Linux Executable
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-dev portaudio19-dev python3-pyaudio
+        
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+        
+    - name: Build Linux executable
+      run: |
+        pyinstaller --onefile --name SoapBoxx frontend/main_window.py
+        
+    - name: Upload Linux artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: SoapBoxx-Linux
+        path: dist/SoapBoxx
+        
+  create-release:
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    name: Create GitHub Release
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: artifacts
+        
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.event.inputs.version || github.ref_name }}
+        name: SoapBoxx ${{ github.event.inputs.version || github.ref_name }}
+        body: |
+          # SoapBoxx ${{ github.event.inputs.version || github.ref_name }}
+          
+          ## 🎉 What's New
+          
+          **SoapBoxx** is a professional desktop podcast recording studio that transforms your computer into a powerful audio production hub.
+          
+          ## 🚀 Downloads
+          
+          ### Windows
+          - **SoapBoxx.exe** - Standalone executable (no installation required)
+          
+          ### macOS
+          - **SoapBoxx** - Native macOS application
+          
+          ### Linux
+          - **SoapBoxx** - Linux executable
+          
+          ## ✨ Features
+          
+          - 🎙️ **Smart Recording Studio** with real-time audio
+          - 🤖 **AI-Powered Analysis** using OpenAI GPT-4
+          - 📝 **Automatic Question Extraction** from transcripts
+          - 🔍 **Guest Research Tools** with web scraping
+          - 📊 **Quantitative Scoring** and feedback
+          
+          ## 🔑 Setup
+          
+          To use AI features, you'll need an OpenAI API key:
+          1. Get your key from [OpenAI Platform](https://platform.openai.com/api-keys)
+          2. Set environment variable: `OPENAI_API_KEY=your_key_here`
+          
+          ## 📖 Documentation
+          
+          Check the built-in help system or visit our documentation for detailed guides.
+          
+          ---
+          
+          **Built with ❤️ using Python, PyQt6, and OpenAI**
+        files: |
+          artifacts/SoapBoxx-Windows/SoapBoxx.exe
+          artifacts/SoapBoxx-macOS/SoapBoxx
+          artifacts/SoapBoxx-Linux/SoapBoxx
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
