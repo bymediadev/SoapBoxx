@@ -1,11 +1,11 @@
 # backend/feedback_engine.py
 import json
 import os
-import time
 import re
-from typing import Dict, List, Optional, Tuple
+import time
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Dict, List, Optional, Tuple
 
 # Try to import error tracker
 try:
@@ -40,6 +40,7 @@ except ImportError:
 @dataclass
 class ContentMetrics:
     """Quantitative metrics for content analysis"""
+
     word_count: int
     sentence_count: int
     avg_sentence_length: float
@@ -54,6 +55,7 @@ class ContentMetrics:
 @dataclass
 class FeedbackScore:
     """Detailed scoring for different aspects"""
+
     clarity: float  # 0-100
     engagement: float  # 0-100
     structure: float  # 0-100
@@ -78,13 +80,17 @@ class FeedbackEngine:
             print("Warning: No OpenAI API key provided. Feedback will be limited.")
             self.client = None
             self.use_new_api = False
-        
+
         # Initialize analysis cache
         self.analysis_cache = {}
         self.cache_ttl = 3600  # 1 hour
 
-    def analyze(self, transcript: str = None, audio: bytes = None, 
-                analysis_depth: str = "comprehensive") -> Dict:
+    def analyze(
+        self,
+        transcript: str = None,
+        audio: bytes = None,
+        analysis_depth: str = "comprehensive",
+    ) -> Dict:
         """
         Analyze transcript and provide precise feedback for podcast hosts
 
@@ -126,22 +132,21 @@ class FeedbackEngine:
                     component="feedback_engine",
                     exception=e,
                 )
-                result = self._get_enhanced_fallback_feedback(transcript, analysis_depth)
+                result = self._get_enhanced_fallback_feedback(
+                    transcript, analysis_depth
+                )
 
         # Cache the result
-        self.analysis_cache[cache_key] = {
-            "result": result,
-            "timestamp": time.time()
-        }
+        self.analysis_cache[cache_key] = {"result": result, "timestamp": time.time()}
 
         return result
 
     def _perform_ai_analysis(self, transcript: str, analysis_depth: str) -> Dict:
         """Perform AI-powered analysis with varying depth levels"""
-        
+
         # Calculate quantitative metrics first
         metrics = self._calculate_content_metrics(transcript)
-        
+
         # Create depth-specific prompts
         if analysis_depth == "basic":
             prompt = self._create_basic_analysis_prompt(transcript, metrics)
@@ -159,7 +164,11 @@ class FeedbackEngine:
         # Call OpenAI API
         if self.use_new_api and self.client:
             response = self.client.chat.completions.create(
-                model="gpt-4" if analysis_depth in ["comprehensive", "expert"] else "gpt-3.5-turbo",
+                model=(
+                    "gpt-4"
+                    if analysis_depth in ["comprehensive", "expert"]
+                    else "gpt-3.5-turbo"
+                ),
                 messages=[
                     {
                         "role": "system",
@@ -168,7 +177,9 @@ class FeedbackEngine:
                     {"role": "user", "content": prompt},
                 ],
                 max_tokens=max_tokens,
-                temperature=0.3 if analysis_depth in ["comprehensive", "expert"] else 0.7,
+                temperature=(
+                    0.3 if analysis_depth in ["comprehensive", "expert"] else 0.7
+                ),
             )
             analysis_text = response.choices[0].message.content.strip()
         else:
@@ -184,7 +195,9 @@ class FeedbackEngine:
                         {"role": "user", "content": prompt},
                     ],
                     max_tokens=max_tokens,
-                    temperature=0.3 if analysis_depth in ["comprehensive", "expert"] else 0.7,
+                    temperature=(
+                        0.3 if analysis_depth in ["comprehensive", "expert"] else 0.7
+                    ),
                 )
                 analysis_text = response.choices[0].message.content.strip()
             except Exception as old_api_error:
@@ -192,28 +205,40 @@ class FeedbackEngine:
                 raise
 
         # Parse and enhance the response
-        parsed_response = self._parse_enhanced_analysis_response(analysis_text, transcript, metrics)
-        
+        parsed_response = self._parse_enhanced_analysis_response(
+            analysis_text, transcript, metrics
+        )
+
         # Add quantitative scores
         parsed_response["metrics"] = metrics.__dict__
-        parsed_response["scores"] = self._calculate_quantitative_scores(transcript, metrics)
-        
+        parsed_response["scores"] = self._calculate_quantitative_scores(
+            transcript, metrics
+        )
+
         return parsed_response
 
     def _get_system_prompt(self, analysis_depth: str) -> str:
         """Get system prompt based on analysis depth"""
         base_prompt = "You are an expert podcast coach and communication specialist with deep knowledge of audio content analysis."
-        
+
         if analysis_depth == "basic":
             return base_prompt + " Provide concise, actionable feedback."
         elif analysis_depth == "standard":
             return base_prompt + " Provide balanced feedback with specific examples."
         elif analysis_depth == "comprehensive":
-            return base_prompt + " Provide detailed analysis with multiple improvement strategies."
+            return (
+                base_prompt
+                + " Provide detailed analysis with multiple improvement strategies."
+            )
         else:  # expert
-            return base_prompt + " Provide expert-level analysis with industry benchmarks and advanced techniques."
+            return (
+                base_prompt
+                + " Provide expert-level analysis with industry benchmarks and advanced techniques."
+            )
 
-    def _create_basic_analysis_prompt(self, transcript: str, metrics: ContentMetrics) -> str:
+    def _create_basic_analysis_prompt(
+        self, transcript: str, metrics: ContentMetrics
+    ) -> str:
         """Create basic analysis prompt"""
         return f"""
 Analyze this podcast transcript and provide basic feedback:
@@ -235,7 +260,9 @@ Provide feedback in this JSON format:
 }}
 """
 
-    def _create_standard_analysis_prompt(self, transcript: str, metrics: ContentMetrics) -> str:
+    def _create_standard_analysis_prompt(
+        self, transcript: str, metrics: ContentMetrics
+    ) -> str:
         """Create standard analysis prompt"""
         return f"""
 Analyze this podcast transcript and provide standard feedback:
@@ -261,7 +288,9 @@ Provide feedback in this JSON format:
 }}
 """
 
-    def _create_comprehensive_analysis_prompt(self, transcript: str, metrics: ContentMetrics) -> str:
+    def _create_comprehensive_analysis_prompt(
+        self, transcript: str, metrics: ContentMetrics
+    ) -> str:
         """Create comprehensive analysis prompt"""
         return f"""
 Analyze this podcast transcript comprehensively:
@@ -293,7 +322,9 @@ Provide comprehensive feedback in this JSON format:
 }}
 """
 
-    def _create_expert_analysis_prompt(self, transcript: str, metrics: ContentMetrics) -> str:
+    def _create_expert_analysis_prompt(
+        self, transcript: str, metrics: ContentMetrics
+    ) -> str:
         """Create expert-level analysis prompt"""
         return f"""
 Provide expert-level podcast content analysis:
@@ -331,20 +362,24 @@ Provide expert analysis in this JSON format:
     def _calculate_content_metrics(self, transcript: str) -> ContentMetrics:
         """Calculate quantitative content metrics"""
         words = transcript.split()
-        sentences = re.split(r'[.!?]+', transcript)
+        sentences = re.split(r"[.!?]+", transcript)
         sentences = [s.strip() for s in sentences if s.strip()]
-        
+
         word_count = len(words)
         sentence_count = len(sentences)
         avg_sentence_length = word_count / sentence_count if sentence_count > 0 else 0
-        
+
         unique_words = len(set(word.lower() for word in words))
         vocabulary_diversity = unique_words / word_count if word_count > 0 else 0
-        
+
         # Estimate reading level (simplified Flesch-Kincaid)
         if sentence_count > 0 and word_count > 0:
             syllables = sum(self._count_syllables(word) for word in words)
-            flesch_score = 206.835 - (1.015 * (word_count / sentence_count)) - (84.6 * (syllables / word_count))
+            flesch_score = (
+                206.835
+                - (1.015 * (word_count / sentence_count))
+                - (84.6 * (syllables / word_count))
+            )
             if flesch_score >= 90:
                 reading_level = "Very Easy"
             elif flesch_score >= 80:
@@ -361,16 +396,18 @@ Provide expert analysis in this JSON format:
                 reading_level = "Very Difficult"
         else:
             reading_level = "Unknown"
-        
+
         # Estimate speaking pace (words per minute)
-        speaking_pace = word_count / 2.5  # Rough estimate: 2.5 minutes for typical content
-        
+        speaking_pace = (
+            word_count / 2.5
+        )  # Rough estimate: 2.5 minutes for typical content
+
         # Calculate topic coherence (simplified)
         topic_coherence = self._calculate_topic_coherence(transcript)
-        
+
         # Count engagement signals
-        engagement_signals = len(re.findall(r'[!?]', transcript))
-        
+        engagement_signals = len(re.findall(r"[!?]", transcript))
+
         return ContentMetrics(
             word_count=word_count,
             sentence_count=sentence_count,
@@ -380,7 +417,7 @@ Provide expert analysis in this JSON format:
             reading_level=reading_level,
             speaking_pace=speaking_pace,
             topic_coherence=topic_coherence,
-            engagement_signals=engagement_signals
+            engagement_signals=engagement_signals,
         )
 
     def _count_syllables(self, word: str) -> int:
@@ -389,14 +426,14 @@ Provide expert analysis in this JSON format:
         count = 0
         vowels = "aeiouy"
         on_vowel = False
-        
+
         for char in word:
             is_vowel = char in vowels
             if is_vowel and not on_vowel:
                 count += 1
             on_vowel = is_vowel
-        
-        if word.endswith('e'):
+
+        if word.endswith("e"):
             count -= 1
         if count == 0:
             count = 1
@@ -410,55 +447,67 @@ Provide expert analysis in this JSON format:
         for word in words:
             if len(word) > 3:  # Only consider meaningful words
                 word_freq[word] = word_freq.get(word, 0) + 1
-        
+
         # Calculate coherence based on word repetition
         total_words = len(words)
         repeated_words = sum(1 for freq in word_freq.values() if freq > 1)
-        
+
         if total_words == 0:
             return 0.0
-        
+
         coherence = min(1.0, (repeated_words / total_words) * 5)  # Scale factor
         return round(coherence, 2)
 
-    def _calculate_quantitative_scores(self, transcript: str, metrics: ContentMetrics) -> FeedbackScore:
+    def _calculate_quantitative_scores(
+        self, transcript: str, metrics: ContentMetrics
+    ) -> FeedbackScore:
         """Calculate quantitative scores for different aspects"""
-        
+
         # Clarity score (based on sentence length, vocabulary diversity)
         clarity = 100 - min(100, (metrics.avg_sentence_length - 15) * 2)
         clarity = max(0, min(100, clarity))
-        
+
         # Engagement score (based on engagement signals, vocabulary diversity)
-        engagement = min(100, metrics.engagement_signals * 10 + metrics.vocabulary_diversity * 50)
-        
+        engagement = min(
+            100, metrics.engagement_signals * 10 + metrics.vocabulary_diversity * 50
+        )
+
         # Structure score (based on topic coherence, sentence count)
-        structure = min(100, metrics.topic_coherence * 100 + (metrics.sentence_count / 10))
-        
+        structure = min(
+            100, metrics.topic_coherence * 100 + (metrics.sentence_count / 10)
+        )
+
         # Energy score (based on engagement signals, speaking pace)
         energy = min(100, metrics.engagement_signals * 15 + (metrics.speaking_pace / 2))
-        
+
         # Professionalism score (based on reading level, vocabulary diversity)
         if metrics.reading_level in ["Standard", "Fairly Easy", "Easy"]:
             professionalism = 80 + metrics.vocabulary_diversity * 20
         else:
             professionalism = 60 + metrics.vocabulary_diversity * 20
         professionalism = max(0, min(100, professionalism))
-        
+
         # Overall score (weighted average)
-        overall = (clarity * 0.25 + engagement * 0.25 + structure * 0.2 + 
-                  energy * 0.15 + professionalism * 0.15)
-        
+        overall = (
+            clarity * 0.25
+            + engagement * 0.25
+            + structure * 0.2
+            + energy * 0.15
+            + professionalism * 0.15
+        )
+
         return FeedbackScore(
             clarity=round(clarity, 1),
             engagement=round(engagement, 1),
             structure=round(structure, 1),
             energy=round(energy, 1),
             professionalism=round(professionalism, 1),
-            overall=round(overall, 1)
+            overall=round(overall, 1),
         )
 
-    def _parse_enhanced_analysis_response(self, response_text: str, transcript: str, 
-                                        metrics: ContentMetrics) -> Dict:
+    def _parse_enhanced_analysis_response(
+        self, response_text: str, transcript: str, metrics: ContentMetrics
+    ) -> Dict:
         """Parse the AI response into structured feedback with enhanced parsing"""
         try:
             # Try to extract JSON from response
@@ -471,13 +520,15 @@ Provide expert analysis in this JSON format:
                 # Ensure all required fields exist with defaults
                 required_fields = {
                     "listener_feedback": "Analysis incomplete",
-                    "coaching_suggestions": ["Review the transcript for improvement opportunities"],
+                    "coaching_suggestions": [
+                        "Review the transcript for improvement opportunities"
+                    ],
                     "benchmark": "Standard analysis provided",
                     "confidence": 0.7,
                     "key_strengths": ["Content analysis completed"],
-                    "areas_for_improvement": ["General improvement areas identified"]
+                    "areas_for_improvement": ["General improvement areas identified"],
                 }
-                
+
                 for field, default in required_fields.items():
                     if field not in analysis:
                         analysis[field] = default
@@ -486,7 +537,7 @@ Provide expert analysis in this JSON format:
                 analysis["analysis_timestamp"] = datetime.now().isoformat()
                 analysis["analysis_version"] = "2.0"
                 analysis["transcript_length"] = len(transcript)
-                
+
                 return analysis
             else:
                 # Fallback parsing
@@ -506,21 +557,23 @@ Provide expert analysis in this JSON format:
             "coaching_suggestions": [
                 "Review the transcript for clarity improvements",
                 "Practice pacing and tone variation",
-                "Consider adding more engaging elements"
+                "Consider adding more engaging elements",
             ],
             "benchmark": "AI analysis provided",
             "confidence": 0.6,
             "key_strengths": ["Content analysis completed"],
             "areas_for_improvement": ["General improvement areas identified"],
             "analysis_timestamp": datetime.now().isoformat(),
-            "analysis_version": "2.0"
+            "analysis_version": "2.0",
         }
 
-    def _get_enhanced_fallback_feedback(self, transcript: str, analysis_depth: str) -> Dict:
+    def _get_enhanced_fallback_feedback(
+        self, transcript: str, analysis_depth: str
+    ) -> Dict:
         """Provide enhanced fallback feedback when API is not available"""
         metrics = self._calculate_content_metrics(transcript)
         scores = self._calculate_quantitative_scores(transcript, metrics)
-        
+
         # Enhanced word-count based feedback
         if metrics.word_count < 50:
             feedback = {
@@ -528,12 +581,16 @@ Provide expert analysis in this JSON format:
                 "coaching_suggestions": [
                     "Add more detail to your explanations",
                     "Include specific examples or stories",
-                    "Expand on key points with supporting information"
+                    "Expand on key points with supporting information",
                 ],
                 "benchmark": "Below average for content depth - aim for 100+ words for meaningful analysis",
                 "confidence": 0.8,
                 "key_strengths": ["Concise communication"],
-                "areas_for_improvement": ["Content depth", "Detail level", "Example inclusion"]
+                "areas_for_improvement": [
+                    "Content depth",
+                    "Detail level",
+                    "Example inclusion",
+                ],
             }
         elif metrics.word_count < 200:
             feedback = {
@@ -541,12 +598,16 @@ Provide expert analysis in this JSON format:
                 "coaching_suggestions": [
                     "Vary your tone and pace throughout",
                     "Include more engaging elements like questions",
-                    "Add transitions between topics"
+                    "Add transitions between topics",
                 ],
                 "benchmark": "Average for brief segments - good for focused topics",
                 "confidence": 0.7,
                 "key_strengths": ["Focused content", "Moderate depth"],
-                "areas_for_improvement": ["Pacing variation", "Engagement elements", "Topic transitions"]
+                "areas_for_improvement": [
+                    "Pacing variation",
+                    "Engagement elements",
+                    "Topic transitions",
+                ],
             }
         else:
             feedback = {
@@ -554,25 +615,30 @@ Provide expert analysis in this JSON format:
                 "coaching_suggestions": [
                     "Break up long segments with natural pauses",
                     "Add clear transitions between topics",
-                    "Include audience engagement checkpoints"
+                    "Include audience engagement checkpoints",
                 ],
                 "benchmark": "Above average for content depth - excellent for comprehensive topics",
                 "confidence": 0.8,
                 "key_strengths": ["Comprehensive coverage", "Detailed explanations"],
-                "areas_for_improvement": ["Segment management", "Transition clarity", "Audience interaction"]
+                "areas_for_improvement": [
+                    "Segment management",
+                    "Transition clarity",
+                    "Audience interaction",
+                ],
             }
-        
+
         # Add metrics and scores
         feedback["metrics"] = metrics.__dict__
         feedback["scores"] = scores.__dict__
         feedback["analysis_timestamp"] = datetime.now().isoformat()
         feedback["analysis_version"] = "2.0"
         feedback["analysis_depth"] = analysis_depth
-        
+
         return feedback
 
-    def get_specific_feedback(self, transcript: str, focus_area: str, 
-                            analysis_depth: str = "standard") -> Dict:
+    def get_specific_feedback(
+        self, transcript: str, focus_area: str, analysis_depth: str = "standard"
+    ) -> Dict:
         """
         Get feedback focused on a specific area with enhanced precision
 
@@ -586,7 +652,7 @@ Provide expert analysis in this JSON format:
             "engagement": "Focus on how engaging and interesting the content is, including audience connection, storytelling, and interactive elements",
             "structure": "Focus on the organization and flow of ideas, including logical progression, transitions, and content architecture",
             "energy": "Focus on vocal energy and enthusiasm, including pacing, tone variation, and dynamic delivery",
-            "professionalism": "Focus on professional delivery standards, including industry terminology, credibility markers, and presentation quality"
+            "professionalism": "Focus on professional delivery standards, including industry terminology, credibility markers, and presentation quality",
         }
 
         if focus_area not in focus_prompts:
@@ -594,54 +660,67 @@ Provide expert analysis in this JSON format:
 
         # Get comprehensive analysis first
         full_analysis = self.analyze(transcript, analysis_depth=analysis_depth)
-        
+
         # Enhance with focus-specific insights
         focus_analysis = {
             **full_analysis,
             "focus_area": focus_area,
             "focus_specific_suggestions": self._get_focus_specific_suggestions(
                 focus_area, full_analysis, full_analysis.get("metrics", {})
-            )
+            ),
         }
-        
+
         return focus_analysis
 
-    def _get_focus_specific_suggestions(self, focus_area: str, analysis: Dict, 
-                                      metrics: Dict) -> List[str]:
+    def _get_focus_specific_suggestions(
+        self, focus_area: str, analysis: Dict, metrics: Dict
+    ) -> List[str]:
         """Get suggestions specific to the focus area"""
         suggestions = []
-        
+
         if focus_area == "clarity":
             if metrics.get("avg_sentence_length", 0) > 20:
-                suggestions.append("Break down long sentences into shorter, clearer statements")
+                suggestions.append(
+                    "Break down long sentences into shorter, clearer statements"
+                )
             if metrics.get("vocabulary_diversity", 0) < 0.3:
-                suggestions.append("Vary your vocabulary to avoid repetition and improve clarity")
+                suggestions.append(
+                    "Vary your vocabulary to avoid repetition and improve clarity"
+                )
             suggestions.append("Use concrete examples to illustrate abstract concepts")
-            
+
         elif focus_area == "engagement":
             if metrics.get("engagement_signals", 0) < 2:
-                suggestions.append("Add more questions and exclamations to engage listeners")
-            suggestions.append("Include personal stories or anecdotes to connect with audience")
+                suggestions.append(
+                    "Add more questions and exclamations to engage listeners"
+                )
+            suggestions.append(
+                "Include personal stories or anecdotes to connect with audience"
+            )
             suggestions.append("Vary your tone and pace to maintain listener interest")
-            
+
         elif focus_area == "structure":
             if metrics.get("topic_coherence", 0) < 0.5:
                 suggestions.append("Organize content with clear topic transitions")
-            suggestions.append("Use signposting language to guide listeners through your content")
+            suggestions.append(
+                "Use signposting language to guide listeners through your content"
+            )
             suggestions.append("Create logical flow from introduction to conclusion")
-            
+
         elif focus_area == "energy":
             if metrics.get("speaking_pace", 0) < 120:
                 suggestions.append("Increase your speaking pace to maintain energy")
             suggestions.append("Vary your vocal pitch and volume for dynamic delivery")
             suggestions.append("Use pauses strategically to emphasize key points")
-            
+
         elif focus_area == "professionalism":
             if metrics.get("reading_level", "") in ["Very Easy", "Easy"]:
-                suggestions.append("Incorporate industry-specific terminology for credibility")
+                suggestions.append(
+                    "Incorporate industry-specific terminology for credibility"
+                )
             suggestions.append("Maintain consistent professional tone throughout")
             suggestions.append("Use data and research to support your points")
-        
+
         return suggestions
 
     def get_comparative_analysis(self, transcript1: str, transcript2: str) -> Dict:
@@ -650,40 +729,49 @@ Provide expert analysis in this JSON format:
         """
         analysis1 = self.analyze(transcript1, analysis_depth="comprehensive")
         analysis2 = self.analyze(transcript2, analysis_depth="comprehensive")
-        
+
         # Calculate improvement metrics
         scores1 = analysis1.get("scores", {})
         scores2 = analysis2.get("scores", {})
-        
+
         # Ensure scores are dictionaries
-        if hasattr(scores1, '__dict__'):
+        if hasattr(scores1, "__dict__"):
             scores1 = scores1.__dict__
-        if hasattr(scores2, '__dict__'):
+        if hasattr(scores2, "__dict__"):
             scores2 = scores2.__dict__
-        
+
         improvements = {}
-        for key in ["clarity", "engagement", "structure", "energy", "professionalism", "overall"]:
+        for key in [
+            "clarity",
+            "engagement",
+            "structure",
+            "energy",
+            "professionalism",
+            "overall",
+        ]:
             if key in scores1 and key in scores2:
                 improvement = scores2[key] - scores1[key]
                 improvements[key] = {
                     "before": scores1[key],
                     "after": scores2[key],
                     "improvement": improvement,
-                    "percentage_change": (improvement / scores1[key] * 100) if scores1[key] > 0 else 0
+                    "percentage_change": (
+                        (improvement / scores1[key] * 100) if scores1[key] > 0 else 0
+                    ),
                 }
-        
+
         return {
             "transcript_1_analysis": analysis1,
             "transcript_2_analysis": analysis2,
             "improvement_analysis": improvements,
             "comparison_timestamp": datetime.now().isoformat(),
-            "summary": self._generate_comparison_summary(improvements)
+            "summary": self._generate_comparison_summary(improvements),
         }
 
     def _generate_comparison_summary(self, improvements: Dict) -> str:
         """Generate a summary of improvements between two transcripts"""
         overall_improvement = improvements.get("overall", {}).get("improvement", 0)
-        
+
         if overall_improvement > 10:
             return "Significant improvement across all areas"
         elif overall_improvement > 5:
@@ -704,8 +792,16 @@ Provide expert analysis in this JSON format:
         return {
             "cache_size": len(self.analysis_cache),
             "cache_ttl": self.cache_ttl,
-            "oldest_entry": min([entry["timestamp"] for entry in self.analysis_cache.values()]) if self.analysis_cache else None,
-            "newest_entry": max([entry["timestamp"] for entry in self.analysis_cache.values()]) if self.analysis_cache else None
+            "oldest_entry": (
+                min([entry["timestamp"] for entry in self.analysis_cache.values()])
+                if self.analysis_cache
+                else None
+            ),
+            "newest_entry": (
+                max([entry["timestamp"] for entry in self.analysis_cache.values()])
+                if self.analysis_cache
+                else None
+            ),
         }
 
 

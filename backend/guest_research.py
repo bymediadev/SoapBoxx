@@ -47,6 +47,7 @@ except Exception:
     except Exception:
         SocialMediaScraper = None
 
+
 class GuestResearch:
     def __init__(
         self, openai_api_key: Optional[str] = None, google_cse_id: Optional[str] = None
@@ -259,19 +260,23 @@ class GuestResearch:
 
             # If we have meaningful results, return them
             if unique_results and not all(r.get("fallback") for r in unique_results):
-            return {
-                "web_results": unique_results[:10],  # Limit to top 10 results
-                "company_name": company_name,
-                "search_queries": queries,
+                return {
+                    "web_results": unique_results[:10],  # Limit to top 10 results
+                    "company_name": company_name,
+                    "search_queries": queries,
                 }
-            
+
             # If all results are fallbacks or no results, enhance with better fallbacks
-            print(f"🔄 Enhancing company info with better fallbacks for: {company_name}")
-            enhanced_fallbacks = self._get_fallback_web_results(f"{company_name} company information")
-            
+            print(
+                f"🔄 Enhancing company info with better fallbacks for: {company_name}"
+            )
+            enhanced_fallbacks = self._get_fallback_web_results(
+                f"{company_name} company information"
+            )
+
             # Combine any real results with enhanced fallbacks
             combined_results = unique_results + enhanced_fallbacks
-            
+
             # Remove duplicates and limit
             final_results = []
             seen_keys = set()
@@ -280,9 +285,11 @@ class GuestResearch:
                 if key not in seen_keys:
                     seen_keys.add(key)
                     final_results.append(result)
-            
+
             return {
-                "web_results": final_results[:12],  # Allow more results when using fallbacks
+                "web_results": final_results[
+                    :12
+                ],  # Allow more results when using fallbacks
                 "company_name": company_name,
                 "search_queries": queries,
                 "fallback_enhanced": True,
@@ -291,7 +298,9 @@ class GuestResearch:
         except Exception as e:
             print(f"Company info search error: {e}")
             # Return enhanced fallbacks even on error
-            fallback_results = self._get_fallback_web_results(f"{company_name} company information")
+            fallback_results = self._get_fallback_web_results(
+                f"{company_name} company information"
+            )
             return {
                 "web_results": fallback_results,
                 "company_name": company_name,
@@ -319,29 +328,52 @@ class GuestResearch:
                         linkedin_results.append(result)
 
             # If we have real LinkedIn results, return them
-            if linkedin_results and not all(r.get("fallback") for r in linkedin_results):
-            return linkedin_results[:15]  # Limit to top 15 LinkedIn results
-            
+            if linkedin_results and not all(
+                r.get("fallback") for r in linkedin_results
+            ):
+                return linkedin_results[:15]  # Limit to top 15 LinkedIn results
+
             # If all results are fallbacks or no results, enhance with professional fallbacks
-            print(f"🔄 Enhancing LinkedIn search with professional fallbacks for: {company_name}")
-            professional_fallbacks = self._get_fallback_web_results(f"{company_name} professional profiles")
-            
+            print(
+                f"🔄 Enhancing LinkedIn search with professional fallbacks for: {company_name}"
+            )
+            professional_fallbacks = self._get_fallback_web_results(
+                f"{company_name} professional profiles"
+            )
+
             # Filter for professional-related results
             professional_results = []
             for result in professional_fallbacks:
-                if any(term in result.get("title", "").lower() or term in result.get("snippet", "").lower() 
-                       for term in ["profile", "executive", "ceo", "founder", "professional", "linkedin"]):
+                if any(
+                    term in result.get("title", "").lower()
+                    or term in result.get("snippet", "").lower()
+                    for term in [
+                        "profile",
+                        "executive",
+                        "ceo",
+                        "founder",
+                        "professional",
+                        "linkedin",
+                    ]
+                ):
                     result["type"] = "professional_profile"
                     result["fallback"] = True
                     professional_results.append(result)
-            
+
             return professional_results[:15]
 
         except Exception as e:
             print(f"LinkedIn search error: {e}")
             # Return professional fallbacks even on error
-            professional_fallbacks = self._get_fallback_web_results(f"{company_name} professional profiles")
-            return [r for r in professional_fallbacks if "profile" in r.get("title", "").lower() or "executive" in r.get("title", "").lower()][:10]
+            professional_fallbacks = self._get_fallback_web_results(
+                f"{company_name} professional profiles"
+            )
+            return [
+                r
+                for r in professional_fallbacks
+                if "profile" in r.get("title", "").lower()
+                or "executive" in r.get("title", "").lower()
+            ][:10]
 
     def _search_executives(self, company_name: str) -> List[Dict]:
         """Search for executive profiles and leadership information"""
@@ -363,30 +395,56 @@ class GuestResearch:
                     executive_results.append(result)
 
             # If we have real executive results, return them
-            if executive_results and not all(r.get("fallback") for r in executive_results):
-            return executive_results[:10]  # Limit to top 10 executive results
-            
+            if executive_results and not all(
+                r.get("fallback") for r in executive_results
+            ):
+                return executive_results[:10]  # Limit to top 10 executive results
+
             # If all results are fallbacks or no results, enhance with leadership fallbacks
-            print(f"🔄 Enhancing executive search with leadership fallbacks for: {company_name}")
-            leadership_fallbacks = self._get_fallback_web_results(f"{company_name} executive leadership")
-            
+            print(
+                f"🔄 Enhancing executive search with leadership fallbacks for: {company_name}"
+            )
+            leadership_fallbacks = self._get_fallback_web_results(
+                f"{company_name} executive leadership"
+            )
+
             # Filter for leadership-related results
             leadership_results = []
             for result in leadership_fallbacks:
-                if any(term in result.get("title", "").lower() or term in result.get("snippet", "").lower() 
-                       for term in ["ceo", "founder", "executive", "leadership", "director", "president", "manager"]):
+                if any(
+                    term in result.get("title", "").lower()
+                    or term in result.get("snippet", "").lower()
+                    for term in [
+                        "ceo",
+                        "founder",
+                        "executive",
+                        "leadership",
+                        "director",
+                        "president",
+                        "manager",
+                    ]
+                ):
                     result["type"] = "executive_info"
                     result["fallback"] = True
                     leadership_results.append(result)
-            
+
             return leadership_results[:10]
 
         except Exception as e:
             print(f"Executive search error: {e}")
             # Return leadership fallbacks even on error
-            leadership_fallbacks = self._get_fallback_web_results(f"{company_name} executive leadership")
-            return [r for r in leadership_fallbacks if any(term in r.get("title", "").lower() or term in r.get("snippet", "").lower() 
-                                                         for term in ["ceo", "founder", "executive", "leadership"])][:8]
+            leadership_fallbacks = self._get_fallback_web_results(
+                f"{company_name} executive leadership"
+            )
+            return [
+                r
+                for r in leadership_fallbacks
+                if any(
+                    term in r.get("title", "").lower()
+                    or term in r.get("snippet", "").lower()
+                    for term in ["ceo", "founder", "executive", "leadership"]
+                )
+            ][:8]
 
     def _search_company_news(self, company_name: str) -> List[Dict]:
         """Search for recent company news and press releases"""
@@ -413,32 +471,53 @@ class GuestResearch:
                     news_results, f"{company_name} news"
                 )
             return news_results[:10]  # Limit to top 10 news results
-            
+
             # If all results are fallbacks or no results, enhance with news-specific fallbacks
-            print(f"🔄 Enhancing news search with industry-specific fallbacks for: {company_name}")
-            news_fallbacks = self._get_fallback_web_results(f"{company_name} news developments")
-            
+            print(
+                f"🔄 Enhancing news search with industry-specific fallbacks for: {company_name}"
+            )
+            news_fallbacks = self._get_fallback_web_results(
+                f"{company_name} news developments"
+            )
+
             # Filter for news-related results and add industry context
             enhanced_news_results = []
             for result in news_fallbacks:
-                if any(term in result.get("title", "").lower() or term in result.get("snippet", "").lower() 
-                       for term in ["news", "press", "announcement", "development", "update", "release"]):
+                if any(
+                    term in result.get("title", "").lower()
+                    or term in result.get("snippet", "").lower()
+                    for term in [
+                        "news",
+                        "press",
+                        "announcement",
+                        "development",
+                        "update",
+                        "release",
+                    ]
+                ):
                     result["type"] = "news"
                     result["fallback"] = True
                     enhanced_news_results.append(result)
-            
+
             # Add industry-specific news context if we don't have enough results
             if len(enhanced_news_results) < 5:
                 industry_context = self._get_industry_news_context(company_name)
                 enhanced_news_results.extend(industry_context)
-            
+
             return enhanced_news_results[:12]  # Allow more results when using fallbacks
 
         except Exception as e:
             print(f"Company news search error: {e}")
             # Return news fallbacks even on error
-            news_fallbacks = self._get_fallback_web_results(f"{company_name} news developments")
-            return [r for r in news_fallbacks if "news" in r.get("title", "").lower() or "press" in r.get("title", "").lower()][:8]
+            news_fallbacks = self._get_fallback_web_results(
+                f"{company_name} news developments"
+            )
+            return [
+                r
+                for r in news_fallbacks
+                if "news" in r.get("title", "").lower()
+                or "press" in r.get("title", "").lower()
+            ][:8]
 
     def _get_industry_news_context(self, company_name: str) -> List[Dict]:
         """Provide industry-specific news context when company news is unavailable"""
@@ -446,8 +525,10 @@ class GuestResearch:
             # Analyze company name for industry hints
             company_lower = company_name.lower()
             industry_context = []
-            
-            if any(term in company_lower for term in ["rec", "records", "music", "audio"]):
+
+            if any(
+                term in company_lower for term in ["rec", "records", "music", "audio"]
+            ):
                 # Music industry context
                 industry_context = [
                     {
@@ -467,9 +548,12 @@ class GuestResearch:
                         "type": "news",
                         "fallback": True,
                         "source": "recording_industry_context",
-                    }
+                    },
                 ]
-            elif any(term in company_lower for term in ["tech", "software", "ai", "digital", "app"]):
+            elif any(
+                term in company_lower
+                for term in ["tech", "software", "ai", "digital", "app"]
+            ):
                 # Technology industry context
                 industry_context = [
                     {
@@ -489,9 +573,12 @@ class GuestResearch:
                         "type": "news",
                         "fallback": True,
                         "source": "software_industry_context",
-                    }
+                    },
                 ]
-            elif any(term in company_lower for term in ["consulting", "advisory", "services", "solutions"]):
+            elif any(
+                term in company_lower
+                for term in ["consulting", "advisory", "services", "solutions"]
+            ):
                 # Professional services context
                 industry_context = [
                     {
@@ -511,7 +598,7 @@ class GuestResearch:
                         "type": "news",
                         "fallback": True,
                         "source": "advisory_industry_context",
-                    }
+                    },
                 ]
             else:
                 # General business context
@@ -533,11 +620,11 @@ class GuestResearch:
                         "type": "news",
                         "fallback": True,
                         "source": "market_development_context",
-                    }
+                    },
                 ]
-            
+
             return industry_context
-            
+
         except Exception as e:
             print(f"Industry context generation failed: {e}")
             return []
@@ -551,27 +638,31 @@ class GuestResearch:
             fallback_heavy = False
             total_results = 0
             fallback_count = 0
-            
+
             for section in ["company_info", "linkedin_profiles", "news"]:
                 if search_results.get(section):
                     if isinstance(search_results[section], list):
                         section_results = search_results[section]
                     else:
                         section_results = search_results[section].get("web_results", [])
-                    
+
                     total_results += len(section_results)
-                    fallback_count += sum(1 for r in section_results if r.get("fallback"))
-            
+                    fallback_count += sum(
+                        1 for r in section_results if r.get("fallback")
+                    )
+
             if total_results > 0 and fallback_count / total_results > 0.7:
                 fallback_heavy = True
                 print(f"🔄 Generating fallback-enhanced summary for {company_name}")
 
             # Prepare context for AI summary
             context_parts = [f"Company: {company_name}"]
-            
+
             # Add fallback context if we're using many fallbacks
             if fallback_heavy:
-                context_parts.append("Note: This summary is based on enhanced fallback research due to limited web search availability.")
+                context_parts.append(
+                    "Note: This summary is based on enhanced fallback research due to limited web search availability."
+                )
 
             if search_results.get("company_info", {}).get("web_results"):
                 context_parts.append("Company Information:")
@@ -614,7 +705,7 @@ Please provide a summary that includes:
 Format the response as a well-structured business summary, clearly indicating when information is based on industry analysis rather than specific company data.
 """
             else:
-            summary_prompt = f"""
+                summary_prompt = f"""
 Based on the following search results for {company_name}, provide a comprehensive business summary:
 
 {context}
@@ -829,7 +920,7 @@ Information about {company_name}'s notable achievements or challenges is not cur
                                     "source": "wikipedia",
                                 }
                             )
-            
+
             # If no results from open search, try page content search
             if not results:
                 wiki_content_resp = requests.get(
@@ -850,7 +941,10 @@ Information about {company_name}'s notable achievements or challenges is not cur
                             results.append(
                                 {
                                     "title": item.get("title", query),
-                                    "snippet": item.get("snippet", "").replace("<span class=\"searchmatch\">", "").replace("</span>", "")[:200] + "...",
+                                    "snippet": item.get("snippet", "")
+                                    .replace('<span class="searchmatch">', "")
+                                    .replace("</span>", "")[:200]
+                                    + "...",
                                     "link": f"https://en.wikipedia.org/wiki/{item.get('title', '').replace(' ', '_')}",
                                     "displayLink": "wikipedia.org",
                                     "fallback": True,
@@ -866,32 +960,42 @@ Information about {company_name}'s notable achievements or challenges is not cur
             company_terms = query.lower().split()
             if "rec" in company_terms or "records" in company_terms:
                 # This looks like a record company
-                results.append({
-                    "title": f"{query} - Music Industry Company",
-                    "snippet": f"{query} appears to be a music recording company or label. Music industry companies typically focus on artist development, recording, and music distribution.",
-                "link": "",
-                    "displayLink": "industry_analysis",
-                "fallback": True,
-                    "source": "industry_knowledge",
-                })
-            elif any(term in company_terms for term in ["tech", "software", "ai", "digital"]):
-                results.append({
-                    "title": f"{query} - Technology Company",
-                    "snippet": f"{query} appears to be a technology company. Tech companies typically focus on software development, AI, or digital services.",
-                    "link": "",
-                    "displayLink": "industry_analysis",
-                    "fallback": True,
-                    "source": "industry_knowledge",
-                })
-            elif any(term in company_terms for term in ["consulting", "advisory", "services"]):
-                results.append({
-                    "title": f"{query} - Professional Services",
-                    "snippet": f"{query} appears to be a professional services company, likely providing consulting, advisory, or specialized business services.",
-                    "link": "",
-                    "displayLink": "industry_analysis",
-                    "fallback": True,
-                    "source": "industry_knowledge",
-                })
+                results.append(
+                    {
+                        "title": f"{query} - Music Industry Company",
+                        "snippet": f"{query} appears to be a music recording company or label. Music industry companies typically focus on artist development, recording, and music distribution.",
+                        "link": "",
+                        "displayLink": "industry_analysis",
+                        "fallback": True,
+                        "source": "industry_knowledge",
+                    }
+                )
+            elif any(
+                term in company_terms for term in ["tech", "software", "ai", "digital"]
+            ):
+                results.append(
+                    {
+                        "title": f"{query} - Technology Company",
+                        "snippet": f"{query} appears to be a technology company. Tech companies typically focus on software development, AI, or digital services.",
+                        "link": "",
+                        "displayLink": "industry_analysis",
+                        "fallback": True,
+                        "source": "industry_knowledge",
+                    }
+                )
+            elif any(
+                term in company_terms for term in ["consulting", "advisory", "services"]
+            ):
+                results.append(
+                    {
+                        "title": f"{query} - Professional Services",
+                        "snippet": f"{query} appears to be a professional services company, likely providing consulting, advisory, or specialized business services.",
+                        "link": "",
+                        "displayLink": "industry_analysis",
+                        "fallback": True,
+                        "source": "industry_knowledge",
+                    }
+                )
         except Exception as e:
             print(f"Industry analysis fallback failed: {e}")
 
@@ -899,7 +1003,7 @@ Information about {company_name}'s notable achievements or challenges is not cur
         try:
             if SocialMediaScraper is not None:
                 sm = SocialMediaScraper()
-                
+
                 # Twitter trends
                 try:
                     tw = sm.get_twitter_trends(query, limit=3)
@@ -908,7 +1012,11 @@ Information about {company_name}'s notable achievements or challenges is not cur
                             results.append(
                                 {
                                     "title": f"Twitter: @{tweet.get('username','user')}",
-                                    "snippet": tweet.get("content", "")[:150] + "..." if len(tweet.get("content", "")) > 150 else tweet.get("content", ""),
+                                    "snippet": (
+                                        tweet.get("content", "")[:150] + "..."
+                                        if len(tweet.get("content", "")) > 150
+                                        else tweet.get("content", "")
+                                    ),
                                     "link": tweet.get("url", ""),
                                     "displayLink": "twitter.com",
                                     "fallback": True,
@@ -917,7 +1025,7 @@ Information about {company_name}'s notable achievements or challenges is not cur
                             )
                 except Exception as e:
                     print(f"Twitter fallback failed: {e}")
-                
+
                 # Reddit trends
                 try:
                     rd = sm.get_reddit_trends(query, limit=3)
@@ -926,7 +1034,11 @@ Information about {company_name}'s notable achievements or challenges is not cur
                             results.append(
                                 {
                                     "title": f"Reddit: {post.get('title', 'Discussion')}",
-                                    "snippet": post.get("content", "")[:150] + "..." if len(post.get("content", "")) > 150 else post.get("content", ""),
+                                    "snippet": (
+                                        post.get("content", "")[:150] + "..."
+                                        if len(post.get("content", "")) > 150
+                                        else post.get("content", "")
+                                    ),
                                     "link": post.get("url", ""),
                                     "displayLink": "reddit.com",
                                     "fallback": True,
@@ -946,17 +1058,19 @@ Information about {company_name}'s notable achievements or challenges is not cur
                 f"{query} business information",
                 f"{query} about us",
             ]
-            
+
             for bq in business_queries:
                 # Simulate finding business directory info
-                results.append({
-                    "title": f"{query} - Company Profile",
-                    "snippet": f"Business information for {query}. Company details, contact information, and business activities may be available through business directories or company websites.",
-                    "link": "",
-                    "displayLink": "business_directory",
-                    "fallback": True,
-                    "source": "business_directory",
-                })
+                results.append(
+                    {
+                        "title": f"{query} - Company Profile",
+                        "snippet": f"Business information for {query}. Company details, contact information, and business activities may be available through business directories or company websites.",
+                        "link": "",
+                        "displayLink": "business_directory",
+                        "fallback": True,
+                        "source": "business_directory",
+                    }
+                )
                 break  # Just add one business directory result
         except Exception as e:
             print(f"Business directory fallback failed: {e}")
@@ -965,44 +1079,52 @@ Information about {company_name}'s notable achievements or challenges is not cur
         if not results or all(len(r.get("snippet", "")) < 30 for r in results):
             # Provide more specific fallback based on query type
             if "news" in query.lower():
-                results.append({
-                    "title": f"Recent News for {query}",
-                    "snippet": f"Searching for recent news, press releases, and announcements related to {query}. News sources may include industry publications, press releases, and business updates.",
-                    "link": "",
-                    "displayLink": "news_search",
-                    "fallback": True,
-                    "source": "news_fallback",
-                })
+                results.append(
+                    {
+                        "title": f"Recent News for {query}",
+                        "snippet": f"Searching for recent news, press releases, and announcements related to {query}. News sources may include industry publications, press releases, and business updates.",
+                        "link": "",
+                        "displayLink": "news_search",
+                        "fallback": True,
+                        "source": "news_fallback",
+                    }
+                )
             elif "linkedin" in query.lower() or "executive" in query.lower():
-                results.append({
-                    "title": f"Professional Profiles for {query}",
-                    "snippet": f"Searching for professional profiles, executive information, and leadership details for {query}. This may include LinkedIn profiles, company leadership pages, and professional networks.",
-                    "link": "",
-                    "displayLink": "professional_search",
-                    "fallback": True,
-                    "source": "professional_fallback",
-                })
+                results.append(
+                    {
+                        "title": f"Professional Profiles for {query}",
+                        "snippet": f"Searching for professional profiles, executive information, and leadership details for {query}. This may include LinkedIn profiles, company leadership pages, and professional networks.",
+                        "link": "",
+                        "displayLink": "professional_search",
+                        "fallback": True,
+                        "source": "professional_fallback",
+                    }
+                )
             else:
-                results.append({
-                    "title": f"Company Research for {query}",
-                    "snippet": f"Comprehensive business research for {query} including company information, industry analysis, recent developments, and professional profiles. Research sources may include business databases, news outlets, and professional networks.",
-                    "link": "",
-                    "displayLink": "business_research",
-                    "fallback": True,
-                    "source": "comprehensive_fallback",
-                })
+                results.append(
+                    {
+                        "title": f"Company Research for {query}",
+                        "snippet": f"Comprehensive business research for {query} including company information, industry analysis, recent developments, and professional profiles. Research sources may include business databases, news outlets, and professional networks.",
+                        "link": "",
+                        "displayLink": "business_research",
+                        "fallback": True,
+                        "source": "comprehensive_fallback",
+                    }
+                )
 
         print(f"✅ Generated {len(results)} enhanced fallback results for: {query}")
         return results[:12]  # Allow more fallback results
 
-    def _augment_with_fallbacks_if_needed(self, items: List[Dict], query: str) -> List[Dict]:
+    def _augment_with_fallbacks_if_needed(
+        self, items: List[Dict], query: str
+    ) -> List[Dict]:
         """If items are empty or only placeholders, add richer fallback items and dedupe by link."""
         if not items or all(it.get("fallback") for it in items):
             print(f"🔄 Augmenting results with enhanced fallbacks for: {query}")
             extra = self._get_fallback_web_results(query)
             seen = set()
             merged: List[Dict] = []
-            
+
             # First add any non-fallback items
             for it in items:
                 if not it.get("fallback"):
@@ -1011,7 +1133,7 @@ Information about {company_name}'s notable achievements or challenges is not cur
                     if key not in seen:
                         seen.add(key)
                         merged.append(it)
-            
+
             # Then add enhanced fallback items
             for it in extra:
                 link = it.get("link")
@@ -1019,7 +1141,7 @@ Information about {company_name}'s notable achievements or challenges is not cur
                 if key not in seen:
                     seen.add(key)
                     merged.append(it)
-            
+
             # If we still don't have meaningful results, add industry context
             if not merged or all(len(it.get("snippet", "")) < 30 for it in merged):
                 print(f"🔄 Adding industry context for: {query}")
@@ -1031,7 +1153,7 @@ Information about {company_name}'s notable achievements or challenges is not cur
                     if key not in seen:
                         seen.add(key)
                         merged.append(ctx)
-            
+
             return merged
         return items
 

@@ -65,14 +65,20 @@ class Config:
                 "cache_ttl": 3600,
                 "enable_quantitative_scoring": True,
                 "enable_comparative_analysis": True,
-                "default_focus_areas": ["clarity", "engagement", "structure", "energy", "professionalism"],
+                "default_focus_areas": [
+                    "clarity",
+                    "engagement",
+                    "structure",
+                    "energy",
+                    "professionalism",
+                ],
                 "scoring_weights": {
                     "clarity": 0.25,
                     "engagement": 0.25,
                     "structure": 0.2,
                     "energy": 0.15,
-                    "professionalism": 0.15
-                }
+                    "professionalism": 0.15,
+                },
             },
             "research_settings": {
                 "model": "gpt-3.5-turbo",
