@@ -46,6 +46,7 @@ jobs:
       run: |
         if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
         if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
+        if (Test-Path "*.spec") { Remove-Item -Force "*.spec" }
         
     - name: Create PyInstaller spec file
       run: |
@@ -99,6 +100,7 @@ jobs:
     - name: Clean previous build
       run: |
         rm -rf dist/ build/
+        rm -f *.spec
         
     - name: Create PyInstaller spec file
       run: |
@@ -151,6 +153,7 @@ jobs:
     - name: Clean previous build
       run: |
         rm -rf dist/ build/
+        rm -f *.spec
         
     - name: Create PyInstaller spec file
       run: |
