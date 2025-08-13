@@ -530,14 +530,6 @@ class MainWindow(QMainWindow):
                     if not hasattr(self, "_tab_creators"):
                         self._tab_creators = {}
                     self._tab_creators[tab_name] = tab_creator
-                
-                # Initialize bulletproof tab loader if available
-                if not hasattr(self, 'tab_loader') and BULLETPROOF_LOADER_AVAILABLE:
-                    self.tab_loader = create_bulletproof_tab_loader(self.tab_widget)
-                    print("✅ Bulletproof tab loader initialized")
-                elif not hasattr(self, 'tab_loader'):
-                    self.tab_loader = None
-                    print("⚠️  Using fallback tab loading")
 
                 except Exception as e:
                     error_msg = (
@@ -546,6 +538,14 @@ class MainWindow(QMainWindow):
                     self._track_error("TabPlaceholderError", error_msg)
                     self._add_placeholder_tab(tab_name, f"Error loading {tab_name} tab")
                     self._tabs_loaded[tab_name] = False
+
+            # Initialize bulletproof tab loader if available (after all tabs are created)
+            if not hasattr(self, 'tab_loader') and BULLETPROOF_LOADER_AVAILABLE:
+                self.tab_loader = create_bulletproof_tab_loader(self.tab_widget)
+                print("✅ Bulletproof tab loader initialized")
+            elif not hasattr(self, 'tab_loader'):
+                self.tab_loader = None
+                print("⚠️  Using fallback tab loading")
 
             # Connect tab change signal to lazy load tabs
             self.tab_widget.currentChanged.connect(self._on_tab_changed)
@@ -591,9 +591,14 @@ class MainWindow(QMainWindow):
                 self.tab_widget.blockSignals(True)
                 actual_tab = tab_creator()
                 
+                # Debug: Check what we got
+                print(f"🔍 Debug: {tab_name} tab type: {type(actual_tab)}")
+                print(f"🔍 Debug: {tab_name} is QWidget: {isinstance(actual_tab, QWidget) if actual_tab else 'None'}")
+                
                 # Use bulletproof tab loader if available, otherwise fallback
                 if self.tab_loader:
-                    # Use the bulletproof loader for guaranteed success
+                    # Remove the placeholder tab first, then insert the real tab
+                    self.tab_widget.removeTab(index)
                     success = self.tab_loader.safe_insert_tab(index, actual_tab, tab_name)
                     if success:
                         self._tabs_loaded[tab_name] = True
@@ -602,6 +607,10 @@ class MainWindow(QMainWindow):
                     else:
                         print(f"❌ Bulletproof loader failed for {tab_name}")
                         self._tabs_loaded[tab_name] = False
+                        # Re-add placeholder if bulletproof loader fails
+                        placeholder = self._create_placeholder_tab(tab_name, f"Failed to load {tab_name} tab")
+                        if placeholder:
+                            self.tab_widget.insertTab(index, placeholder, tab_name)
                 else:
                     # Fallback to manual QWidget validation
                     if actual_tab and isinstance(actual_tab, QWidget):
@@ -682,16 +691,30 @@ class MainWindow(QMainWindow):
     def _create_scoop_tab(self):
         """Create Scoop tab with error handling"""
         try:
-            return ScoopTab()
+            print("🔧 MainWindow: Creating Scoop tab...")
+            # Use the local placeholder class defined in the import section
+            tab = ScoopTab()
+            print("✅ MainWindow: Scoop tab created successfully")
+            return tab
         except Exception as e:
+            print(f"❌ MainWindow: Failed to create Scoop tab: {e}")
+            import traceback
+            traceback.print_exc()
             self._track_error("ScoopTabError", f"Failed to create Scoop tab: {str(e)}")
-            return None
+            # Return a placeholder tab instead of None
+            return self._create_placeholder_tab("Scoop", f"Failed to load: {str(e)}")
 
     def _create_reverb_tab(self):
         """Create Reverb tab with error handling"""
         try:
-            return ReverbTab()
+            print("🔧 MainWindow: Creating Reverb tab...")
+            tab = ReverbTab()
+            print("✅ MainWindow: Reverb tab created successfully")
+            return tab
         except Exception as e:
+            print(f"❌ MainWindow: Failed to create Reverb tab: {e}")
+            import traceback
+            traceback.print_exc()
             self._track_error(
                 "ReverbTabError", f"Failed to create Reverb tab: {str(e)}"
             )

@@ -1,3 +1,12 @@
+#!/usr/bin/env python3
+"""
+SoapBoxx Tab - Demo Version
+===========================
+
+This is a demo version of the SoapBoxx tab that shows the real UI layout
+but with mock functionality for demonstration purposes.
+"""
+
 import json
 import os
 import sys
@@ -2402,10 +2411,10 @@ class SoapBoxxTab(QWidget):
             # Simple keyword-based matcher (extendable)
             keywords_to_questions = {
                 "sponsor": "Can you tell us about your current sponsors and partnerships?",
-                "launch": "What’s the launch timeline and what milestones are you targeting?",
-                "roadmap": "What’s on your product roadmap over the next quarter?",
+                "launch": "What's the launch timeline and what milestones are you targeting?",
+                "roadmap": "What's on your product roadmap over the next quarter?",
                 "growth": "What growth channels are working best right now?",
-                "challenge": "What’s been the hardest challenge recently and how did you handle it?",
+                "challenge": "What's been the hardest challenge recently and how did you handle it?",
                 "audience": "Who is your ideal audience and how do you engage them?",
                 "revenue": "What are your main revenue streams and how are they evolving?",
                 "hiring": "Are you hiring? What roles are most important right now?",
