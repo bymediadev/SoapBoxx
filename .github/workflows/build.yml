@@ -170,7 +170,7 @@ jobs:
         
     - name: Build Linux executable
       run: |
-        python -m PyInstaller SoapBoxx.spec
+        python -m PyInstaller -y SoapBoxx.spec
         
     - name: Check file size
       run: |
