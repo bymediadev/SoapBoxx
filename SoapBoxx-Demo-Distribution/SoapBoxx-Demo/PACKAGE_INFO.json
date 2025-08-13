@@ -1,0 +1,10 @@
+{
+  "package_name": "SoapBoxx-Demo",
+  "description": "AI-Powered Podcast Production Studio - Demo Version",
+  "author": "SoapBoxx Team",
+  "license": "Same as main SoapBoxx project",
+  "homepage": "https://github.com/yourusername/SoapBoxx",
+  "demo_features": "Offline-capable with mock data and local analysis",
+  "upgrade_path": "Switch to main branch for full functionality",
+  "support": "Check documentation and test scripts for help"
+}

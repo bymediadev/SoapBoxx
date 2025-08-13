@@ -1,0 +1,11 @@
+Welcome to the SoapBoxx Demo Podcast!
+
+This is a sample transcript to help you get started with content analysis. 
+You can copy this text into the SoapBoxx tab and analyze it to see how 
+the feedback engine works.
+
+The demo version provides local analysis without needing external API keys, 
+making it perfect for learning and testing. Try different analysis depths 
+from Basic to Expert to see varying levels of detail.
+
+Remember, this is a demo - all features work offline with sample data!

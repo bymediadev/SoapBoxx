@@ -1,0 +1,12 @@
+# SoapBoxx Demo - Minimal Dependencies
+# These are the minimum packages needed to run the demo
+
+PyQt6>=6.4.0
+numpy>=1.21.0
+requests>=2.25.0
+python-dotenv>=0.19.0
+
+# Optional packages for enhanced experience
+# pyaudio>=0.2.11  # For microphone support
+# azure-cognitiveservices-speech>=1.25.0  # For Azure Speech
+# pyttsx3>=2.90  # For local TTS
