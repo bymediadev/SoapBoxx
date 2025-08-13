@@ -39,26 +39,65 @@ except ImportError:
         print(f"Warning: Some frontend modules not available: {e}")
 
         # Create placeholder classes for missing modules
-        class BatchProcessorDialog:
-            pass
+        # Import QWidget for placeholder classes
+        from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
+        from PyQt6.QtCore import Qt
+        
+        class BatchProcessorDialog(QWidget):
+            def __init__(self, parent=None):
+                super().__init__(parent)
+                self.setLayout(QVBoxLayout())
+                label = QLabel("Batch Processor (Demo Mode)")
+                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.layout().addWidget(label)
 
-        class ExportManager:
-            pass
+        class ExportManager(QWidget):
+            def __init__(self, parent=None):
+                super().__init__(parent)
+                self.setLayout(QVBoxLayout())
+                label = QLabel("Export Manager (Demo Mode)")
+                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.layout().addWidget(label)
 
-        class ShortcutHandler:
-            pass
+        class ShortcutHandler(QWidget):
+            def __init__(self, parent=None):
+                super().__init__(parent)
+                self.setLayout(QVBoxLayout())
+                label = QLabel("Shortcut Handler (Demo Mode)")
+                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.layout().addWidget(label)
 
-        class ReverbTab:
-            pass
+        class ReverbTab(QWidget):
+            def __init__(self, parent=None):
+                super().__init__(parent)
+                self.setLayout(QVBoxLayout())
+                label = QLabel("Reverb Tab (Demo Mode)")
+                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.layout().addWidget(label)
 
-        class ScoopTab:
-            pass
+        class ScoopTab(QWidget):
+            def __init__(self, parent=None):
+                super().__init__(parent)
+                self.setLayout(QVBoxLayout())
+                label = QLabel("Scoop Tab (Demo Mode)")
+                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.layout().addWidget(label)
 
-        class SoapBoxxTab:
-            pass
+        class SoapBoxxTab(QWidget):
+            def __init__(self, parent=None):
+                super().__init__(parent)
+                self.setLayout(QVBoxLayout())
+                label = QLabel("SoapBoxx Tab (Demo Mode)")
+                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.layout().addWidget(label)
 
-        class ThemeManager:
-            pass
+        class ThemeManager(QWidget):
+            def __init__(self, parent=None):
+                super().__init__(parent)
+                self.setLayout(QVBoxLayout())
+                label = QLabel("Theme Manager (Demo Mode)")
+                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.layout().addWidget(label)
 
 
 from PyQt6.QtCore import QDate, Qt, QTime, QTimer
@@ -72,6 +111,17 @@ from PyQt6.QtWidgets import (QApplication, QComboBox, QDateEdit, QDialog,
                              QVBoxLayout, QWidget)
 
 # (imports moved into try/except above for dual compatibility)
+
+# BaseTab class to enforce QWidget contract
+class BaseTab(QWidget):
+    """Base class for all tabs - ensures QWidget inheritance"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setup_ui()
+    
+    def setup_ui(self):
+        """Override this method to set up the tab's UI"""
+        pass
 
 
 class ModernCard(QFrame):
@@ -523,16 +573,25 @@ class MainWindow(QMainWindow):
             try:
                 self.tab_widget.blockSignals(True)
                 actual_tab = tab_creator()
-                if actual_tab:
+                
+                # ✅ Guarantee QWidget type before insert - PyQt6 safety
+                if actual_tab and isinstance(actual_tab, QWidget):
                     # Replace placeholder with actual tab
                     self.tab_widget.removeTab(index)
                     self.tab_widget.insertTab(index, actual_tab, tab_name)
                     self._tabs_loaded[tab_name] = True
                     self.tab_widget.setCurrentIndex(index)
-                    print(f"{tab_name} tab loaded successfully")
+                    print(f"✅ {tab_name} tab loaded successfully")
                 else:
-                    print(f"Failed to create {tab_name} tab")
+                    print(f"❌ Failed to create {tab_name} tab - invalid widget type: {type(actual_tab)}")
                     self._tabs_loaded[tab_name] = False
+                    
+                    # Create a placeholder tab for failed tabs
+                    placeholder = self._create_placeholder_tab(tab_name, f"Failed to load {tab_name} tab")
+                    if placeholder:
+                        self.tab_widget.removeTab(index)
+                        self.tab_widget.insertTab(index, placeholder, tab_name)
+                        print(f"✅ {tab_name} placeholder tab created")
             finally:
                 self.tab_widget.blockSignals(False)
                 self._is_switching_tab = False
@@ -607,7 +666,8 @@ class MainWindow(QMainWindow):
             self._track_error(
                 "ReverbTabError", f"Failed to create Reverb tab: {str(e)}"
             )
-            return None
+            # Return a placeholder tab instead of None
+            return self._create_placeholder_tab("Reverb", f"Failed to load: {str(e)}")
 
     def _add_placeholder_tab(self, tab_name: str, message: str):
         """Add placeholder tab when actual tab fails to load"""
