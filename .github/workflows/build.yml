@@ -199,6 +199,18 @@ jobs:
           ### Windows
           - **SoapBoxx.exe** - Standalone executable (no installation required)
           
+          ## ⚠️ Windows Security Note
+          
+          **If you get permission errors on Windows:**
+          1. **Right-click** the downloaded `SoapBoxx.exe`
+          2. **Select "Properties"**
+          3. **Check "Unblock"** at the bottom (if present)
+          4. **Click "OK"**
+          5. **Right-click** the file again
+          6. **Select "Run as administrator"** (first time only)
+          
+          This is normal for executables downloaded from the internet on Windows.
+          
           ### macOS
           - **SoapBoxx** - Native macOS application
           
