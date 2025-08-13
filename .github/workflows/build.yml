@@ -163,11 +163,16 @@ jobs:
         
     - name: Check file size
       run: |
-        size=$(stat -c%s "dist/SoapBoxx")
-        sizeMB=$(echo "scale=2; $size/1024/1024" | bc)
-        echo "Linux build size: $sizeMB MB"
-        if [ $size -gt 2147483648 ]; then
-          echo "Warning: File size exceeds 2GB limit"
+        if [ -f "dist/SoapBoxx" ]; then
+          size=$(stat -c%s "dist/SoapBoxx")
+          sizeMB=$(echo "scale=2; $size/1024/1024" | bc)
+          echo "Linux build size: $sizeMB MB"
+          if [ $size -gt 2147483648 ]; then
+            echo "Warning: File size exceeds 2GB limit"
+          fi
+        else
+          echo "ERROR: Executable not found - build failed"
+          exit 1
         fi
         
     - name: Upload Linux artifact
