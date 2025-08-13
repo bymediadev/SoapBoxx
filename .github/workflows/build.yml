@@ -42,6 +42,11 @@ jobs:
       run: |
         pip install pyaudio
         
+    - name: Clean previous build
+      run: |
+        if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
+        if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
+        
     - name: Create PyInstaller spec file
       run: |
         echo "Creating PyInstaller spec file..."
@@ -91,10 +96,14 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
         
+    - name: Clean previous build
+      run: |
+        rm -rf dist/ build/
+        
     - name: Create PyInstaller spec file
       run: |
         echo "Creating PyInstaller spec file..."
-        python -m PyInstaller --onefile --windowed --name SoapBoxx --add-data "backend:backend" --add-data "frontend:frontend" --hidden-import "backend" --hidden-import "frontend" --hidden-import "PyQt6" --hidden-import "pyaudio" --hidden-import "openai" --hidden-import "whisper" --hidden-import "gtts" frontend/main_window.py
+        python -m PyInstaller --onedir --windowed --name SoapBoxx --add-data "backend:backend" --add-data "frontend:frontend" --hidden-import "backend" --hidden-import "frontend" --hidden-import "PyQt6" --hidden-import "pyaudio" --hidden-import "openai" --hidden-import "whisper" --hidden-import "gtts" frontend/main_window.py
         
     - name: Build macOS app
       run: |
@@ -102,7 +111,7 @@ jobs:
         
     - name: Check file size
       run: |
-        size=$(stat -f%z "dist/SoapBoxx")
+        size=$(stat -f%z "dist/SoapBoxx/SoapBoxx")
         sizeMB=$(echo "scale=2; $size/1024/1024" | bc)
         echo "macOS build size: $sizeMB MB"
         if [ $size -gt 2147483648 ]; then
@@ -113,7 +122,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: SoapBoxx-macOS
-        path: dist/SoapBoxx
+        path: dist/SoapBoxx/
         
   build-linux:
     runs-on: ubuntu-latest
@@ -133,6 +142,10 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pyinstaller
+        
+    - name: Clean previous build
+      run: |
+        rm -rf dist/ build/
         
     - name: Create PyInstaller spec file
       run: |
