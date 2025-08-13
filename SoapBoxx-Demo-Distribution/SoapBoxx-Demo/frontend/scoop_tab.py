@@ -86,6 +86,12 @@ class ScoopTab(QWidget):
         self.demo_timer = QTimer()
         self.demo_timer.timeout.connect(self.update_demo_status)
         self.demo_timer.start(3000)  # Update every 3 seconds
+        
+        # Search animation timer
+        self.search_animation_timer = QTimer()
+        self.search_animation_timer.timeout.connect(self.update_search_animation)
+        self.search_dots = 0
+        self.is_searching = False
     
     def setup_ui(self):
         """Set up the tab UI"""
@@ -134,10 +140,17 @@ class ScoopTab(QWidget):
         """)
         search_group_layout.addWidget(self.search_input, 0, 1)
         
-        # Search button
+        # Search button and status
+        search_button_layout = QHBoxLayout()
         self.search_button = ModernButton("🔍 Search", style="primary")
         self.search_button.clicked.connect(self.perform_search)
-        search_group_layout.addWidget(self.search_button, 0, 2)
+        search_button_layout.addWidget(self.search_button)
+        
+        self.search_status = QLabel("")
+        self.search_status.setStyleSheet("color: #3498DB; font-weight: bold; font-size: 14px;")
+        search_button_layout.addWidget(self.search_status)
+        
+        search_group_layout.addLayout(search_button_layout, 0, 2)
         
         # Search filters
         search_group_layout.addWidget(QLabel("Content Type:"), 1, 0)
@@ -300,8 +313,34 @@ class ScoopTab(QWidget):
         query = self.search_input.text() or "podcast content"
         self.status_bar.setText(f"🔍 Searching for: {query}...")
         
+        # Start search animation
+        self.is_searching = True
+        self.search_dots = 0
+        self.search_status.setText("Searching")
+        self.search_animation_timer.start(500)  # Update every 500ms
+        
         # Simulate search delay
-        QTimer.singleShot(1500, lambda: self.status_bar.setText(f"✅ Found 5 results for: {query}"))
+        QTimer.singleShot(3000, self.complete_search)
+    
+    def update_search_animation(self):
+        """Update search animation dots"""
+        if self.is_searching:
+            self.search_dots = (self.search_dots + 1) % 4
+            dots = "." * self.search_dots
+            self.search_status.setText(f"Searching{dots}")
+    
+    def complete_search(self):
+        """Complete the search and show results"""
+        self.is_searching = False
+        self.search_animation_timer.stop()
+        self.search_status.setText("✅ Found 5 results")
+        
+        # Update status bar
+        query = self.search_input.text() or "podcast content"
+        self.status_bar.setText(f"✅ Found 5 results for: {query}")
+        
+        # Clear status after a delay
+        QTimer.singleShot(2000, lambda: self.search_status.setText(""))
     
     def update_demo_status(self):
         """Update demo status periodically"""

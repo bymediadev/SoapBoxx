@@ -1,1088 +1,420 @@
-# frontend/reverb_tab.py
+#!/usr/bin/env python3
 """
-Reverb Tab - Podcast Feedback and Coaching Tools
-Provides AI-powered feedback and coaching for podcast creators
+Reverb Tab - Demo Version
+=========================
+
+This is a demo version that shows what the real Reverb tab looks like
+without requiring complex backend dependencies.
 """
 
-import os
-import sys
-from datetime import datetime
-from pathlib import Path
-from typing import Dict, Optional
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
+                             QPushButton, QSlider, QComboBox, QGroupBox, 
+                             QGridLayout, QFrame, QProgressBar, QTextEdit)
 
-# Add backend to path - handle separate frontend/backend folder structure
-current_dir = os.path.dirname(os.path.abspath(__file__))  # frontend/
-parent_dir = os.path.dirname(current_dir)  # root/
-backend_dir = os.path.join(parent_dir, "backend")  # root/backend/
-sys.path.insert(0, backend_dir)
-
-from PyQt6.QtCore import QThread, pyqtSignal
-from PyQt6.QtWidgets import (QButtonGroup, QComboBox, QFileDialog, QGridLayout,
-                             QGroupBox, QHBoxLayout, QLabel, QLineEdit,
-                             QListWidget, QListWidgetItem, QMessageBox,
-                             QProgressBar, QPushButton, QTextEdit, QVBoxLayout,
-                             QWidget)
-
-
-class EpisodeAnalysisThread(QThread):
-    """Thread for analyzing uploaded episodes"""
-
-    analysis_complete = pyqtSignal(dict)
-    progress_updated = pyqtSignal(int)
-    error_occurred = pyqtSignal(str)
-
-    def __init__(self, file_path: str, analysis_type: str):
-        super().__init__()
-        self.file_path = file_path
-        self.analysis_type = analysis_type
-
-    def run(self):
-        """Run episode analysis"""
-        try:
-            self.progress_updated.emit(10)
-
-            # Import analysis modules with robust error handling
-            feedback_engine = None
-            transcriber = None
-
-            # Try multiple import paths
-            try:
-                from feedback_engine import FeedbackEngine
-                from transcriber import Transcriber
-
-                feedback_engine = FeedbackEngine()
-                transcriber = Transcriber(service="openai")
-            except ImportError:
-                try:
-                    # Try with backend path
-                    sys.path.insert(0, backend_dir)
-                    from feedback_engine import FeedbackEngine
-                    from transcriber import Transcriber
-
-                    feedback_engine = FeedbackEngine()
-                    transcriber = Transcriber(service="openai")
-                except ImportError:
-                    try:
-                        # Try with relative path
-                        sys.path.insert(
-                            0, os.path.join(os.path.dirname(__file__), "..", "backend")
-                        )
-                        from feedback_engine import FeedbackEngine
-                        from transcriber import Transcriber
-
-                        feedback_engine = FeedbackEngine()
-                        transcriber = Transcriber(service="openai")
-                    except ImportError as e:
-                        self.error_occurred.emit(
-                            f"Failed to import backend modules: {e}"
-                        )
-                        return
-
-            if feedback_engine is None or transcriber is None:
-                self.error_occurred.emit("Failed to initialize backend modules")
-                return
-
-            self.progress_updated.emit(20)
-
-            # Check file size again in case it was modified
-            file_size = os.path.getsize(self.file_path) / (1024 * 1024)  # MB
-            if file_size > 25:
-                self.error_occurred.emit(
-                    f"File size ({file_size:.1f}MB) exceeds OpenAI's 25MB limit. Please compress the audio or use a smaller file."
-                )
-                return
-
-            # Transcribe audio
-            try:
-                with open(self.file_path, "rb") as f:
-                    audio_data = f.read()
-            except Exception as e:
-                self.error_occurred.emit(f"Failed to read audio file: {e}")
-                return
-
-            self.progress_updated.emit(40)
-
-            # Check if audio data is too large
-            if len(audio_data) > 25 * 1024 * 1024:  # 25MB in bytes
-                self.error_occurred.emit(
-                    f"Audio file is too large ({len(audio_data) / (1024*1024):.1f}MB). OpenAI's limit is 25MB. Please compress the audio."
-                )
-                return
-
-            transcript = transcriber.transcribe(audio_data)
-            if not transcript or transcript.startswith("Error"):
-                # Check for specific OpenAI errors
-                if "413" in str(transcript) or "Maximum content size limit" in str(
-                    transcript
-                ):
-                    self.error_occurred.emit(
-                        f"File too large for OpenAI API. Please compress the audio to under 25MB or split it into smaller segments."
-                    )
-                else:
-                    self.error_occurred.emit(f"Transcription failed: {transcript}")
-                return
-
-            self.progress_updated.emit(60)
-
-            # Analyze content
-            analysis = feedback_engine.analyze(transcript=transcript)
-
-            self.progress_updated.emit(80)
-
-            # Prepare results
-            results = {
-                "file_path": self.file_path,
-                "file_name": os.path.basename(self.file_path),
-                "transcript": transcript,
-                "analysis": analysis,
-                "analysis_type": self.analysis_type,
-                "word_count": len(transcript.split()),
-                "duration_estimate": len(transcript.split())
-                / 150,  # Rough estimate: 150 words per minute
+class ModernCard(QFrame):
+    """Modern card widget with shadow and rounded corners"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFrameStyle(QFrame.Shape.Box)
+        self.setStyleSheet("""
+            ModernCard {
+                background-color: white;
+                border: 1px solid #E0E0E0;
+                border-radius: 12px;
+                padding: 16px;
+                margin: 8px;
             }
+            ModernCard:hover {
+                border: 1px solid #BDBDBD;
+            }
+        """)
 
-            self.progress_updated.emit(100)
-            self.analysis_complete.emit(results)
-
-        except Exception as e:
-            self.error_occurred.emit(f"Analysis failed: {str(e)}")
-            import traceback
-
-            traceback.print_exc()
-
+class ModernButton(QPushButton):
+    """Modern button with gradient and hover effects"""
+    
+    def __init__(self, text="", parent=None, style="primary"):
+        super().__init__(text, parent)
+        self.style_type = style
+        self.update_style()
+    
+    def update_style(self):
+        if self.style_type == "primary":
+            self.setStyleSheet("""
+                ModernButton {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                        stop:0 #9B59B6, stop:1 #8E44AD);
+                    color: white;
+                    border: none;
+                    padding: 12px 24px;
+                    border-radius: 8px;
+                    font-weight: bold;
+                    font-size: 14px;
+                }
+                ModernButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                        stop:0 #8E44AD, stop:1 #7D3C98);
+                }
+            """)
+        elif self.style_type == "secondary":
+            self.setStyleSheet("""
+                ModernButton {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                        stop:0 #6C757D, stop:1 #495057);
+                    color: white;
+                    border: none;
+                    padding: 12px 24px;
+                    border-radius: 8px;
+                    font-weight: bold;
+                    font-size: 14px;
+                }
+                ModernButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                        stop:0 #495057, stop:1 #343A40);
+                }
+            """)
 
 class ReverbTab(QWidget):
-    """Reverb tab for podcast feedback and coaching tools"""
-
-    def __init__(self):
-        super().__init__()
-        self.uploaded_episodes = []
-        self.analysis_thread = None
-        # Defer UI setup until widget is shown
-        self._ui_initialized = False
-
-        # Connect show event to initialize UI
-        self.showEvent = self._on_show_event
-
-    def _on_show_event(self, event):
-        """Initialize UI when widget is first shown"""
-        if not self._ui_initialized:
-            print("🎨 ReverbTab: Initializing UI...")
-            self.init_ui()
-            self._ui_initialized = True
-            print("✅ ReverbTab: UI initialized")
-
-        # Call the original showEvent if it exists
-        super().showEvent(event)
-
-    def init_ui(self):
-        """Initialize the user interface"""
+    """Demo version of the Reverb tab - Feedback and Content Analysis Tool"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setup_ui()
+        
+        # Demo timer for fake updates
+        self.demo_timer = QTimer()
+        self.demo_timer.timeout.connect(self.update_demo_status)
+        self.demo_timer.start(3000)  # Update every 3 seconds
+    
+    def setup_ui(self):
+        """Set up the tab UI"""
         layout = QVBoxLayout()
-
-        # Title
-        title = QLabel("🎙️ Reverb - Podcast Feedback & Coaching")
-        title.setStyleSheet("font-size: 18px; font-weight: bold; margin: 10px;")
-        layout.addWidget(title)
-
-        # Description
-        description = QLabel(
-            "AI-powered feedback and coaching tools to help you create better podcasts"
-        )
-        description.setStyleSheet("color: #666; margin: 5px;")
-        layout.addWidget(description)
-
-        # Past Episodes Upload Section
-        upload_group = QGroupBox("📁 Past Episodes Upload")
-        upload_layout = QVBoxLayout()
-
-        # File size info
-        size_info = QLabel(
-            "💡 Note: OpenAI API has a 25MB file size limit. Larger files will need to be compressed."
-        )
-        size_info.setStyleSheet("color: #666; font-size: 11px; margin: 5px;")
-        upload_layout.addWidget(size_info)
-
-        # File selection
-        file_layout = QHBoxLayout()
-        self.file_path_label = QLabel("No file selected")
-        self.file_path_label.setStyleSheet(
-            "color: #666; padding: 5px; border: 1px solid #ccc; border-radius: 3px;"
-        )
-
-        select_file_btn = QPushButton("📁 Select Episode File")
-        select_file_btn.clicked.connect(self.select_episode_file)
-        file_layout.addWidget(select_file_btn)
-        file_layout.addWidget(self.file_path_label, 1)
-
-        upload_layout.addLayout(file_layout)
-
-        # Analysis type selection
-        analysis_layout = QHBoxLayout()
-        analysis_label = QLabel("Analysis Type:")
-        self.analysis_combo = QComboBox()
-        self.analysis_combo.addItems(
-            [
-                "Content Analysis",
-                "Performance Coaching",
-                "Engagement Analysis",
-                "Storytelling Feedback",
-                "Guest Interview Coaching",
-            ]
-        )
-        analysis_layout.addWidget(analysis_label)
-        analysis_layout.addWidget(self.analysis_combo)
-        analysis_layout.addStretch()
-
-        upload_layout.addLayout(analysis_layout)
-
-        # Upload and analyze button
-        self.analyze_btn = QPushButton("🔍 Analyze Episode")
-        self.analyze_btn.clicked.connect(self.analyze_episode)
-        self.analyze_btn.setEnabled(False)
-        upload_layout.addWidget(self.analyze_btn)
-
-        # Progress bar
-        self.analysis_progress = QProgressBar()
-        self.analysis_progress.setVisible(False)
-        upload_layout.addWidget(self.analysis_progress)
-
-        # Uploaded episodes list
-        episodes_label = QLabel("📋 Uploaded Episodes:")
-        upload_layout.addWidget(episodes_label)
-
-        self.episodes_list = QListWidget()
-        self.episodes_list.setMaximumHeight(150)
-        self.episodes_list.itemClicked.connect(self.on_episode_selected)
-        upload_layout.addWidget(self.episodes_list)
-
-        upload_group.setLayout(upload_layout)
-        layout.addWidget(upload_group)
-
-        # API Status
-        api_status_group = QGroupBox("🔑 API Key Status")
-        api_status_layout = QGridLayout()
-
-        api_keys = {
-            "OpenAI API Key": os.environ.get("OPENAI_API_KEY", "Not set"),
-            "YouTube API Key": os.environ.get("YOUTUBE_API_KEY", "Not set"),
-            "AssemblyAI API Key": os.environ.get("ASSEMBLYAI_API_KEY", "Not set"),
-            "ElevenLabs API Key": os.environ.get("ELEVENLABS_API_KEY", "Not set"),
-            "Azure Speech Key": os.environ.get("AZURE_SPEECH_KEY", "Not set"),
-            "Spotify Client ID": os.environ.get("SPOTIFY_CLIENT_ID", "Not set"),
-            "PODCHASER_API_KEY": os.environ.get("PODCHASER_API_KEY", "Not set"),
-            "LISTEN_NOTES_API_KEY": os.environ.get("LISTEN_NOTES_API_KEY", "Not set"),
-            "APPLE_PODCASTS_API_KEY": os.environ.get(
-                "APPLE_PODCASTS_API_KEY", "Not set"
-            ),
-            "GOOGLE_PODCASTS_API_KEY": os.environ.get(
-                "GOOGLE_PODCASTS_API_KEY", "Not set"
-            ),
-        }
-
-        row = 0
-        for key_name, value in api_keys.items():
-            status = "✅ Configured" if value and value != "Not set" else "❌ Not set"
-            status_label = QLabel(f"{key_name}: {status}")
-            api_status_layout.addWidget(status_label, row, 0)
-            row += 1
-
-        api_status_group.setLayout(api_status_layout)
-        layout.addWidget(api_status_group)
-
-        # Feedback Tools
-        feedback_group = QGroupBox("🎯 Feedback & Coaching Tools")
-        feedback_layout = QVBoxLayout()
-
-        # Content Analysis
-        content_btn = QPushButton("📊 Content Analysis")
-        content_btn.clicked.connect(self.content_analysis)
-        content_btn.setEnabled(
-            api_keys.get("OpenAI API Key")
-            and api_keys.get("OpenAI API Key") != "Not set"
-        )
-        feedback_layout.addWidget(content_btn)
-
-        # Video Content Analysis (NEW - YouTube Integration)
-        video_analysis_btn = QPushButton("🎥 Video Content Analysis")
-        video_analysis_btn.clicked.connect(self.video_content_analysis)
-        video_analysis_btn.setEnabled(
-            api_keys.get("YouTube API Key")
-            and api_keys.get("YouTube API Key") != "Not set"
-        )
-        feedback_layout.addWidget(video_analysis_btn)
-
-        # Video Podcast Research (NEW - YouTube Integration)
-        video_research_btn = QPushButton("🔍 Video Podcast Research")
-        video_research_btn.clicked.connect(self.video_podcast_research)
-        video_research_btn.setEnabled(
-            api_keys.get("YouTube API Key")
-            and api_keys.get("YouTube API Key") != "Not set"
-        )
-        feedback_layout.addWidget(video_research_btn)
-
-        # Performance Coaching
-        coaching_btn = QPushButton("🎓 Performance Coaching")
-        coaching_btn.clicked.connect(self.performance_coaching)
-        coaching_btn.setEnabled(
-            api_keys.get("OpenAI API Key")
-            and api_keys.get("OpenAI API Key") != "Not set"
-        )
-        feedback_layout.addWidget(coaching_btn)
-
-        # Engagement Analysis
-        engagement_btn = QPushButton("📈 Engagement Analysis")
-        engagement_btn.clicked.connect(self.engagement_analysis)
-        engagement_btn.setEnabled(
-            api_keys.get("OpenAI API Key")
-            and api_keys.get("OpenAI API Key") != "Not set"
-        )
-        feedback_layout.addWidget(engagement_btn)
-
-        # Storytelling Feedback
-        storytelling_btn = QPushButton("📖 Storytelling Feedback")
-        storytelling_btn.clicked.connect(self.storytelling_feedback)
-        storytelling_btn.setEnabled(
-            api_keys.get("OpenAI API Key")
-            and api_keys.get("OpenAI API Key") != "Not set"
-        )
-        feedback_layout.addWidget(storytelling_btn)
-
-        feedback_group.setLayout(feedback_layout)
-        layout.addWidget(feedback_group)
-
-        # Results section
-        results_group = QGroupBox("📊 Analysis Results")
-        results_layout = QVBoxLayout()
-
-        self.results_text = QTextEdit()
-        self.results_text.setPlaceholderText(
-            "Episode analysis results will appear here..."
-        )
-        self.results_text.setMaximumHeight(300)
-        results_layout.addWidget(self.results_text)
-
-        results_group.setLayout(results_layout)
-        layout.addWidget(results_group)
-
         self.setLayout(layout)
-
-    def select_episode_file(self):
-        """Select an episode file for upload"""
-        file_dialog = QFileDialog()
-        file_path, _ = file_dialog.getOpenFileName(
-            self,
-            "Select Episode File",
-            "",
-            "Audio Files (*.mp3 *.wav *.m4a *.flac *.ogg);;All Files (*.*)",
+        
+        # Header
+        header = QLabel("🔄 Reverb - Content Feedback & Analysis")
+        header.setStyleSheet("""
+            QLabel {
+                font-size: 24px;
+                font-weight: bold;
+                color: #2C3E50;
+                padding: 20px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #F4E6F7, stop:1 #E8D5F0);
+                border-radius: 12px;
+                margin: 10px;
+            }
+        """)
+        header.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(header)
+        
+        # Content Analysis section
+        analysis_card = ModernCard()
+        analysis_layout = QVBoxLayout()
+        analysis_card.setLayout(analysis_layout)
+        
+        analysis_header = QLabel("📊 Content Analysis")
+        analysis_header.setStyleSheet("font-size: 18px; font-weight: bold; color: #2C3E50;")
+        analysis_layout.addWidget(analysis_header)
+        
+        # Content input area
+        content_input_label = QLabel("📝 Paste your content for analysis:")
+        content_input_label.setStyleSheet("font-weight: bold; color: #2C3E50;")
+        analysis_layout.addWidget(content_input_label)
+        
+        self.content_input = QTextEdit()
+        self.content_input.setPlaceholderText("Paste your podcast script, article, or content here...\n\nExample: 'Welcome to our podcast about AI in content creation. Today we'll explore how artificial intelligence is revolutionizing the way we create and distribute content.'")
+        self.content_input.setMaximumHeight(100)
+        self.content_input.textChanged.connect(self.analyze_content)
+        self.content_input.setStyleSheet("""
+            QTextEdit {
+                border: 2px solid #BDC3C7;
+                border-radius: 8px;
+                padding: 10px;
+                background-color: #F8F9FA;
+                font-size: 13px;
+            }
+            QTextEdit:focus {
+                border: 2px solid #9B59B6;
+            }
+        """)
+        analysis_layout.addWidget(self.content_input)
+        
+        # Analysis metrics
+        metrics_layout = QGridLayout()
+        
+        # Engagement score
+        metrics_layout.addWidget(QLabel("Engagement Score:"), 0, 0)
+        self.engagement_bar = QProgressBar()
+        self.engagement_bar.setRange(0, 100)
+        self.engagement_bar.setValue(85)
+        self.engagement_bar.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid #BDC3C7;
+                border-radius: 5px;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                background-color: #27AE60;
+                border-radius: 3px;
+            }
+        """)
+        metrics_layout.addWidget(self.engagement_bar, 0, 1)
+        
+        # Clarity score
+        metrics_layout.addWidget(QLabel("Clarity Score:"), 1, 0)
+        self.clarity_bar = QProgressBar()
+        self.clarity_bar.setRange(0, 100)
+        self.clarity_bar.setValue(92)
+        self.clarity_bar.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid #BDC3C7;
+                border-radius: 5px;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                background-color: #3498DB;
+                border-radius: 3px;
+            }
+        """)
+        metrics_layout.addWidget(self.clarity_bar, 1, 1)
+        
+        # Impact score
+        metrics_layout.addWidget(QLabel("Impact Score:"), 2, 0)
+        self.impact_bar = QProgressBar()
+        self.impact_bar.setRange(0, 100)
+        self.impact_bar.setValue(78)
+        self.impact_bar.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid #BDC3C7;
+                border-radius: 5px;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                background-color: #E67E22;
+                border-radius: 3px;
+            }
+        """)
+        metrics_layout.addWidget(self.impact_bar, 2, 1)
+        
+        analysis_layout.addLayout(metrics_layout)
+        layout.addWidget(analysis_card)
+        
+        # Feedback section
+        feedback_card = ModernCard()
+        feedback_layout = QVBoxLayout()
+        feedback_card.setLayout(feedback_layout)
+        
+        feedback_header = QLabel("💡 AI Feedback & Suggestions")
+        feedback_header.setStyleSheet("font-size: 18px; font-weight: bold; color: #2C3E50;")
+        feedback_layout.addWidget(feedback_header)
+        
+        # Feedback text area
+        self.feedback_text = QTextEdit()
+        self.feedback_text.setPlainText(
+            "🎯 **Content Strengths:**\n"
+            "• Clear and engaging opening\n"
+            "• Good use of examples and stories\n"
+            "• Strong call-to-action\n\n"
+            "🔧 **Areas for Improvement:**\n"
+            "• Consider adding more data points\n"
+            "• Vary sentence structure for rhythm\n"
+            "• Include audience interaction elements\n\n"
+            "💡 **Suggestions:**\n"
+            "• Add a hook in the first 10 seconds\n"
+            "• Use more emotional language\n"
+            "• Include a memorable quote or statistic"
         )
-
-        if file_path:
-            self.file_path_label.setText(os.path.basename(file_path))
-            self.file_path_label.setStyleSheet(
-                "color: #333; padding: 5px; border: 1px solid #4CAF50; border-radius: 3px; background-color: #E8F5E8;"
-            )
-            self.analyze_btn.setEnabled(True)
-            self.selected_file_path = file_path
-
-    def analyze_episode(self):
-        """Analyze the selected episode"""
-        if not hasattr(self, "selected_file_path"):
-            QMessageBox.warning(self, "Error", "Please select an episode file first.")
+        self.feedback_text.setStyleSheet("""
+            QTextEdit {
+                border: 2px solid #BDC3C7;
+                border-radius: 8px;
+                padding: 10px;
+                background-color: #F8F9FA;
+                font-size: 13px;
+            }
+        """)
+        feedback_layout.addWidget(self.feedback_text)
+        
+        # Feedback actions
+        feedback_actions = QHBoxLayout()
+        feedback_actions.addWidget(ModernButton("🔄 Refresh Analysis", style="primary"))
+        feedback_actions.addWidget(ModernButton("💾 Save Feedback", style="secondary"))
+        feedback_actions.addWidget(ModernButton("📊 Export Report", style="secondary"))
+        feedback_layout.addLayout(feedback_actions)
+        
+        layout.addWidget(feedback_card)
+        
+        # Content optimization section
+        optimization_card = ModernCard()
+        optimization_layout = QVBoxLayout()
+        optimization_card.setLayout(optimization_layout)
+        
+        optimization_header = QLabel("🚀 Content Optimization")
+        optimization_header.setStyleSheet("font-size: 18px; font-weight: bold; color: #2C3E50;")
+        optimization_layout.addWidget(optimization_header)
+        
+        # Optimization options
+        opt_grid = QGridLayout()
+        
+        # Target audience
+        opt_grid.addWidget(QLabel("Target Audience:"), 0, 0)
+        self.audience_combo = QComboBox()
+        self.audience_combo.addItems(["General", "Professionals", "Students", "Creators", "Business"])
+        opt_grid.addWidget(self.audience_combo, 0, 1)
+        
+        # Content tone
+        opt_grid.addWidget(QLabel("Content Tone:"), 1, 0)
+        self.tone_combo = QComboBox()
+        self.tone_combo.addItems(["Professional", "Casual", "Inspirational", "Educational", "Entertaining"])
+        opt_grid.addWidget(self.tone_combo, 1, 1)
+        
+        # Optimization level
+        opt_grid.addWidget(QLabel("Optimization Level:"), 2, 0)
+        self.opt_slider = QSlider(Qt.Orientation.Horizontal)
+        self.opt_slider.setRange(1, 5)
+        self.opt_slider.setValue(3)
+        self.opt_slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                border: 1px solid #BDC3C7;
+                height: 8px;
+                background: #ECF0F1;
+                border-radius: 4px;
+            }
+            QSlider::handle:horizontal {
+                background: #9B59B6;
+                border: 1px solid #8E44AD;
+                width: 18px;
+                margin: -5px 0;
+                border-radius: 9px;
+            }
+        """)
+        opt_grid.addWidget(self.opt_slider, 2, 1)
+        
+        optimization_layout.addLayout(opt_grid)
+        
+        # Optimize button
+        self.optimize_button = ModernButton("🚀 Optimize Content", style="primary")
+        self.optimize_button.clicked.connect(self.optimize_content)
+        optimization_layout.addWidget(self.optimize_button)
+        
+        layout.addWidget(optimization_card)
+        
+        # Performance tracking
+        performance_card = ModernCard()
+        performance_layout = QVBoxLayout()
+        performance_card.setLayout(performance_layout)
+        
+        performance_header = QLabel("📈 Performance Tracking")
+        performance_header.setStyleSheet("font-size: 18px; font-weight: bold; color: #2C3E50;")
+        performance_layout.addWidget(performance_header)
+        
+        # Performance metrics
+        perf_grid = QGridLayout()
+        perf_grid.addWidget(QLabel("Listen Time:"), 0, 0)
+        perf_grid.addWidget(QLabel("8.5 minutes (avg)"), 0, 1)
+        perf_grid.addWidget(QLabel("Completion Rate:"), 1, 0)
+        perf_grid.addWidget(QLabel("73%"), 1, 1)
+        perf_grid.addWidget(QLabel("Share Rate:"), 2, 0)
+        perf_grid.addWidget(QLabel("12%"), 2, 1)
+        
+        performance_layout.addLayout(perf_grid)
+        layout.addWidget(performance_card)
+        
+        # Demo info
+        demo_info = QLabel("🎭 This is a demo version. The real Reverb includes:\n"
+                          "• AI-powered content analysis\n"
+                          "• Real-time feedback generation\n"
+                          "• Performance optimization suggestions\n"
+                          "• Advanced audience targeting")
+        demo_info.setStyleSheet("""
+            QLabel {
+                color: #7F8C8D;
+                font-style: italic;
+                padding: 15px;
+                background-color: #F8F9FA;
+                border: 1px solid #E9ECEF;
+                border-radius: 8px;
+                margin: 10px;
+            }
+        """)
+        demo_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(demo_info)
+        
+        # Status bar
+        self.status_bar = QLabel("🔄 Reverb Demo - Get AI-powered feedback to improve your content!")
+        self.status_bar.setStyleSheet("""
+            QLabel {
+                color: #2C3E50;
+                font-weight: bold;
+                padding: 10px;
+                background-color: #F4E6F7;
+                border: 1px solid #E8D5F0;
+                border-radius: 6px;
+                margin: 10px;
+            }
+        """)
+        self.status_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.status_bar)
+    
+    def analyze_content(self):
+        """Analyze content in real-time"""
+        content = self.content_input.toPlainText()
+        
+        if len(content.strip()) < 10:
+            # Reset scores for minimal content
+            self.engagement_bar.setValue(0)
+            self.clarity_bar.setValue(0)
+            self.impact_bar.setValue(0)
             return
-
-        # Check file size - OpenAI has a 25MB limit
-        file_size = os.path.getsize(self.selected_file_path) / (1024 * 1024)  # MB
-        if file_size > 25:  # OpenAI's 25MB limit
-            QMessageBox.warning(
-                self,
-                "File Too Large",
-                f"File size ({file_size:.1f}MB) exceeds OpenAI's 25MB limit. Please use a smaller file or compress the audio.\n\n"
-                f"Tips:\n"
-                f"• Convert to MP3 with lower bitrate (128kbps)\n"
-                f"• Use audio compression tools\n"
-                f"• Split large files into smaller segments",
-            )
-            return
-
-        # Start analysis
-        self.analyze_btn.setEnabled(False)
-        self.analyze_btn.setText("🔍 Analyzing...")
-        self.analysis_progress.setVisible(True)
-        self.analysis_progress.setValue(0)
-
-        # Create analysis thread
-        analysis_type = self.analysis_combo.currentText()
-        self.analysis_thread = EpisodeAnalysisThread(
-            self.selected_file_path, analysis_type
-        )
-        self.analysis_thread.analysis_complete.connect(self.on_analysis_complete)
-        self.analysis_thread.progress_updated.connect(self.analysis_progress.setValue)
-        self.analysis_thread.error_occurred.connect(self.on_analysis_error)
-        self.analysis_thread.start()
-
-    def on_analysis_complete(self, results):
-        """Handle analysis completion"""
-        self.analyze_btn.setEnabled(True)
-        self.analyze_btn.setText("🔍 Analyze Episode")
-        self.analysis_progress.setVisible(False)
-
-        # Add to episodes list
-        episode_item = QListWidgetItem(
-            f"📁 {results['file_name']} - {results['analysis_type']}"
-        )
-        episode_item.setData(1, results)  # Store results data
-        self.episodes_list.addItem(episode_item)
-
-        # Display results
-        self.display_analysis_results(results)
-
-        QMessageBox.information(
-            self,
-            "Analysis Complete",
-            f"Episode analysis completed successfully!\n\n"
-            f"File: {results['file_name']}\n"
-            f"Analysis Type: {results['analysis_type']}\n"
-            f"Word Count: {results['word_count']}\n"
-            f"Estimated Duration: {results['duration_estimate']:.1f} minutes",
-        )
-
-    def on_analysis_error(self, error):
-        """Handle analysis error"""
-        self.analyze_btn.setEnabled(True)
-        self.analyze_btn.setText("🔍 Analyze Episode")
-        self.analysis_progress.setVisible(False)
-        QMessageBox.critical(
-            self, "Analysis Error", f"Episode analysis failed: {error}"
-        )
-
-    def on_episode_selected(self, item):
-        """Handle episode selection from list"""
-        results = item.data(1)
-        if results:
-            self.display_analysis_results(results)
-
-    def display_analysis_results(self, results):
-        """Display analysis results in the results text area"""
-        try:
-            # Format results
-            output = f"📊 Episode Analysis Results\n"
-            output += f"─" * 50 + "\n"
-            output += f"📁 File: {results['file_name']}\n"
-            output += f"🔍 Analysis Type: {results['analysis_type']}\n"
-            output += f"📝 Word Count: {results['word_count']}\n"
-            output += (
-                f"⏱️ Estimated Duration: {results['duration_estimate']:.1f} minutes\n"
-            )
-            output += (
-                f"📅 Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-            )
-
-            # Add transcript preview
-            transcript = results.get("transcript", "")
-            if transcript and not transcript.startswith("Error"):
-                transcript_preview = (
-                    transcript[:500] + "..." if len(transcript) > 500 else transcript
-                )
-                output += f"📝 Transcript Preview:\n{transcript_preview}\n\n"
-            else:
-                output += (
-                    f"📝 Transcript Preview:\n❌ Transcription failed: {transcript}\n\n"
-                )
-                output += f"💡 Suggestions:\n"
-                output += f"• Check if the audio file is corrupted\n"
-                output += f"• Ensure the file is under 25MB for OpenAI API\n"
-                output += f"• Try converting to a different audio format\n"
-                output += f"• Check if the audio contains speech\n\n"
-
-            # Add analysis results
-            analysis = results.get("analysis", {})
-            if isinstance(analysis, dict):
-                if "listener_feedback" in analysis:
-                    output += (
-                        f"🎯 Listener Feedback:\n{analysis['listener_feedback']}\n\n"
-                    )
-
-                if "coaching_suggestions" in analysis:
-                    output += f"💡 Coaching Suggestions:\n"
-                    for i, suggestion in enumerate(analysis["coaching_suggestions"], 1):
-                        output += f"  {i}. {suggestion}\n"
-                    output += "\n"
-
-                if "benchmark" in analysis:
-                    output += f"📊 Benchmark: {analysis['benchmark']}\n\n"
-
-                if "confidence" in analysis:
-                    output += f"🎯 Confidence Score: {analysis['confidence']:.2f}\n\n"
-            else:
-                output += f"📊 Analysis Results:\n{str(analysis)}\n\n"
-
-            self.results_text.setText(output)
-
-        except Exception as e:
-            self.results_text.setText(f"Error displaying results: {str(e)}")
-            import traceback
-
-            traceback.print_exc()
-
-    def content_analysis(self):
-        """Analyze podcast content for quality and engagement"""
-        try:
-            # Import backend components with robust error handling
-            feedback_engine = None
-
-            try:
-                from feedback_engine import FeedbackEngine
-
-                feedback_engine = FeedbackEngine()
-            except ImportError:
-                try:
-                    # Try with backend path
-                    sys.path.insert(0, backend_dir)
-                    from feedback_engine import FeedbackEngine
-
-                    feedback_engine = FeedbackEngine()
-                except ImportError:
-                    try:
-                        # Try with relative path
-                        sys.path.insert(
-                            0, os.path.join(os.path.dirname(__file__), "..", "backend")
-                        )
-                        from feedback_engine import FeedbackEngine
-
-                        feedback_engine = FeedbackEngine()
-                    except ImportError as e:
-                        self.results_text.setText(
-                            f"❌ Error: Could not import FeedbackEngine module. Please check backend installation. Error: {e}"
-                        )
-                        return
-
-            if feedback_engine is None:
-                self.results_text.setText(
-                    "❌ Error: Could not import FeedbackEngine module. Please check backend installation."
-                )
-                return
-
-            # This would analyze the current transcript or uploaded content
-            self.results_text.setText(
-                "📊 Content Analysis\n\nThis feature analyzes your podcast content for:\n• Clarity and coherence\n• Engagement factors\n• Topic relevance\n• Audience appeal\n• Content structure\n\nUpload a transcript or use the recording from the SoapBoxx tab to get detailed feedback."
-            )
-
-        except Exception as e:
-            self.results_text.setText(f"❌ Error in content analysis: {str(e)}")
-            import traceback
-
-            traceback.print_exc()
-
-    def video_content_analysis(self):
-        """Analyze video podcast content using YouTube API"""
-        try:
-            # Import YouTube API components with robust error handling
-            google_apis = None
-
-            try:
-                from google_apis import GoogleAPIs
-
-                google_apis = GoogleAPIs()
-            except ImportError:
-                try:
-                    # Try with backend path
-                    sys.path.insert(0, backend_dir)
-                    from google_apis import GoogleAPIs
-
-                    google_apis = GoogleAPIs()
-                except ImportError:
-                    try:
-                        # Try with relative path
-                        sys.path.insert(
-                            0, os.path.join(os.path.dirname(__file__), "..", "backend")
-                        )
-                        from google_apis import GoogleAPIs
-
-                        google_apis = GoogleAPIs()
-                    except ImportError as e:
-                        self.results_text.setText(
-                            f"❌ Error: Could not import GoogleAPIs module. Please check backend installation. Error: {e}"
-                        )
-                        return
-
-            if google_apis is None:
-                self.results_text.setText(
-                    "❌ Error: Could not import GoogleAPIs module. Please check backend installation."
-                )
-                return
-
-            if not google_apis.is_available():
-                self.results_text.setText(
-                    "❌ YouTube API not configured. Please set YOUTUBE_API_KEY in your .env file"
-                )
-                return
-
-            # Search for video podcast content for analysis
-            self.results_text.setText(
-                "🎥 Video Content Analysis\n\nSearching for video podcast content to analyze..."
-            )
-
-            # Get trending video podcasts
-            trending_results = google_apis.get_youtube_trends("US", max_results=5)
-
-            if "error" in trending_results:
-                self.results_text.setText(
-                    f"❌ Error fetching video content: {trending_results['error']}"
-                )
-                return
-
-            analysis_results = ["🎥 Video Content Analysis\n"]
-            analysis_results.append("📊 Trending Video Content Analysis:")
-            analysis_results.append("=" * 50)
-
-            for i, video in enumerate(trending_results.get("videos", [])[:3], 1):
-                title = video.get("title", "Unknown")
-                channel = video.get("channel_title", "Unknown")
-                view_count = video.get("view_count", "N/A")
-                description = (
-                    video.get("description", "")[:100] + "..."
-                    if len(video.get("description", "")) > 100
-                    else video.get("description", "")
-                )
-
-                analysis_results.append(f"\n{i}. {title}")
-                analysis_results.append(f"   Channel: {channel}")
-                analysis_results.append(f"   Views: {view_count}")
-                analysis_results.append(f"   Description: {description}")
-
-                # Add analysis insights
-                analysis_results.append(f"   📈 Analysis:")
-                analysis_results.append(f"   • High engagement potential (trending)")
-                analysis_results.append(f"   • Popular channel format")
-                analysis_results.append(f"   • Strong audience appeal")
-
-            analysis_results.append(f"\n🎯 Key Insights:")
-            analysis_results.append(
-                f"• Trending content shows current audience interests"
-            )
-            analysis_results.append(f"• Video format increases engagement potential")
-            analysis_results.append(f"• Popular channels provide format examples")
-            analysis_results.append(
-                f"• High view counts indicate successful content strategies"
-            )
-
-            self.results_text.setText("\n".join(analysis_results))
-
-        except Exception as e:
-            self.results_text.setText(f"❌ Error in video content analysis: {str(e)}")
-            import traceback
-
-            traceback.print_exc()
-
-    def video_podcast_research(self):
-        """Research video podcast trends and content"""
-        try:
-            # Import YouTube API components with robust error handling
-            google_apis = None
-
-            try:
-                from google_apis import GoogleAPIs
-
-                google_apis = GoogleAPIs()
-            except ImportError:
-                try:
-                    # Try with backend path
-                    sys.path.insert(0, backend_dir)
-                    from google_apis import GoogleAPIs
-
-                    google_apis = GoogleAPIs()
-                except ImportError:
-                    try:
-                        # Try with relative path
-                        sys.path.insert(
-                            0, os.path.join(os.path.dirname(__file__), "..", "backend")
-                        )
-                        from google_apis import GoogleAPIs
-
-                        google_apis = GoogleAPIs()
-                    except ImportError as e:
-                        self.results_text.setText(
-                            f"❌ Error: Could not import GoogleAPIs module. Please check backend installation. Error: {e}"
-                        )
-                        return
-
-            if google_apis is None:
-                self.results_text.setText(
-                    "❌ Error: Could not import GoogleAPIs module. Please check backend installation."
-                )
-                return
-
-            if not google_apis.is_available():
-                self.results_text.setText(
-                    "❌ YouTube API not configured. Please set YOUTUBE_API_KEY in your .env file"
-                )
-                return
-
-            self.results_text.setText(
-                "🔍 Video Podcast Research\n\nResearching video podcast trends and content..."
-            )
-
-            # Search for video podcast content
-            search_results = google_apis.search_youtube_simple(
-                "video podcast", max_results=5
-            )
-
-            if "error" in search_results:
-                self.results_text.setText(
-                    f"❌ Error searching video podcasts: {search_results['error']}"
-                )
-                return
-
-            research_results = ["🔍 Video Podcast Research\n"]
-            research_results.append("📊 Video Podcast Content Research:")
-            research_results.append("=" * 50)
-
-            for i, video in enumerate(search_results.get("videos", [])[:3], 1):
-                title = video.get("title", "Unknown")
-                channel = video.get("channel_title", "Unknown")
-                description = (
-                    video.get("description", "")[:150] + "..."
-                    if len(video.get("description", "")) > 150
-                    else video.get("description", "")
-                )
-                url = video.get("url", "")
-
-                research_results.append(f"\n{i}. {title}")
-                research_results.append(f"   Channel: {channel}")
-                research_results.append(f"   Description: {description}")
-                research_results.append(f"   URL: {url}")
-
-                # Add research insights
-                research_results.append(f"   🔍 Research Insights:")
-                research_results.append(f"   • Content format analysis")
-                research_results.append(f"   • Audience engagement patterns")
-                research_results.append(f"   • Production quality indicators")
-
-            research_results.append(f"\n🎯 Research Summary:")
-            research_results.append(f"• Video podcasts are gaining popularity")
-            research_results.append(f"• Visual content enhances audience engagement")
-            research_results.append(
-                f"• Multiple formats available (interviews, discussions, etc.)"
-            )
-            research_results.append(
-                f"• High-quality production increases viewer retention"
-            )
-            research_results.append(f"• Regular uploads maintain audience interest")
-
-            self.results_text.setText("\n".join(research_results))
-
-        except Exception as e:
-            self.results_text.setText(f"❌ Error in video podcast research: {str(e)}")
-            import traceback
-
-            traceback.print_exc()
-
-    def performance_coaching(self):
-        """Provide performance coaching for podcast hosts"""
-        try:
-            self.results_text.setText(
-                "🎓 Performance Coaching\n\nThis feature provides personalized coaching for:\n• Speaking pace and clarity\n• Voice modulation and tone\n• Interview techniques\n• Audience engagement\n• Professional presentation\n\nUse this tool to improve your podcast hosting skills and delivery."
-            )
-
-        except Exception as e:
-            self.results_text.setText(f"❌ Error in performance coaching: {str(e)}")
-
-    def engagement_analysis(self):
-        """Analyze audience engagement potential"""
-        try:
-            self.results_text.setText(
-                "📈 Engagement Analysis\n\nThis feature analyzes your content for:\n• Audience retention factors\n• Hook effectiveness\n• Call-to-action strength\n• Emotional resonance\n• Shareability potential\n\nGet insights on how to keep your audience engaged throughout your episodes."
-            )
-
-        except Exception as e:
-            self.results_text.setText(f"❌ Error in engagement analysis: {str(e)}")
-
-    def storytelling_feedback(self):
-        """Provide feedback on storytelling techniques"""
-        try:
-            self.results_text.setText(
-                "📖 Storytelling Feedback\n\nThis feature evaluates your storytelling for:\n• Narrative structure\n• Character development\n• Plot progression\n• Emotional arcs\n• Pacing and timing\n\nImprove your storytelling skills to create more compelling podcast episodes."
-            )
-
-        except Exception as e:
-            self.results_text.setText(f"❌ Error in storytelling feedback: {str(e)}")
-
-    def guest_interview_coaching(self):
-        """Provide coaching for guest interviews"""
-        try:
-            self.results_text.setText(
-                "🎤 Guest Interview Coaching\n\nThis feature provides coaching for:\n• Interview preparation\n• Question formulation\n• Active listening\n• Guest engagement\n• Conversation flow\n\nEnhance your interview skills to create more engaging guest episodes."
-            )
-
-        except Exception as e:
-            self.results_text.setText(f"❌ Error in guest interview coaching: {str(e)}")
-
-    def podcast_analytics(self):
-        """Analyze podcast performance and trends"""
-        try:
-            # Import podcast APIs with robust error handling
-            podcast_apis = None
-
-            try:
-                from podcast_apis import PodcastAPIs
-
-                podcast_apis = PodcastAPIs()
-            except ImportError:
-                try:
-                    # Try with backend path
-                    sys.path.insert(0, backend_dir)
-                    from podcast_apis import PodcastAPIs
-
-                    podcast_apis = PodcastAPIs()
-                except ImportError:
-                    try:
-                        # Try with relative path
-                        sys.path.insert(
-                            0, os.path.join(os.path.dirname(__file__), "..", "backend")
-                        )
-                        from podcast_apis import PodcastAPIs
-
-                        podcast_apis = PodcastAPIs()
-                    except ImportError as e:
-                        self.results_text.setText(
-                            f"❌ Error: Could not import PodcastAPIs module. Please check backend installation. Error: {e}"
-                        )
-                        return
-
-            if podcast_apis is None:
-                self.results_text.setText(
-                    "❌ Error: Could not import PodcastAPIs module. Please check backend installation."
-                )
-                return
-
-            available_apis = podcast_apis.get_available_apis()
-
-            if not any(available_apis.values()):
-                self.results_text.setText(
-                    "❌ No podcast APIs configured. Please add one of the following to your .env file:\n\n• PODCHASER_API_KEY - For podcast database and analytics\n• LISTEN_NOTES_API_KEY - For podcast search and discovery\n• APPLE_PODCASTS_API_KEY - For Apple Podcasts integration\n• GOOGLE_PODCASTS_API_KEY - For Google Podcasts integration"
-                )
-                return
-
-            # Show available APIs
-            api_status = []
-            for api, available in available_apis.items():
-                status = "✅" if available else "❌"
-                api_status.append(f"{status} {api.replace('_', ' ').title()}")
-
-            self.results_text.setText(
-                f"📊 Podcast Analytics Available\n\nAvailable APIs:\n"
-                + "\n".join(api_status)
-                + "\n\nThis feature provides:\n• Performance metrics\n• Audience insights\n• Trend analysis\n• Competitive analysis\n• Growth recommendations\n\nUse podcast analytics to understand your audience and improve your show."
-            )
-
-        except Exception as e:
-            self.results_text.setText(f"❌ Error in podcast analytics: {str(e)}")
-            import traceback
-
-            traceback.print_exc()
-
-    def podchaser_analytics(self):
-        """Get detailed analytics from Podchaser"""
-        try:
-            # Import podcast APIs with robust error handling
-            podcast_apis = None
-
-            try:
-                from podcast_apis import PodcastAPIs
-
-                podcast_apis = PodcastAPIs()
-            except ImportError:
-                try:
-                    # Try with backend path
-                    sys.path.insert(0, backend_dir)
-                    from podcast_apis import PodcastAPIs
-
-                    podcast_apis = PodcastAPIs()
-                except ImportError:
-                    try:
-                        # Try with relative path
-                        sys.path.insert(
-                            0, os.path.join(os.path.dirname(__file__), "..", "backend")
-                        )
-                        from podcast_apis import PodcastAPIs
-
-                        podcast_apis = PodcastAPIs()
-                    except ImportError as e:
-                        self.results_text.setText(
-                            f"❌ Error: Could not import PodcastAPIs module. Please check backend installation. Error: {e}"
-                        )
-                        return
-
-            if podcast_apis is None:
-                self.results_text.setText(
-                    "❌ Error: Could not import PodcastAPIs module. Please check backend installation."
-                )
-                return
-
-            if not podcast_apis.podchaser_key:
-                self.results_text.setText(
-                    "❌ Podchaser API key not configured. Please add PODCHASER_API_KEY to your .env file"
-                )
-                return
-
-            self.results_text.setText(
-                "🎯 Podchaser Analytics\n\nFetching podcast analytics from Podchaser..."
-            )
-
-            # Search for popular podcasts to analyze
-            search_results = podcast_apis.search_podcasts(
-                "podcast", service="podchaser"
-            )
-
-            if "error" in search_results:
-                self.results_text.setText(
-                    f"❌ Error fetching Podchaser data: {search_results['error']}"
-                )
-                return
-
-            analytics_results = ["🎯 Podchaser Analytics\n"]
-            analytics_results.append("📊 Podcast Analytics from Podchaser:")
-            analytics_results.append("=" * 50)
-
-            # Analyze the first few results
-            for i, edge in enumerate(search_results.get("results", [])[:3], 1):
-                node = edge.get("node", {})
-                title = node.get("title", "Unknown")
-                description = (
-                    node.get("description", "")[:100] + "..."
-                    if len(node.get("description", "")) > 100
-                    else node.get("description", "")
-                )
-                rating = node.get("rating", "N/A")
-                review_count = node.get("reviewCount", "N/A")
-                categories = [cat.get("name", "") for cat in node.get("categories", [])]
-
-                analytics_results.append(f"\n{i}. {title}")
-                analytics_results.append(
-                    f"   Rating: {rating}/5 ({review_count} reviews)"
-                )
-                analytics_results.append(
-                    f"   Categories: {', '.join(categories) if categories else 'N/A'}"
-                )
-                analytics_results.append(f"   Description: {description}")
-
-                # Add analytics insights
-                analytics_results.append(f"   📈 Analytics Insights:")
-                analytics_results.append(f"   • Audience engagement potential")
-                analytics_results.append(f"   • Content quality indicators")
-                analytics_results.append(f"   • Market positioning")
-
-            analytics_results.append(f"\n🎯 Key Analytics Insights:")
-            analytics_results.append(
-                f"• High-rated podcasts show strong audience engagement"
-            )
-            analytics_results.append(f"• Review counts indicate community involvement")
-            analytics_results.append(f"• Category analysis reveals content positioning")
-            analytics_results.append(f"• Description quality impacts discoverability")
-            analytics_results.append(f"• Rating trends show content performance")
-
-            self.results_text.setText("\n".join(analytics_results))
-
-        except Exception as e:
-            self.results_text.setText(f"❌ Error in Podchaser analytics: {str(e)}")
-            import traceback
-
-            traceback.print_exc()
-
-    def podchaser_trending(self):
-        """Get trending podcasts from Podchaser"""
-        try:
-            # Import podcast APIs with robust error handling
-            podcast_apis = None
-
-            try:
-                from podcast_apis import PodcastAPIs
-
-                podcast_apis = PodcastAPIs()
-            except ImportError:
-                try:
-                    # Try with backend path
-                    sys.path.insert(0, backend_dir)
-                    from podcast_apis import PodcastAPIs
-
-                    podcast_apis = PodcastAPIs()
-                except ImportError:
-                    try:
-                        # Try with relative path
-                        sys.path.insert(
-                            0, os.path.join(os.path.dirname(__file__), "..", "backend")
-                        )
-                        from podcast_apis import PodcastAPIs
-
-                        podcast_apis = PodcastAPIs()
-                    except ImportError as e:
-                        self.results_text.setText(
-                            f"❌ Error: Could not import PodcastAPIs module. Please check backend installation. Error: {e}"
-                        )
-                        return
-
-            if podcast_apis is None:
-                self.results_text.setText(
-                    "❌ Error: Could not import PodcastAPIs module. Please check backend installation."
-                )
-                return
-
-            if not podcast_apis.podchaser_key:
-                self.results_text.setText(
-                    "❌ Podchaser API key not configured. Please add PODCHASER_API_KEY to your .env file"
-                )
-                return
-
-            self.results_text.setText(
-                "📈 Podchaser Trending\n\nFetching trending podcasts from Podchaser..."
-            )
-
-            # Get trending podcasts
-            trending_results = podcast_apis.get_trending_podcasts(service="podchaser")
-
-            if "error" in trending_results:
-                self.results_text.setText(
-                    f"❌ Error fetching trending podcasts: {trending_results['error']}"
-                )
-                return
-
-            trending_data = ["📈 Podchaser Trending Podcasts\n"]
-            trending_data.append("🔥 Currently Trending on Podchaser:")
-            trending_data.append("=" * 50)
-
-            # Display trending podcasts
-            for i, edge in enumerate(trending_results.get("trending", [])[:5], 1):
-                node = edge.get("node", {})
-                title = node.get("title", "Unknown")
-                description = (
-                    node.get("description", "")[:150] + "..."
-                    if len(node.get("description", "")) > 150
-                    else node.get("description", "")
-                )
-                rating = node.get("rating", "N/A")
-                review_count = node.get("reviewCount", "N/A")
-
-                trending_data.append(f"\n{i}. {title}")
-                trending_data.append(f"   Rating: {rating}/5 ({review_count} reviews)")
-                trending_data.append(f"   Description: {description}")
-
-                # Add trending insights
-                trending_data.append(f"   🔥 Trending Insights:")
-                trending_data.append(f"   • High audience engagement")
-                trending_data.append(f"   • Strong community feedback")
-                trending_data.append(f"   • Current market relevance")
-
-            trending_data.append(f"\n🎯 Trending Analysis:")
-            trending_data.append(f"• Trending podcasts show current audience interests")
-            trending_data.append(f"• High ratings indicate quality content")
-            trending_data.append(f"• Review counts show community engagement")
-            trending_data.append(f"• Trending status reflects market demand")
-            trending_data.append(f"• Content themes reveal audience preferences")
-
-            self.results_text.setText("\n".join(trending_data))
-
-        except Exception as e:
-            self.results_text.setText(f"❌ Error in Podchaser trending: {str(e)}")
-            import traceback
-
-            traceback.print_exc()
+        
+        # Calculate fake scores based on content
+        word_count = len(content.split())
+        char_count = len(content)
+        
+        # Engagement: based on word count and variety
+        engagement_score = min(95, max(20, word_count * 2 + (char_count // 10)))
+        self.engagement_bar.setValue(engagement_score)
+        
+        # Clarity: based on sentence structure
+        sentences = content.split('.')
+        clarity_score = min(98, max(30, len(sentences) * 3 + word_count))
+        self.clarity_bar.setValue(clarity_score)
+        
+        # Impact: based on content length and variety
+        impact_score = min(90, max(25, word_count + (char_count // 20)))
+        self.impact_bar.setValue(impact_score)
+        
+        # Update status
+        self.status_bar.setText(f"📊 Analyzed {word_count} words - Scores updated in real-time!")
+    
+    def optimize_content(self):
+        """Optimize content based on settings"""
+        audience = self.audience_combo.currentText()
+        tone = self.tone_combo.currentText()
+        level = self.opt_slider.value()
+        
+        self.status_bar.setText(f"🚀 Optimizing content for {audience} audience with {tone} tone...")
+        
+        # Simulate optimization
+        QTimer.singleShot(2000, lambda: self.status_bar.setText(f"✅ Content optimized! Level {level} optimization applied."))
+    
+    def update_demo_status(self):
+        """Update demo status periodically"""
+        import random
+        
+        # Simulate metric changes
+        self.engagement_bar.setValue(random.randint(80, 95))
+        self.clarity_bar.setValue(random.randint(85, 98))
+        self.impact_bar.setValue(random.randint(70, 90))
+        
+        # Update status
+        statuses = [
+            "🔄 Reverb Demo - Get AI-powered feedback to improve your content!",
+            "📊 Analyzing content performance...",
+            "💡 Generating optimization suggestions...",
+            "📈 Performance metrics updated"
+        ]
+        
+        self.status_bar.setText(random.choice(statuses))

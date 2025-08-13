@@ -90,6 +90,12 @@ class SoapBoxxTab(QWidget):
         self.demo_timer = QTimer()
         self.demo_timer.timeout.connect(self.update_demo_status)
         self.demo_timer.start(2000)  # Update every 2 seconds
+        
+        # Recording timer
+        self.recording_timer = QTimer()
+        self.recording_timer.timeout.connect(self.update_recording_timer)
+        self.recording_time = 0
+        self.is_recording = False
     
     def setup_ui(self):
         """Set up the tab UI"""
@@ -133,10 +139,18 @@ class SoapBoxxTab(QWidget):
         self.record_button.clicked.connect(self.toggle_recording)
         recording_layout.addWidget(self.record_button, 1, 0, 1, 2)
         
-        # Recording status
+        # Recording status and timer
+        recording_status_layout = QHBoxLayout()
         self.recording_status = QLabel("⏸️ Ready to record")
         self.recording_status.setStyleSheet("color: #27AE60; font-weight: bold;")
-        recording_layout.addWidget(self.recording_status, 2, 0, 1, 2)
+        recording_status_layout.addWidget(self.recording_status)
+        
+        self.recording_timer_label = QLabel("00:00")
+        self.recording_timer_label.setStyleSheet("color: #E74C3C; font-weight: bold; font-size: 16px;")
+        self.recording_timer_label.setVisible(False)
+        recording_status_layout.addWidget(self.recording_timer_label)
+        
+        recording_layout.addLayout(recording_status_layout, 2, 0, 1, 2)
         
         recording_group.setLayout(recording_layout)
         controls_layout.addWidget(recording_group)
@@ -246,7 +260,10 @@ class SoapBoxxTab(QWidget):
     
     def toggle_recording(self):
         """Toggle recording state (demo)"""
-        if self.record_button.text() == "🔴 Start Recording":
+        if not self.is_recording:
+            # Start recording
+            self.is_recording = True
+            self.recording_time = 0
             self.record_button.setText("⏹️ Stop Recording")
             self.record_button.setStyleSheet("""
                 QPushButton {
@@ -258,17 +275,65 @@ class SoapBoxxTab(QWidget):
                     border-radius: 8px;
                     font-weight: bold;
                     font-size: 14px;
+                    animation: pulse 1s infinite;
                 }
             """)
             self.recording_status.setText("🔴 Recording in progress...")
             self.recording_status.setStyleSheet("color: #E74C3C; font-weight: bold;")
+            self.recording_timer_label.setVisible(True)
             self.status_bar.setText("🎙️ Recording... Speak clearly into your microphone!")
+            
+            # Start recording timer
+            self.recording_timer.start(1000)  # Update every second
         else:
+            # Stop recording
+            self.is_recording = False
             self.record_button.setText("🔴 Start Recording")
             self.record_button.update_style()
             self.recording_status.setText("⏸️ Ready to record")
             self.recording_status.setStyleSheet("color: #27AE60; font-weight: bold;")
-            self.status_bar.setText("✅ Recording stopped. Processing audio...")
+            self.recording_timer_label.setVisible(False)
+            self.status_bar.setText(f"✅ Recording stopped. Total time: {self.recording_timer_label.text()}")
+            
+            # Stop recording timer
+            self.recording_timer.stop()
+    
+    def update_recording_timer(self):
+        """Update the recording timer display"""
+        if self.is_recording:
+            self.recording_time += 1
+            minutes = self.recording_time // 60
+            seconds = self.recording_time % 60
+            self.recording_timer_label.setText(f"{minutes:02d}:{seconds:02d}")
+            
+            # Add pulsing animation effect
+            if self.recording_time % 2 == 0:
+                self.record_button.setStyleSheet("""
+                    QPushButton {
+                        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                            stop:0 #E74C3C, stop:1 #C0392B);
+                        color: white;
+                        border: none;
+                        padding: 12px 24px;
+                        border-radius: 8px;
+                        font-weight: bold;
+                        font-size: 14px;
+                        box-shadow: 0 0 20px #E74C3C;
+                    }
+                """)
+            else:
+                self.record_button.setStyleSheet("""
+                    QPushButton {
+                        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                            stop:0 #E74C3C, stop:1 #C0392B);
+                        color: white;
+                        border: none;
+                        padding: 12px 24px;
+                        border-radius: 8px;
+                        font-weight: bold;
+                        font-size: 14px;
+                    }
+                """)
     
     def update_demo_status(self):
         """Update demo status periodically"""

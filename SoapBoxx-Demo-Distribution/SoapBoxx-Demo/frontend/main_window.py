@@ -67,30 +67,6 @@ except ImportError:
                 label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.layout().addWidget(label)
 
-        class ReverbTab(QWidget):
-            def __init__(self, parent=None):
-                super().__init__(parent)
-                self.setLayout(QVBoxLayout())
-                label = QLabel("Reverb Tab (Demo Mode)")
-                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                self.layout().addWidget(label)
-
-        class ScoopTab(QWidget):
-            def __init__(self, parent=None):
-                super().__init__(parent)
-                self.setLayout(QVBoxLayout())
-                label = QLabel("Scoop Tab (Demo Mode)")
-                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                self.layout().addWidget(label)
-
-        class SoapBoxxTab(QWidget):
-            def __init__(self, parent=None):
-                super().__init__(parent)
-                self.setLayout(QVBoxLayout())
-                label = QLabel("SoapBoxx Tab (Demo Mode)")
-                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                self.layout().addWidget(label)
-
         class ThemeManager(QWidget):
             def __init__(self, parent=None):
                 super().__init__(parent)
@@ -118,6 +94,16 @@ try:
 except ImportError:
     print("⚠️  Bulletproof tab loader not available, using fallback")
     BULLETPROOF_LOADER_AVAILABLE = False
+
+# Import demo tab classes
+try:
+    from soapboxx_tab import SoapBoxxTab
+    from scoop_tab import ScoopTab
+    from reverb_tab import ReverbTab
+    print("✅ Demo tab classes imported successfully")
+except ImportError as e:
+    print(f"⚠️  Demo tab classes not available: {e}")
+    # Fallback placeholder classes will be used
 
 # (imports moved into try/except above for dual compatibility)
 
