@@ -16,49 +16,41 @@ backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "bac
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
-# Use package-relative imports to support `python -m frontend.main_window`
+# Import modules for direct script execution
 try:
-    from .batch_processor import BatchProcessorDialog
-    from .export_manager import ExportManager
-    from .keyboard_shortcuts import ShortcutHandler
-    from .reverb_tab import ReverbTab
-    from .scoop_tab import ScoopTab
-    from .soapboxx_tab import SoapBoxxTab
-    from .theme_manager import ThemeManager
-except ImportError:
-    # Fallback for direct script execution
-    try:
-        from batch_processor import BatchProcessorDialog
-        from export_manager import ExportManager
-        from keyboard_shortcuts import ShortcutHandler
-        from reverb_tab import ReverbTab
-        from scoop_tab import ScoopTab
-        from soapboxx_tab import SoapBoxxTab
-        from theme_manager import ThemeManager
-    except ImportError as e:
-        print(f"Warning: Some frontend modules not available: {e}")
+    from batch_processor import BatchProcessorDialog
+    from export_manager import ExportManager
+    from keyboard_shortcuts import ShortcutHandler
+    from reverb_tab import ReverbTab
+    from scoop_tab import ScoopTab
+    from soapboxx_tab import SoapBoxxTab
+    from theme_manager import ThemeManager
+    print("✅ All frontend modules imported successfully")
+except ImportError as e:
+    print(f"❌ Import error: {e}")
+    print("Creating placeholder classes...")
+    
+    # Create placeholder classes for missing modules
+    class BatchProcessorDialog:
+        pass
 
-        # Create placeholder classes for missing modules
-        class BatchProcessorDialog:
-            pass
+    class ExportManager:
+        pass
 
-        class ExportManager:
-            pass
+    class ShortcutHandler:
+        pass
 
-        class ShortcutHandler:
-            pass
+    class ReverbTab:
+        pass
 
-        class ReverbTab:
-            pass
+    class ScoopTab:
+        pass
 
-        class ScoopTab:
-            pass
+    class SoapBoxxTab:
+        pass
 
-        class SoapBoxxTab:
-            pass
-
-        class ThemeManager:
-            pass
+    class ThemeManager:
+        pass
 
 
 from PyQt6.QtCore import QDate, Qt, QTime, QTimer
@@ -526,6 +518,7 @@ class MainWindow(QMainWindow):
                 if actual_tab:
                     # Replace placeholder with actual tab
                     self.tab_widget.removeTab(index)
+                    # PyQt6-compliant insertTab - use proper signature
                     self.tab_widget.insertTab(index, actual_tab, tab_name)
                     self._tabs_loaded[tab_name] = True
                     self.tab_widget.setCurrentIndex(index)
