@@ -162,46 +162,46 @@ class FeedbackEngine:
             max_tokens = 1200
 
         # Call OpenAI API
-        if self.use_new_api and self.client:
-            response = self.client.chat.completions.create(
+            if self.use_new_api and self.client:
+                response = self.client.chat.completions.create(
                 model=(
                     "gpt-4"
                     if analysis_depth in ["comprehensive", "expert"]
                     else "gpt-3.5-turbo"
                 ),
-                messages=[
-                    {
-                        "role": "system",
+                    messages=[
+                        {
+                            "role": "system",
                         "content": self._get_system_prompt(analysis_depth),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
                 max_tokens=max_tokens,
                 temperature=(
                     0.3 if analysis_depth in ["comprehensive", "expert"] else 0.7
                 ),
-            )
-            analysis_text = response.choices[0].message.content.strip()
-        else:
+                )
+                analysis_text = response.choices[0].message.content.strip()
+            else:
             # Fallback to old API
-            try:
-                response = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {
-                            "role": "system",
+                try:
+                    response = openai.ChatCompletion.create(
+                        model="gpt-3.5-turbo",
+                        messages=[
+                            {
+                                "role": "system",
                             "content": self._get_system_prompt(analysis_depth),
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
+                            },
+                            {"role": "user", "content": prompt},
+                        ],
                     max_tokens=max_tokens,
                     temperature=(
                         0.3 if analysis_depth in ["comprehensive", "expert"] else 0.7
                     ),
-                )
-                analysis_text = response.choices[0].message.content.strip()
-            except Exception as old_api_error:
-                print(f"Old API failed: {old_api_error}")
+                    )
+                    analysis_text = response.choices[0].message.content.strip()
+                except Exception as old_api_error:
+                    print(f"Old API failed: {old_api_error}")
                 raise
 
         # Parse and enhance the response

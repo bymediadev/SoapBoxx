@@ -1,12 +1,52 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-
 a = Analysis(
     ['frontend\\main_window.py'],
     pathex=[],
     binaries=[],
-    datas=[('backend', 'backend'), ('frontend', 'frontend')],
-    hiddenimports=['backend', 'frontend', 'PyQt6', 'pyaudio', 'openai', 'whisper', 'gtts'],
+    datas=[
+        ('backend', 'backend'), 
+        ('frontend', 'frontend'),
+        ('backend\\__init__.py', 'backend'),
+        ('frontend\\__init__.py', 'frontend'),
+        ('backend\\config.py', 'backend'),
+        ('backend\\feedback_engine.py', 'backend'),
+        ('backend\\guest_research.py', 'backend'),
+        ('backend\\soapboxx_core.py', 'backend'),
+        ('backend\\transcriber.py', 'backend'),
+        ('backend\\tts_generator.py', 'backend'),
+        ('frontend\\batch_processor.py', 'frontend'),
+        ('frontend\\export_manager.py', 'frontend'),
+        ('frontend\\feedback_dialog.py', 'frontend'),
+        ('frontend\\keyboard_shortcuts.py', 'frontend'),
+        ('frontend\\reverb_tab.py', 'frontend'),
+        ('frontend\\scoop_tab.py', 'frontend'),
+        ('frontend\\soapboxx_tab.py', 'frontend'),
+        ('frontend\\theme_manager.py', 'frontend'),
+    ],
+    hiddenimports=[
+        'backend', 
+        'frontend', 
+        'PyQt6', 
+        'pyaudio', 
+        'openai', 
+        'whisper', 
+        'gtts',
+        'backend.config',
+        'backend.feedback_engine',
+        'backend.guest_research',
+        'backend.soapboxx_core',
+        'backend.transcriber',
+        'backend.tts_generator',
+        'frontend.batch_processor',
+        'frontend.export_manager',
+        'frontend.feedback_dialog',
+        'frontend.keyboard_shortcuts',
+        'frontend.reverb_tab',
+        'frontend.scoop_tab',
+        'frontend.soapboxx_tab',
+        'frontend.theme_manager',
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -15,7 +55,6 @@ a = Analysis(
     optimize=0,
 )
 pyz = PYZ(a.pure)
-
 exe = EXE(
     pyz,
     a.scripts,
@@ -29,7 +68,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=True,  # Changed to True for debugging
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
