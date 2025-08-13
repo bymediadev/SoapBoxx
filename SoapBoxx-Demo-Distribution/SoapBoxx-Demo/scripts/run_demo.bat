@@ -17,27 +17,19 @@ if errorlevel 1 (
 REM Check if we're in the right directory
 if not exist "frontend\main_window.py" (
     echo ❌ main_window.py not found
-    echo Please run this script from the SoapBoxx root directory
+    echo Please run this script from the SoapBoxx-Demo directory
+    echo.
+    echo Current directory: %CD%
+    echo Expected files: frontend\main_window.py
+    echo.
+    echo Make sure you extracted the ZIP file and are in the SoapBoxx-Demo folder
     pause
     exit /b 1
 )
 
-REM Check if we're on the demo branch
-git branch --show-current | findstr "demo/soapboxx-barebones" >nul
-if errorlevel 1 (
-    echo ⚠️  Warning: Not on demo branch
-    echo Current branch: 
-    git branch --show-current
-    echo.
-    echo To switch to demo branch: git checkout demo/soapboxx-barebones
-    echo.
-    set /p continue="Continue anyway? (y/N): "
-    if /i not "%continue%"=="y" (
-        echo Aborted.
-        pause
-        exit /b 1
-    )
-)
+REM Check if we're in a demo package (standalone)
+echo ✅ Running from SoapBoxx Demo package
+echo.
 
 echo ✅ Python found: 
 python --version
@@ -78,35 +70,40 @@ REM Check if barebones modules exist
 echo 🔍 Checking barebones modules...
 if not exist "backend\feedback_engine_barebones.py" (
     echo ❌ Missing: feedback_engine_barebones.py
-    echo Please ensure you're on the demo branch
+    echo This file should be in the backend directory
+    echo Please ensure the demo package is complete
     pause
     exit /b 1
 )
 
 if not exist "backend\guest_research_barebones.py" (
     echo ❌ Missing: guest_research_barebones.py
-    echo Please ensure you're on the demo branch
+    echo This file should be in the backend directory
+    echo Please ensure the demo package is complete
     pause
     exit /b 1
 )
 
 if not exist "backend\transcriber_barebones.py" (
     echo ❌ Missing: transcriber_barebones.py
-    echo Please ensure you're on the demo branch
+    echo This file should be in the backend directory
+    echo Please ensure the demo package is complete
     pause
     exit /b 1
 )
 
 if not exist "backend\tts_generator_barebones.py" (
     echo ❌ Missing: tts_generator_barebones.py
-    echo Please ensure you're on the demo branch
+    echo This file should be in the backend directory
+    echo Please ensure the demo package is complete
     pause
     exit /b 1
 )
 
 if not exist "backend\soapboxx_core_barebones.py" (
     echo ❌ Missing: soapboxx_core_barebones.py
-    echo Please ensure you're on the demo branch
+    echo This file should be in the backend directory
+    echo Please ensure the demo package is complete
     pause
     exit /b 1
 )

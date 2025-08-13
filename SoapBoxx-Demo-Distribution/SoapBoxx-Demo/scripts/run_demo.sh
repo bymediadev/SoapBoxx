@@ -1,52 +1,42 @@
 #!/bin/bash
 
-echo
+echo ""
 echo "========================================"
-echo "    SoapBoxx Demo - Quick Launcher"
+echo "   SoapBoxx Demo - Quick Launcher"
 echo "========================================"
-echo
+echo ""
 
-# Check if Python is installed
-if ! command -v python3 &> /dev/null; then
-    if ! command -v python &> /dev/null; then
-        echo "❌ Python is not installed or not in PATH"
-        echo "Please install Python 3.8+ and try again"
-        exit 1
-    else
-        PYTHON_CMD="python"
-    fi
-else
+# Find Python command
+PYTHON_CMD=""
+if command -v python3 &> /dev/null; then
     PYTHON_CMD="python3"
+elif command -v python &> /dev/null; then
+    PYTHON_CMD="python"
+else
+    echo "❌ Python is not installed or not in PATH"
+    echo "Please install Python 3.8+ and try again"
+    exit 1
 fi
 
 # Check if we're in the right directory
 if [ ! -f "frontend/main_window.py" ]; then
     echo "❌ main_window.py not found"
-    echo "Please run this script from the SoapBoxx root directory"
+    echo "Please run this script from the SoapBoxx-Demo directory"
+    echo ""
+    echo "Current directory: $(pwd)"
+    echo "Expected files: frontend/main_window.py"
+    echo ""
+    echo "Make sure you extracted the ZIP file and are in the SoapBoxx-Demo folder"
     exit 1
 fi
 
-# Check if we're on the demo branch
-CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
-if [ $? -ne 0 ]; then
-    echo "⚠️  Warning: Not in a git repository"
-    echo "Continuing anyway..."
-elif [ "$CURRENT_BRANCH" != "demo/soapboxx-barebones" ]; then
-    echo "⚠️  Warning: Not on demo branch"
-    echo "Current branch: $CURRENT_BRANCH"
-    echo
-    echo "To switch to demo branch: git checkout demo/soapboxx-barebones"
-    echo
-    read -p "Continue anyway? (y/N): " continue
-    if [[ ! $continue =~ ^[Yy]$ ]]; then
-        echo "Aborted."
-        exit 1
-    fi
-fi
+# Check if we're in a demo package (standalone)
+echo "✅ Running from SoapBoxx Demo package"
+echo ""
 
 echo "✅ Python found:"
 $PYTHON_CMD --version
-echo
+echo ""
 
 # Check if required modules are installed
 echo "🔍 Checking dependencies..."
@@ -74,7 +64,7 @@ if ! $PYTHON_CMD -c "import requests" &> /dev/null; then
 fi
 
 echo "✅ Dependencies ready!"
-echo
+echo ""
 
 # Check if barebones modules exist
 echo "🔍 Checking barebones modules..."
@@ -106,17 +96,17 @@ if [ ${#MISSING_MODULES[@]} -gt 0 ]; then
     for module in "${MISSING_MODULES[@]}"; do
         echo "   - $module"
     done
-    echo "Please ensure you're on the demo branch"
+    echo "Please ensure the demo package is complete"
     exit 1
 fi
 
 echo "✅ All barebones modules found!"
-echo
+echo ""
 
 echo "🚀 Launching SoapBoxx Demo..."
-echo
+echo ""
 echo "========================================"
-echo "    Demo Features Available:"
+echo "   Demo Features Available:"
 echo "========================================"
 echo "🧠 Content Analysis (SoapBoxx Tab)"
 echo "🔍 Guest Research (Scoop Tab)"
@@ -125,21 +115,22 @@ echo "📊 Session Management"
 echo "🎨 Theme Customization"
 echo "⌨️  Keyboard Shortcuts"
 echo "========================================"
-echo
+echo ""
 
 # Launch the application
 $PYTHON_CMD frontend/main_window.py
 
 # Check exit code
-if [ $? -ne 0 ]; then
-    echo
+if [ $? -eq 0 ]; then
+    echo ""
+    echo "✅ SoapBoxx Demo closed successfully"
+else
+    echo ""
     echo "❌ SoapBoxx Demo exited with an error"
     echo "Check the error messages above for details"
-    echo
+    echo ""
     echo "For help, see TUTORIAL_DEMO.md or README_DEMO.md"
-else
-    echo
-    echo "✅ SoapBoxx Demo closed successfully"
 fi
 
-echo
+echo ""
+read -p "Press Enter to continue..."
