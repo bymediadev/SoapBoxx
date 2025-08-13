@@ -47,6 +47,8 @@ jobs:
         if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
         if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
         if (Test-Path "*.spec") { Remove-Item -Force "*.spec" }
+        # Ensure dist directory is completely empty
+        New-Item -ItemType Directory -Force -Path "dist" | Out-Null
         
     - name: Create PyInstaller spec file
       run: |
@@ -101,6 +103,9 @@ jobs:
       run: |
         rm -rf dist/ build/
         rm -f *.spec
+        # Ensure dist directory is completely empty
+        mkdir -p dist
+        rm -rf dist/*
         
     - name: Create PyInstaller spec file
       run: |
@@ -154,6 +159,9 @@ jobs:
       run: |
         rm -rf dist/ build/
         rm -f *.spec
+        # Ensure dist directory is completely empty
+        mkdir -p dist
+        rm -rf dist/*
         
     - name: Create PyInstaller spec file
       run: |
