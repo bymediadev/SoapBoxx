@@ -110,6 +110,15 @@ from PyQt6.QtWidgets import (QApplication, QComboBox, QDateEdit, QDialog,
                              QStatusBar, QTabWidget, QTextEdit, QTimeEdit,
                              QVBoxLayout, QWidget)
 
+# Import the bulletproof tab loader
+try:
+    from bulletproof_tab_loader import create_bulletproof_tab_loader
+    BULLETPROOF_LOADER_AVAILABLE = True
+    print("✅ Bulletproof tab loader imported successfully")
+except ImportError:
+    print("⚠️  Bulletproof tab loader not available, using fallback")
+    BULLETPROOF_LOADER_AVAILABLE = False
+
 # (imports moved into try/except above for dual compatibility)
 
 # BaseTab class to enforce QWidget contract
@@ -521,6 +530,14 @@ class MainWindow(QMainWindow):
                     if not hasattr(self, "_tab_creators"):
                         self._tab_creators = {}
                     self._tab_creators[tab_name] = tab_creator
+                
+                # Initialize bulletproof tab loader if available
+                if not hasattr(self, 'tab_loader') and BULLETPROOF_LOADER_AVAILABLE:
+                    self.tab_loader = create_bulletproof_tab_loader(self.tab_widget)
+                    print("✅ Bulletproof tab loader initialized")
+                elif not hasattr(self, 'tab_loader'):
+                    self.tab_loader = None
+                    print("⚠️  Using fallback tab loading")
 
                 except Exception as e:
                     error_msg = (
@@ -574,24 +591,36 @@ class MainWindow(QMainWindow):
                 self.tab_widget.blockSignals(True)
                 actual_tab = tab_creator()
                 
-                # ✅ Guarantee QWidget type before insert - PyQt6 safety
-                if actual_tab and isinstance(actual_tab, QWidget):
-                    # Replace placeholder with actual tab
-                    self.tab_widget.removeTab(index)
-                    self.tab_widget.insertTab(index, actual_tab, tab_name)
-                    self._tabs_loaded[tab_name] = True
-                    self.tab_widget.setCurrentIndex(index)
-                    print(f"✅ {tab_name} tab loaded successfully")
+                # Use bulletproof tab loader if available, otherwise fallback
+                if self.tab_loader:
+                    # Use the bulletproof loader for guaranteed success
+                    success = self.tab_loader.safe_insert_tab(index, actual_tab, tab_name)
+                    if success:
+                        self._tabs_loaded[tab_name] = True
+                        self.tab_widget.setCurrentIndex(index)
+                        print(f"✅ {tab_name} tab loaded successfully via bulletproof loader")
+                    else:
+                        print(f"❌ Bulletproof loader failed for {tab_name}")
+                        self._tabs_loaded[tab_name] = False
                 else:
-                    print(f"❌ Failed to create {tab_name} tab - invalid widget type: {type(actual_tab)}")
-                    self._tabs_loaded[tab_name] = False
-                    
-                    # Create a placeholder tab for failed tabs
-                    placeholder = self._create_placeholder_tab(tab_name, f"Failed to load {tab_name} tab")
-                    if placeholder:
+                    # Fallback to manual QWidget validation
+                    if actual_tab and isinstance(actual_tab, QWidget):
+                        # Replace placeholder with actual tab
                         self.tab_widget.removeTab(index)
-                        self.tab_widget.insertTab(index, placeholder, tab_name)
-                        print(f"✅ {tab_name} placeholder tab created")
+                        self.tab_widget.insertTab(index, actual_tab, tab_name)
+                        self._tabs_loaded[tab_name] = True
+                        self.tab_widget.setCurrentIndex(index)
+                        print(f"✅ {tab_name} tab loaded successfully via fallback")
+                    else:
+                        print(f"❌ Failed to create {tab_name} tab - invalid widget type: {type(actual_tab)}")
+                        self._tabs_loaded[tab_name] = False
+                        
+                        # Create a placeholder tab for failed tabs
+                        placeholder = self._create_placeholder_tab(tab_name, f"Failed to load {tab_name} tab")
+                        if placeholder:
+                            self.tab_widget.removeTab(index)
+                            self.tab_widget.insertTab(index, placeholder, tab_name)
+                            print(f"✅ {tab_name} placeholder tab created")
             finally:
                 self.tab_widget.blockSignals(False)
                 self._is_switching_tab = False
