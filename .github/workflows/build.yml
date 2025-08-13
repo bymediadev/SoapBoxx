@@ -110,7 +110,7 @@ jobs:
     - name: Create PyInstaller spec file
       run: |
         echo "Creating PyInstaller spec file..."
-        python -m PyInstaller --onedir --name SoapBoxx --add-data "backend:backend" --add-data "frontend:frontend" --hidden-import "backend" --hidden-import "frontend" --hidden-import "PyQt6" --hidden-import "pyaudio" --hidden-import "openai" --hidden-import "whisper" --hidden-import "gtts" frontend/main_window.py
+        python -m PyInstaller --onefile --name SoapBoxx --add-data "backend:backend" --add-data "frontend:frontend" --hidden-import "backend" --hidden-import "frontend" --hidden-import "PyQt6" --hidden-import "pyaudio" --hidden-import "openai" --hidden-import "whisper" --hidden-import "gtts" frontend/main_window.py
         
     - name: Build macOS app
       run: |
@@ -118,8 +118,8 @@ jobs:
         
     - name: Check file size
       run: |
-        if [ -f "dist/SoapBoxx/SoapBoxx" ]; then
-          size=$(stat -f%z "dist/SoapBoxx/SoapBoxx")
+        if [ -f "dist/SoapBoxx" ]; then
+          size=$(stat -f%z "dist/SoapBoxx")
           sizeMB=$(echo "scale=2; $size/1024/1024" | bc)
           echo "macOS build size: $sizeMB MB"
           if [ $size -gt 2147483648 ]; then
@@ -134,7 +134,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: SoapBoxx-macOS
-        path: dist/SoapBoxx/
+        path: dist/SoapBoxx
         
   build-linux:
     runs-on: ubuntu-latest
