@@ -38,22 +38,32 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
         
+    - name: Install pyaudio (Windows)
+      run: |
+        pip install pyaudio
+        
     - name: Create PyInstaller spec file
       run: |
         echo "Creating PyInstaller spec file..."
-        pyi-makespec --onefile --windowed --name SoapBoxx --add-data "backend;backend" --add-data "frontend;frontend" --hidden-import "backend" --hidden-import "frontend" --hidden-import "PyQt6" --hidden-import "pyaudio" --hidden-import "openai" --hidden-import "whisper" --hidden-import "gtts" frontend/main_window.py
+        python -m PyInstaller --onefile --windowed --name SoapBoxx --add-data "backend;backend" --add-data "frontend;frontend" --hidden-import "backend" --hidden-import "frontend" --hidden-import "PyQt6" --hidden-import "pyaudio" --hidden-import "openai" --hidden-import "whisper" --hidden-import "gtts" frontend/main_window.py
         
     - name: Build Windows executable
       run: |
-        pyinstaller SoapBoxx.spec
+        python -m PyInstaller SoapBoxx.spec
         
-    - name: Check file size
+    - name: Check file size and verify build
       run: |
-        $size = (Get-Item "dist/SoapBoxx.exe").Length
-        $sizeMB = [math]::Round($size / 1MB, 2)
-        echo "Windows build size: $sizeMB MB"
-        if ($size -gt 2GB) {
-          echo "Warning: File size exceeds 2GB limit"
+        if (Test-Path "dist/SoapBoxx.exe") {
+          $size = (Get-Item "dist/SoapBoxx.exe").Length
+          $sizeMB = [math]::Round($size / 1MB, 2)
+          echo "Windows build size: $sizeMB MB"
+          if ($size -lt 1000000) {
+            echo "ERROR: Executable is too small - build may have failed"
+            exit 1
+          }
+        } else {
+          echo "ERROR: Executable not found - build failed"
+          exit 1
         }
         
     - name: Upload Windows artifact
@@ -84,11 +94,11 @@ jobs:
     - name: Create PyInstaller spec file
       run: |
         echo "Creating PyInstaller spec file..."
-        pyi-makespec --onefile --windowed --name SoapBoxx --add-data "backend:backend" --add-data "frontend:frontend" --hidden-import "backend" --hidden-import "frontend" --hidden-import "PyQt6" --hidden-import "pyaudio" --hidden-import "openai" --hidden-import "whisper" --hidden-import "gtts" frontend/main_window.py
+        python -m PyInstaller --onefile --windowed --name SoapBoxx --add-data "backend:backend" --add-data "frontend:frontend" --hidden-import "backend" --hidden-import "frontend" --hidden-import "PyQt6" --hidden-import "pyaudio" --hidden-import "openai" --hidden-import "whisper" --hidden-import "gtts" frontend/main_window.py
         
     - name: Build macOS app
       run: |
-        pyinstaller SoapBoxx.spec
+        python -m PyInstaller SoapBoxx.spec
         
     - name: Check file size
       run: |
@@ -127,11 +137,11 @@ jobs:
     - name: Create PyInstaller spec file
       run: |
         echo "Creating PyInstaller spec file..."
-        pyi-makespec --onefile --name SoapBoxx --add-data "backend:backend" --add-data "frontend:frontend" --hidden-import "backend" --hidden-import "frontend" --hidden-import "PyQt6" --hidden-import "pyaudio" --hidden-import "openai" --hidden-import "whisper" --hidden-import "gtts" frontend/main_window.py
+        python -m PyInstaller --onefile --name SoapBoxx --add-data "backend:backend" --add-data "frontend:frontend" --hidden-import "backend" --hidden-import "frontend" --hidden-import "PyQt6" --hidden-import "pyaudio" --hidden-import "openai" --hidden-import "whisper" --hidden-import "gtts" frontend/main_window.py
         
     - name: Build Linux executable
       run: |
-        pyinstaller SoapBoxx.spec
+        python -m PyInstaller SoapBoxx.spec
         
     - name: Check file size
       run: |
