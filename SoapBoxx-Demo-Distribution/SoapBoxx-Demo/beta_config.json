@@ -1,0 +1,4 @@
+{
+  "admin_email": "whymastermind@gmail.com",
+  "notes": "Events log to beta_events.jsonl. To email this address: copy .env.example to .env and set SMTP_* (Gmail app password), or RESEND_API_KEY / SENDGRID_API_KEY. Optional: deploy server/notify_server.py and set NOTIFY_WEBHOOK_URL in .env."
+}

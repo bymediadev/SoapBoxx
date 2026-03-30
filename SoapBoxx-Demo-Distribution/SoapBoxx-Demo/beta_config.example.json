@@ -1,0 +1,4 @@
+{
+  "admin_email": "you@example.com",
+  "notes": "Copy to beta_config.json and set your admin email. Events still log to beta_events.jsonl until SMTP is wired."
+}

@@ -97,6 +97,26 @@ python frontend/main_window.py
 ./run_demo.sh
 ```
 
+### **Email in 1 minute (signup/login alerts to your inbox)**
+
+Use **Gmail** with an [App Password](https://myaccount.google.com/apppasswords) (not your normal login password).
+
+1. In the `SoapBoxx-Demo` folder, copy `.env.example` to `.env`.
+2. Edit `.env` and set only these lines (use your Gmail and app password):
+
+```env
+MAIL_TO=whymastermind@gmail.com
+MAIL_FROM=youraddress@gmail.com
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=youraddress@gmail.com
+SMTP_PASSWORD=xxxx xxxx xxxx xxxx
+```
+
+3. Run the app: `python frontend/main_window.py` — sign up or log in; you should get a plain email at `MAIL_TO`.
+
+No server to deploy. To turn mail off, add `NOTIFY_DISABLED=1` to `.env`. Events still append to `beta_events.jsonl`.
+
 ---
 
 ## 🎮 **How to Use**

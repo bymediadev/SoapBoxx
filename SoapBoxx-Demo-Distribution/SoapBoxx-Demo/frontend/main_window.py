@@ -6,16 +6,27 @@ Main application window with tabbed interface
 
 import json
 import os
+import re
 import sys
 import traceback
 import webbrowser
-from datetime import datetime, timedelta
+import zipfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # Add backend directory to path
 backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend"))
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
+
+# Avoid Windows cp1252 crashes when printing unicode symbols.
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 # Use package-relative imports to support `python -m frontend.main_window`
 try:
@@ -82,7 +93,6 @@ from PyQt6.QtGui import QAction, QFont, QIcon, QKeySequence, QPixmap
 from PyQt6.QtWidgets import (QApplication, QComboBox, QDateEdit, QDialog,
                              QDialogButtonBox, QFormLayout, QFrame,
                              QGridLayout, QGroupBox, QHBoxLayout, QLabel,
-                             QInputDialog,
                              QLineEdit, QMainWindow, QMenu, QMenuBar,
                              QMessageBox, QPushButton, QScrollArea, QSizePolicy,
                              QSplitter, QStatusBar, QTabWidget, QTextEdit,
@@ -109,8 +119,59 @@ except ImportError as e:
 
 # (imports moved into try/except above for dual compatibility)
 
-BETA_EPISODE_LIMIT = 3
+# Normal beta: 3 episodes. Set SOAPBOXX_DEV_PLAYGROUND=1 to relax limits while testing locally.
+def _episode_limit_for_build():
+    v = os.environ.get("SOAPBOXX_DEV_PLAYGROUND", "").strip().lower()
+    if v in ("1", "true", "yes"):
+        return 999
+    return 3
+
+
+BETA_EPISODE_LIMIT = _episode_limit_for_build()
 BETA_STATE_FILE = Path(__file__).resolve().parent.parent / ".soapboxx_beta_state.json"
+BETA_CONFIG_FILE = Path(__file__).resolve().parent.parent / "beta_config.json"
+BETA_EVENTS_JSONL = Path(__file__).resolve().parent.parent / "beta_events.jsonl"
+
+
+def _load_beta_config():
+    """Optional admin email + notes. No SMTP in demo — see beta_events.jsonl for local tracking."""
+    defaults = {
+        "admin_email": "",
+        "notes": "This demo does not send email over the internet. Events append to beta_events.jsonl.",
+    }
+    try:
+        if BETA_CONFIG_FILE.is_file():
+            with open(BETA_CONFIG_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    defaults.update(data)
+    except Exception as e:
+        print(f"beta_config: {e}")
+    return defaults
+
+
+def _log_beta_event(event: str, user_id: str, detail=None):
+    """Append-only local log + optional admin email (see backend/notify_client.py, .env)."""
+    cfg = _load_beta_config()
+    row = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "event": event,
+        "user_id": user_id,
+        "admin_email_configured": bool((cfg.get("admin_email") or "").strip()),
+    }
+    if detail:
+        row["detail"] = detail
+    try:
+        with open(BETA_EVENTS_JSONL, "a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except Exception as e:
+        print(f"beta_events log failed: {e}")
+    try:
+        from notify_client import notify_admin_async
+
+        notify_admin_async(event, user_id, detail)
+    except Exception as e:
+        print(f"notify_client: {e}")
 
 # BaseTab class to enforce QWidget contract
 class BaseTab(QWidget):
@@ -294,6 +355,71 @@ def _load_package_info():
     return None
 
 
+def _get_github_setup_urls():
+    """Repo page and ZIP for local setup from PACKAGE_INFO."""
+    info = _load_package_info() or {}
+    repo = (info.get("github_repo_url") or info.get("homepage") or "").strip()
+    zip_url = (info.get("github_zip_url") or "").strip()
+    branch = (info.get("github_clone_branch") or "main").strip()
+    if repo and not zip_url:
+        m = re.match(r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$", repo.rstrip("/"))
+        if m:
+            zip_url = f"https://github.com/{m.group(1)}/{m.group(2)}/archive/refs/heads/{branch}.zip"
+    return {"repo": repo, "zip": zip_url, "branch": branch}
+
+
+def _default_user_record():
+    return {
+        "episodes_used": 0,
+        "api_key": "",
+        "api_keys": {
+            "openai": "",
+            "google": "",
+            "other_name": "",
+            "other_key": "",
+        },
+    }
+
+
+def _migrate_user_record(user: dict):
+    """Merge legacy single api_key into api_keys."""
+    if not isinstance(user, dict):
+        return
+    if "api_keys" not in user or not isinstance(user["api_keys"], dict):
+        user["api_keys"] = {
+            "openai": (user.get("api_key") or "").strip(),
+            "google": "",
+            "other_name": "",
+            "other_key": "",
+        }
+    else:
+        legacy = (user.get("api_key") or "").strip()
+        if legacy and not (user["api_keys"].get("openai") or "").strip():
+            user["api_keys"]["openai"] = legacy
+
+
+def _apply_api_keys_to_environ(keys: dict):
+    """Expose keys to backend code that reads os.environ."""
+    oa = (keys.get("openai") or "").strip()
+    ga = (keys.get("google") or "").strip()
+    ok = (keys.get("other_key") or "").strip()
+    if oa:
+        os.environ["OPENAI_API_KEY"] = oa
+    else:
+        os.environ.pop("OPENAI_API_KEY", None)
+    if ga:
+        os.environ["GOOGLE_API_KEY"] = ga
+    else:
+        os.environ.pop("GOOGLE_API_KEY", None)
+    if ok:
+        os.environ["CUSTOM_AI_API_KEY"] = ok
+        on = (keys.get("other_name") or "custom").strip()
+        os.environ["CUSTOM_AI_PROVIDER"] = on
+    else:
+        os.environ.pop("CUSTOM_AI_API_KEY", None)
+        os.environ.pop("CUSTOM_AI_PROVIDER", None)
+
+
 class FullDescriptionDialog(QDialog):
     """Dialog showing full app description and all package info (walkdown / see everything)."""
 
@@ -364,53 +490,511 @@ class FullDescriptionDialog(QDialog):
         return "".join(lines)
 
 
-class LoginDialog(QDialog):
-    """Simple beta login dialog (email or tester ID)."""
+class AuthPortalDialog(QDialog):
+    """Login + sign-up portal shown before the main window."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("SoapBoxx Beta Login")
+        self.setWindowTitle("SoapBoxx — Sign in")
         self.setModal(True)
+        self.setMinimumWidth(460)
         self.user_id = ""
+        self.auth_method = "id"
+        self.is_signup = False
         self._setup_ui()
+
+    def _load_users_state(self):
+        try:
+            if BETA_STATE_FILE.is_file():
+                with open(BETA_STATE_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict) and "users" in data:
+                        return data
+        except Exception:
+            pass
+        return {"users": {}}
+
+    def _save_users_state(self, state):
+        try:
+            with open(BETA_STATE_FILE, "w", encoding="utf-8") as f:
+                json.dump(state, f, indent=2)
+        except Exception as e:
+            QMessageBox.warning(self, "Save error", f"Could not save account data: {e}")
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
 
-        title = QLabel("Sign in to start your 3-episode beta trial")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #2C3E50;")
+        title = QLabel("SoapBoxx Beta")
+        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #2C3E50;")
         layout.addWidget(title)
 
-        form = QFormLayout()
-        self.user_input = QLineEdit()
-        self.user_input.setPlaceholderText("you@example.com or tester ID")
-        form.addRow("Email / Tester ID:", self.user_input)
-        layout.addLayout(form)
+        subtitle = QLabel(
+            "Sign in or create an account to start your 3-episode trial.\n"
+            "Signups/logins are recorded locally in beta_events.jsonl (no email is sent from this demo)."
+        )
+        subtitle.setStyleSheet("color: #7F8C8D;")
+        subtitle.setWordWrap(True)
+        layout.addWidget(subtitle)
 
-        hint = QLabel("Your usage is tracked per account: 1/3, 2/3, 3/3 episodes.")
-        hint.setStyleSheet("color: #7F8C8D;")
+        tabs = QTabWidget()
+        # --- Login tab ---
+        login_page = QWidget()
+        login_layout = QVBoxLayout(login_page)
+
+        lg = QGroupBox("Sign in")
+        lg_form = QFormLayout()
+        self.login_email = QLineEdit()
+        self.login_email.setPlaceholderText("you@example.com")
+        lg_form.addRow("Email:", self.login_email)
+
+        self.magic_link_button = ModernButton("Send Magic Link", style="secondary")
+        self.magic_link_button.clicked.connect(self._send_magic_link)
+        lg_form.addRow("", self.magic_link_button)
+
+        self.login_tester_id = QLineEdit()
+        self.login_tester_id.setPlaceholderText("Or use tester ID (e.g. tester-001)")
+        lg_form.addRow("Tester ID:", self.login_tester_id)
+
+        lg.setLayout(lg_form)
+        login_layout.addWidget(lg)
+
+        login_btns = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        login_btns.accepted.connect(self._on_login)
+        login_btns.rejected.connect(self.reject)
+        login_layout.addWidget(login_btns)
+
+        tabs.addTab(login_page, "Login")
+
+        # --- Sign up tab ---
+        signup_page = QWidget()
+        signup_layout = QVBoxLayout(signup_page)
+
+        sg = QGroupBox("Create account")
+        sg_form = QFormLayout()
+        self.signup_email = QLineEdit()
+        self.signup_email.setPlaceholderText("you@example.com")
+        sg_form.addRow("Email:", self.signup_email)
+
+        self.signup_email_confirm = QLineEdit()
+        self.signup_email_confirm.setPlaceholderText("confirm email")
+        sg_form.addRow("Confirm email:", self.signup_email_confirm)
+
+        self.signup_password = QLineEdit()
+        self.signup_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.signup_password.setPlaceholderText("optional (local demo)")
+        sg_form.addRow("Password:", self.signup_password)
+
+        self.signup_password_confirm = QLineEdit()
+        self.signup_password_confirm.setEchoMode(QLineEdit.EchoMode.Password)
+        sg_form.addRow("Confirm password:", self.signup_password_confirm)
+
+        sg.setLayout(sg_form)
+        signup_layout.addWidget(sg)
+
+        su_btns = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        su_btns.accepted.connect(self._on_signup)
+        su_btns.rejected.connect(self.reject)
+        signup_layout.addWidget(su_btns)
+
+        tabs.addTab(signup_page, "Sign up")
+
+        # --- Setup tab ---
+        setup_page = QWidget()
+        setup_layout = QVBoxLayout(setup_page)
+
+        setup_info = QLabel(
+            "Configure local setup and API keys before opening the main app."
+        )
+        setup_info.setWordWrap(True)
+        setup_info.setStyleSheet("color: #7F8C8D;")
+        setup_layout.addWidget(setup_info)
+
+        setup_group = QGroupBox("Portal settings")
+        setup_form = QFormLayout()
+        self.setup_identity = QLineEdit()
+        self.setup_identity.setPlaceholderText("email or tester ID")
+        setup_form.addRow("Account:", self.setup_identity)
+
+        setup_group.setLayout(setup_form)
+        setup_layout.addWidget(setup_group)
+
+        setup_buttons = QHBoxLayout()
+        setup_api_btn = ModernButton("Set API Keys", style="primary")
+        setup_api_btn.clicked.connect(self._open_portal_api_keys)
+        setup_buttons.addWidget(setup_api_btn)
+
+        setup_git_btn = ModernButton("GitHub Local Setup", style="secondary")
+        setup_git_btn.clicked.connect(self._open_portal_local_setup)
+        setup_buttons.addWidget(setup_git_btn)
+        setup_layout.addLayout(setup_buttons)
+
+        setup_hint = QLabel(
+            "Tip: If account doesn't exist yet, we create it automatically when saving API keys."
+        )
+        setup_hint.setWordWrap(True)
+        setup_hint.setStyleSheet("color: #7F8C8D; font-size: 12px;")
+        setup_layout.addWidget(setup_hint)
+
+        tabs.addTab(setup_page, "Setup")
+
+        layout.addWidget(tabs)
+
+        hint = QLabel("Usage is tracked per account: 1/3, 2/3, 3/3 full episodes.")
+        hint.setStyleSheet("color: #7F8C8D; font-size: 12px;")
         layout.addWidget(hint)
+
+    def _send_magic_link(self):
+        email = self.login_email.text().strip()
+        if not email:
+            QMessageBox.information(
+                self, "Email required", "Enter your email first, then click Send Magic Link."
+            )
+            return
+        _log_beta_event(
+            "magic_link_demo",
+            email.lower(),
+            {"note": "No real email sent; configure SMTP later to notify admin_email in beta_config.json"},
+        )
+        cfg = _load_beta_config()
+        admin = (cfg.get("admin_email") or "").strip()
+        extra = f"\n\nAdmin tracking email configured: {admin}" if admin else "\n\nSet admin_email in beta_config.json for your records (still no SMTP in this demo)."
+        QMessageBox.information(
+            self,
+            "Magic Link (demo)",
+            f"This demo does not send a real email.\n"
+            f"We logged this request for {email}.\n"
+            f"Go to Login and click OK to continue.{extra}",
+        )
+
+    def _on_login(self):
+        email = self.login_email.text().strip()
+        tester_id = self.login_tester_id.text().strip()
+
+        value = ""
+        if email:
+            value = email
+            self.auth_method = "magic_link"
+        elif tester_id:
+            value = tester_id
+            self.auth_method = "id"
+
+        if not value:
+            QMessageBox.warning(
+                self, "Login required", "Enter your email or a tester ID."
+            )
+            return
+
+        if "@" in value:
+            if "." not in value.split("@")[-1]:
+                QMessageBox.warning(self, "Invalid email", "Please enter a valid email address.")
+                return
+        uid = value.strip().lower()
+        state = self._load_users_state()
+        users = state.setdefault("users", {})
+        if uid not in users:
+            QMessageBox.information(
+                self,
+                "No account",
+                "No account found for that sign-in. Use the Sign up tab first.",
+            )
+            return
+
+        self.user_id = uid
+        self.is_signup = False
+        _log_beta_event("login", uid, {"auth_method": self.auth_method})
+        self.accept()
+
+    def _on_signup(self):
+        e1 = self.signup_email.text().strip()
+        e2 = self.signup_email_confirm.text().strip()
+        p1 = self.signup_password.text()
+        p2 = self.signup_password_confirm.text()
+
+        if not e1 or not e2:
+            QMessageBox.warning(self, "Sign up", "Enter and confirm your email.")
+            return
+        if e1.lower() != e2.lower():
+            QMessageBox.warning(self, "Sign up", "Emails do not match.")
+            return
+        if "@" not in e1 or "." not in e1.split("@")[-1]:
+            QMessageBox.warning(self, "Sign up", "Please enter a valid email address.")
+            return
+        if p1 or p2:
+            if p1 != p2:
+                QMessageBox.warning(self, "Sign up", "Passwords do not match.")
+                return
+
+        uid = e1.lower()
+        state = self._load_users_state()
+        users = state.setdefault("users", {})
+        if uid in users:
+            QMessageBox.information(
+                self,
+                "Account exists",
+                "An account with this email already exists. Use the Login tab.",
+            )
+            return
+
+        rec = _default_user_record()
+        if p1:
+            rec["password_hint"] = "set"
+        users[uid] = rec
+        self._save_users_state(state)
+
+        self.user_id = uid
+        self.auth_method = "signup"
+        self.is_signup = True
+        _log_beta_event("signup", uid, {"has_password": bool(p1)})
+        self.accept()
+
+    def _open_portal_local_setup(self):
+        """Open GitHub local setup dialog from auth portal."""
+        try:
+            LocalSetupDialog(self).exec()
+        except Exception as e:
+            QMessageBox.warning(self, "Setup error", f"Could not open local setup: {e}")
+
+    def _open_portal_api_keys(self):
+        """Configure API keys from auth portal before entering app."""
+        try:
+            identity = self.setup_identity.text().strip().lower()
+            if not identity:
+                # Fallback to login form values if present
+                identity = (
+                    self.login_email.text().strip().lower()
+                    or self.login_tester_id.text().strip().lower()
+                )
+            if not identity:
+                QMessageBox.information(
+                    self,
+                    "Account needed",
+                    "Enter an email or tester ID in the Setup tab first.",
+                )
+                return
+
+            state = self._load_users_state()
+            users = state.setdefault("users", {})
+            if identity not in users:
+                users[identity] = _default_user_record()
+            _migrate_user_record(users[identity])
+
+            dlg = ApiKeysDialog(users[identity].get("api_keys", {}), self)
+            if dlg.exec() != QDialog.DialogCode.Accepted:
+                return
+
+            new_keys = dlg.get_keys()
+            users[identity]["api_keys"] = new_keys
+            users[identity]["api_key"] = new_keys.get("openai", "")
+            self._save_users_state(state)
+            _log_beta_event(
+                "api_keys_saved_portal",
+                identity,
+                {
+                    "has_openai": bool(new_keys.get("openai")),
+                    "has_google": bool(new_keys.get("google")),
+                    "has_other": bool(new_keys.get("other_key")),
+                },
+            )
+            QMessageBox.information(
+                self,
+                "Saved",
+                f"API keys saved for {identity}. You can now log in and continue.",
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "Setup error", f"Could not save API keys: {e}")
+
+
+class ApiKeysDialog(QDialog):
+    """Configure OpenAI, Google, and custom provider keys anytime."""
+
+    def __init__(self, keys: dict, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("API Keys — AI services")
+        self.setModal(True)
+        self._keys = dict(keys)
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        intro = QLabel(
+            "Add keys for cloud AI when you want them. Leave blank to use local-only processing."
+        )
+        intro.setWordWrap(True)
+        intro.setStyleSheet("color: #7F8C8D;")
+        layout.addWidget(intro)
+
+        form = QFormLayout()
+        self.openai_edit = QLineEdit()
+        self.openai_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.openai_edit.setText(self._keys.get("openai", ""))
+        self.openai_edit.setPlaceholderText("sk-...")
+        form.addRow("OpenAI:", self.openai_edit)
+
+        self.google_edit = QLineEdit()
+        self.google_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.google_edit.setText(self._keys.get("google", ""))
+        form.addRow("Google API:", self.google_edit)
+
+        self.other_name = QLineEdit()
+        self.other_name.setText(self._keys.get("other_name", ""))
+        self.other_name.setPlaceholderText("e.g. Anthropic, Azure, custom")
+        form.addRow("Other provider name:", self.other_name)
+
+        self.other_key = QLineEdit()
+        self.other_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self.other_key.setText(self._keys.get("other_key", ""))
+        form.addRow("Other API key:", self.other_key)
+
+        layout.addLayout(form)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        buttons.accepted.connect(self._on_accept)
+        buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-    def _on_accept(self):
-        value = self.user_input.text().strip()
-        if not value:
-            QMessageBox.warning(self, "Login required", "Please enter an email or tester ID.")
-            return
-        self.user_id = value
-        self.accept()
+    def get_keys(self) -> dict:
+        return {
+            "openai": self.openai_edit.text().strip(),
+            "google": self.google_edit.text().strip(),
+            "other_name": self.other_name.text().strip(),
+            "other_key": self.other_key.text().strip(),
+        }
+
+
+class LocalSetupDialog(QDialog):
+    """Open GitHub repo / ZIP and copy clone command for local setup."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Download from GitHub — local setup")
+        self.setModal(True)
+        self.setMinimumWidth(480)
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        urls = _get_github_setup_urls()
+        repo = urls["repo"] or "(set github_repo_url in PACKAGE_INFO.json)"
+        zip_u = urls["zip"] or ""
+        branch = urls["branch"]
+
+        info = QLabel(
+            "Get the full project on your machine: clone with Git, or download the ZIP. "
+            "Update PACKAGE_INFO.json with your real GitHub user/repo URLs."
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        layout.addWidget(QLabel(f"Repository: {repo}"))
+        if zip_u:
+            layout.addWidget(QLabel(f"ZIP: {zip_u}"))
+
+        row = QHBoxLayout()
+        open_repo = ModernButton("Open repository page", style="primary")
+        open_repo.clicked.connect(lambda: webbrowser.open(repo) if repo.startswith("http") else None)
+        row.addWidget(open_repo)
+
+        open_zip = ModernButton("Download ZIP", style="secondary")
+        open_zip.clicked.connect(lambda: webbrowser.open(zip_u) if zip_u.startswith("http") else None)
+        row.addWidget(open_zip)
+        layout.addLayout(row)
+
+        clone_cmd = ""
+        if repo.startswith("https://github.com/"):
+            base = repo.rstrip("/").replace(".git", "")
+            clone_cmd = f"git clone -b {branch} {base}.git"
+        self.clone_label = QLabel(clone_cmd or "git clone <your-repo-url>")
+        self.clone_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(QLabel("Clone command:"))
+        layout.addWidget(self.clone_label)
+
+        copy_btn = ModernButton("Copy clone command", style="secondary")
+        copy_btn.clicked.connect(self._copy_clone)
+        layout.addWidget(copy_btn)
+
+        close_btn = ModernButton("Close", style="primary")
+        close_btn.clicked.connect(self.accept)
+        layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignRight)
+
+    def _copy_clone(self):
+        text = self.clone_label.text()
+        QApplication.clipboard().setText(text)
+        QMessageBox.information(self, "Copied", "Clone command copied to clipboard.")
+
+
+class AppSettingsDialog(QDialog):
+    """In-app settings hub for account, API keys, and local setup."""
+
+    def __init__(self, user_id: str, episodes_used: int, limit: int, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("SoapBoxx Settings")
+        self.setModal(True)
+        self.setMinimumWidth(520)
+        self._user_id = user_id
+        self._episodes_used = episodes_used
+        self._limit = limit
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        tabs = QTabWidget()
+
+        # Account tab
+        account_page = QWidget()
+        account_layout = QFormLayout(account_page)
+        account_layout.addRow("Signed in user:", QLabel(self._user_id or "not signed in"))
+        account_layout.addRow("Episode usage:", QLabel(f"{self._episodes_used}/{self._limit}"))
+        tabs.addTab(account_page, "Account")
+
+        # API tab
+        api_page = QWidget()
+        api_layout = QVBoxLayout(api_page)
+        api_desc = QLabel("Manage OpenAI, Google, and custom provider keys.")
+        api_desc.setStyleSheet("color: #7F8C8D;")
+        api_layout.addWidget(api_desc)
+        api_btn = ModernButton("Open API Keys", style="primary")
+        api_btn.clicked.connect(self._open_api_keys)
+        api_layout.addWidget(api_btn)
+        api_layout.addStretch()
+        tabs.addTab(api_page, "API Keys")
+
+        # Local setup tab
+        setup_page = QWidget()
+        setup_layout = QVBoxLayout(setup_page)
+        setup_desc = QLabel("Download/clone everything needed for local setup.")
+        setup_desc.setStyleSheet("color: #7F8C8D;")
+        setup_layout.addWidget(setup_desc)
+        setup_btn = ModernButton("Open GitHub Local Setup", style="secondary")
+        setup_btn.clicked.connect(self._open_local_setup)
+        setup_layout.addWidget(setup_btn)
+        setup_layout.addStretch()
+        tabs.addTab(setup_page, "Local Setup")
+
+        layout.addWidget(tabs)
+
+        close_btn = ModernButton("Close", style="primary")
+        close_btn.clicked.connect(self.accept)
+        layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignRight)
+
+    def _open_api_keys(self):
+        if self.parent() and hasattr(self.parent(), "_set_api_key"):
+            self.parent()._set_api_key()
+
+    def _open_local_setup(self):
+        if self.parent() and hasattr(self.parent(), "_show_local_setup_dialog"):
+            self.parent()._show_local_setup_dialog()
 
 
 class MainWindow(QMainWindow):
     """Main application window with enhanced resilience and error handling"""
 
-    def __init__(self):
+    def __init__(self, pre_auth_user_id=None, pre_auth_method=None, pre_signup=False):
         try:
             print("🏗️ MainWindow: Starting initialization...")
             super().__init__()
@@ -438,8 +1022,11 @@ class MainWindow(QMainWindow):
             self.setup_ui()
             print("✅ MainWindow: UI setup complete")
 
-            # Login gate for beta access
-            self._ensure_beta_login()
+            # Session (startup auth runs in main() before this window is shown)
+            if pre_auth_user_id:
+                self._apply_user_session(pre_auth_user_id, pre_auth_method, pre_signup)
+            else:
+                self._ensure_beta_login()
 
             # Mark initialization complete
             self._is_initializing = False
@@ -623,6 +1210,10 @@ class MainWindow(QMainWindow):
             settings_button = ModernButton("Settings", style="secondary")
             settings_button.clicked.connect(self._show_settings)
             layout.addWidget(settings_button)
+
+            github_button = ModernButton("GitHub setup", style="secondary")
+            github_button.clicked.connect(self._show_local_setup_dialog)
+            layout.addWidget(github_button)
 
             # Complete workflow action (consumes one beta episode credit)
             complete_button = ModernButton("Complete Episode Workflow", style="primary")
@@ -972,6 +1563,15 @@ class MainWindow(QMainWindow):
             export_action.triggered.connect(self._export_data)
             file_menu.addAction(export_action)
 
+            # Download everything bundle
+            download_all_action = QAction("Download Everything", self)
+            download_all_action.triggered.connect(self._download_everything)
+            file_menu.addAction(download_all_action)
+
+            github_setup_action = QAction("Download from GitHub (local setup)", self)
+            github_setup_action.triggered.connect(self._show_local_setup_dialog)
+            file_menu.addAction(github_setup_action)
+
             # Exit action
             exit_action = QAction("Exit", self)
             exit_action.setShortcut(QKeySequence.StandardKey.Quit)
@@ -985,7 +1585,7 @@ class MainWindow(QMainWindow):
             login_action.triggered.connect(self._ensure_beta_login)
             beta_menu.addAction(login_action)
 
-            api_key_action = QAction("Set API Key", self)
+            api_key_action = QAction("API Keys…", self)
             api_key_action.triggered.connect(self._set_api_key)
             beta_menu.addAction(api_key_action)
 
@@ -1033,13 +1633,12 @@ class MainWindow(QMainWindow):
             )
 
     def _show_settings(self):
-        """Show settings dialog"""
+        """Show in-app settings portal."""
         try:
-            QMessageBox.information(
-                self,
-                "Settings",
-                "For beta setup, use Beta -> Login / Switch User and Beta -> Set API Key.",
+            dlg = AppSettingsDialog(
+                self._current_user_id, self._episodes_used, BETA_EPISODE_LIMIT, self
             )
+            dlg.exec()
         except Exception as e:
             self._track_error("SettingsError", f"Failed to show settings: {str(e)}")
 
@@ -1052,6 +1651,48 @@ class MainWindow(QMainWindow):
             )
         except Exception as e:
             self._track_error("ExportError", f"Failed to export data: {str(e)}")
+
+    def _download_everything(self):
+        """Create a zip bundle of the demo project data for easy download/sharing."""
+        try:
+            project_root = Path(__file__).resolve().parent.parent
+            downloads_dir = project_root / "Downloads"
+            downloads_dir.mkdir(exist_ok=True)
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            zip_path = downloads_dir / f"soapboxx_everything_{stamp}.zip"
+
+            excluded_dirs = {".git", ".venv", "__pycache__", ".pytest_cache", "node_modules"}
+            excluded_suffixes = {".pyc", ".pyo"}
+
+            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+                for file_path in project_root.rglob("*"):
+                    if not file_path.is_file():
+                        continue
+                    if any(part in excluded_dirs for part in file_path.parts):
+                        continue
+                    if file_path.suffix.lower() in excluded_suffixes:
+                        continue
+                    if file_path.resolve() == zip_path.resolve():
+                        continue
+                    arcname = file_path.relative_to(project_root)
+                    zf.write(file_path, arcname)
+
+            QMessageBox.information(
+                self,
+                "Download Everything",
+                f"Bundle created successfully:\n{zip_path}",
+            )
+            self._show_status_message(f"Download bundle created: {zip_path}", 8000)
+        except Exception as e:
+            self._track_error(
+                "DownloadEverythingError",
+                f"Failed to create full download bundle: {str(e)}",
+            )
+            self._show_user_friendly_error(
+                "Download error",
+                "Failed to create the full download bundle.",
+                str(e),
+            )
 
     def _show_full_description(self):
         """Show full description dialog (walkdown of package info — see everything)."""
@@ -1102,59 +1743,107 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self._track_error("BetaStateSaveError", f"Failed to save beta state: {str(e)}")
 
-    def _ensure_beta_login(self):
-        """Require login for beta usage and load user usage/API state."""
+    def _get_user_api_keys_dict(self) -> dict:
+        """Return api_keys for the signed-in user."""
+        if not self._current_user_id:
+            return {}
+        users = self._beta_state.setdefault("users", {})
+        u = users.get(self._current_user_id)
+        if not u:
+            return {}
+        _migrate_user_record(u)
+        return u.get("api_keys", {})
+
+    def _has_any_api_key(self) -> bool:
+        k = self._get_user_api_keys_dict()
+        return any((k.get(x) or "").strip() for x in ("openai", "google", "other_key"))
+
+    def _apply_user_session(self, user_id, auth_method=None, pre_signup=False):
+        """Load credits and API keys for this account and sync environment."""
         try:
             self._load_beta_state()
-            dialog = LoginDialog(self)
-            if dialog.exec() != QDialog.DialogCode.Accepted:
-                self.close()
+            uid = (user_id or "").strip().lower()
+            if not uid:
                 return
-
-            user_id = dialog.user_id.strip().lower()
             users = self._beta_state.setdefault("users", {})
-            users.setdefault(user_id, {"episodes_used": 0, "api_key": ""})
-
-            self._current_user_id = user_id
-            self._episodes_used = int(users[user_id].get("episodes_used", 0))
-            self._current_api_key = users[user_id].get("api_key", "")
+            if uid not in users:
+                users[uid] = _default_user_record()
+            _migrate_user_record(users[uid])
+            self._current_user_id = uid
+            self._episodes_used = int(users[uid].get("episodes_used", 0))
+            keys = self._get_user_api_keys_dict()
+            _apply_api_keys_to_environ(keys)
+            self._current_api_key = (keys.get("openai") or "").strip()
             self._update_status_display()
+            if pre_signup:
+                label = "new account"
+            elif auth_method == "magic_link":
+                label = "email"
+            elif auth_method == "signup":
+                label = "sign-up"
+            else:
+                label = "tester ID"
             self._show_status_message(
-                f"Signed in as {self._current_user_id}. Usage: {self._episodes_used}/{BETA_EPISODE_LIMIT}"
+                f"Signed in ({label}) as {self._current_user_id}. Usage: {self._episodes_used}/{BETA_EPISODE_LIMIT}",
+                5000,
+            )
+        except Exception as e:
+            self._track_error("SessionError", f"Failed to apply user session: {str(e)}")
+
+    def _ensure_beta_login(self):
+        """Switch user / login from menu (does not quit the app on cancel)."""
+        try:
+            dialog = AuthPortalDialog(self)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            self._apply_user_session(
+                dialog.user_id, getattr(dialog, "auth_method", None), dialog.is_signup
             )
         except Exception as e:
             self._track_error("LoginError", f"Failed to login: {str(e)}")
 
     def _set_api_key(self):
-        """Set per-user API key for optional cloud AI usage."""
+        """Configure OpenAI, Google, and custom API keys (anytime)."""
         try:
             if not self._current_user_id:
                 QMessageBox.warning(self, "Login required", "Please login first.")
                 return
 
-            key, ok = QInputDialog.getText(
-                self,
-                "Set API Key",
-                "Enter your API key (optional):",
-                QLineEdit.EchoMode.Password,
-                self._current_api_key,
-            )
-            if not ok:
+            self._load_beta_state()
+            keys = self._get_user_api_keys_dict()
+            dlg = ApiKeysDialog(keys, self)
+            if dlg.exec() != QDialog.DialogCode.Accepted:
                 return
 
-            self._current_api_key = key.strip()
+            new_keys = dlg.get_keys()
             users = self._beta_state.setdefault("users", {})
-            users.setdefault(self._current_user_id, {})
-            users[self._current_user_id]["api_key"] = self._current_api_key
+            users.setdefault(self._current_user_id, _default_user_record())
+            _migrate_user_record(users[self._current_user_id])
+            users[self._current_user_id]["api_keys"] = new_keys
+            users[self._current_user_id]["api_key"] = new_keys.get("openai", "")
             self._save_beta_state()
+            _apply_api_keys_to_environ(new_keys)
+            self._current_api_key = (new_keys.get("openai") or "").strip()
             self._update_status_display()
-
-            if self._current_api_key:
-                self._show_status_message("API key saved for this tester.")
-            else:
-                self._show_status_message("API key cleared. Using local-only processing.")
+            self._show_status_message("API keys saved. They apply for this user on this machine.")
+            _log_beta_event(
+                "api_keys_saved_app",
+                self._current_user_id,
+                {
+                    "has_openai": bool(new_keys.get("openai")),
+                    "has_google": bool(new_keys.get("google")),
+                    "has_other": bool(new_keys.get("other_key")),
+                },
+            )
         except Exception as e:
             self._track_error("ApiKeyError", f"Failed to set API key: {str(e)}")
+
+    def _show_local_setup_dialog(self):
+        """GitHub clone / ZIP for full local setup."""
+        try:
+            LocalSetupDialog(self).exec()
+        except Exception as e:
+            self._track_error("LocalSetupError", f"Failed to show local setup: {str(e)}")
 
     def _remaining_credits(self) -> int:
         return max(0, BETA_EPISODE_LIMIT - self._episodes_used)
@@ -1170,7 +1859,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(
                     self,
                     "Beta limit reached",
-                    "You've used all 3 test episodes. If this saved you time or improved your podcast, continue for $X/month.",
+                    f"You've used all {BETA_EPISODE_LIMIT} test episode(s). If this saved you time or improved your podcast, continue for $X/month.",
                 )
                 return
 
@@ -1181,12 +1870,18 @@ class MainWindow(QMainWindow):
             self._save_beta_state()
             self._update_status_display()
 
-            mode = "API key mode" if self._current_api_key else "local-only mode"
+            mode = "API keys configured" if self._has_any_api_key() else "local-only mode"
+            _log_beta_event(
+                "episode_workflow",
+                self._current_user_id,
+                {"episodes_used": self._episodes_used, "limit": BETA_EPISODE_LIMIT},
+            )
             if self._episodes_used >= BETA_EPISODE_LIMIT:
                 QMessageBox.information(
                     self,
-                    "Episode completed (3/3)",
-                    "Episode workflow completed.\n\nYou've used all 3 test episodes. If this saved you time or improved your podcast, continue for $X/month.",
+                    f"Episode completed ({BETA_EPISODE_LIMIT}/{BETA_EPISODE_LIMIT})",
+                    "Episode workflow completed.\n\n"
+                    "You've used all test episodes for this build. If this saved you time or improved your podcast, continue for $X/month.",
                 )
             else:
                 self._show_status_message(
@@ -1243,7 +1938,9 @@ class MainWindow(QMainWindow):
                 )
             if hasattr(self, "api_indicator"):
                 self.api_indicator.setText(
-                    "API key: set" if self._current_api_key else "API key: local mode"
+                    "API keys: configured"
+                    if self._has_any_api_key()
+                    else "API keys: local mode"
                 )
 
         except Exception as e:
@@ -1323,10 +2020,21 @@ def main():
         app.setOrganizationName("SoapBoxx")
         print("QApplication created successfully")
 
+        # Login / sign-up portal first (before main window)
+        print("Showing login portal...")
+        portal = AuthPortalDialog()
+        if portal.exec() != QDialog.DialogCode.Accepted:
+            print("Login cancelled.")
+            sys.exit(0)
+
         # Create and show main window
         print("Creating main window...")
         try:
-            window = MainWindow()
+            window = MainWindow(
+                pre_auth_user_id=portal.user_id,
+                pre_auth_method=getattr(portal, "auth_method", None),
+                pre_signup=portal.is_signup,
+            )
             print("Main window created successfully")
         except Exception as e:
             print(f"Main window creation failed: {e}")

@@ -4,6 +4,9 @@
   "author": "SoapBoxx Team",
   "license": "Same as main SoapBoxx project",
   "homepage": "https://github.com/yourusername/SoapBoxx",
+  "github_repo_url": "https://github.com/yourusername/SoapBoxx",
+  "github_zip_url": "https://github.com/yourusername/SoapBoxx/archive/refs/heads/main.zip",
+  "github_clone_branch": "main",
   "demo_features": "Offline-capable with mock data and local analysis",
   "upgrade_path": "Switch to main branch for full functionality",
   "support": "Check documentation and test scripts for help"
