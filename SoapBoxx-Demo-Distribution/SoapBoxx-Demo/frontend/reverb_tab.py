@@ -125,7 +125,7 @@ class ReverbTab(QWidget):
         
         self.content_input = QTextEdit()
         self.content_input.setPlaceholderText("Paste your podcast script, article, or content here...\n\nExample: 'Welcome to our podcast about AI in content creation. Today we'll explore how artificial intelligence is revolutionizing the way we create and distribute content.'")
-        self.content_input.setMaximumHeight(100)
+        self.content_input.setMinimumHeight(100)
         self.content_input.textChanged.connect(self.analyze_content)
         self.content_input.setStyleSheet("""
             QTextEdit {

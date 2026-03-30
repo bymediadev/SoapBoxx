@@ -4,6 +4,7 @@ SoapBoxx Main Window
 Main application window with tabbed interface
 """
 
+import json
 import os
 import sys
 import traceback
@@ -81,10 +82,11 @@ from PyQt6.QtGui import QAction, QFont, QIcon, QKeySequence, QPixmap
 from PyQt6.QtWidgets import (QApplication, QComboBox, QDateEdit, QDialog,
                              QDialogButtonBox, QFormLayout, QFrame,
                              QGridLayout, QGroupBox, QHBoxLayout, QLabel,
+                             QInputDialog,
                              QLineEdit, QMainWindow, QMenu, QMenuBar,
-                             QMessageBox, QPushButton, QScrollArea, QSplitter,
-                             QStatusBar, QTabWidget, QTextEdit, QTimeEdit,
-                             QVBoxLayout, QWidget)
+                             QMessageBox, QPushButton, QScrollArea, QSizePolicy,
+                             QSplitter, QStatusBar, QTabWidget, QTextEdit,
+                             QTimeEdit, QVBoxLayout, QWidget)
 
 # Import the bulletproof tab loader
 try:
@@ -106,6 +108,9 @@ except ImportError as e:
     # Fallback placeholder classes will be used
 
 # (imports moved into try/except above for dual compatibility)
+
+BETA_EPISODE_LIMIT = 3
+BETA_STATE_FILE = Path(__file__).resolve().parent.parent / ".soapboxx_beta_state.json"
 
 # BaseTab class to enforce QWidget contract
 class BaseTab(QWidget):
@@ -240,9 +245,9 @@ class BookingDialog(QDialog):
             self.time_picker.setTime(QTime.currentTime())
             card_layout.addRow("Time:", self.time_picker)
 
-            # Notes
+            # Notes (expandable so you can see everything)
             self.notes = QTextEdit()
-            self.notes.setMaximumHeight(100)
+            self.notes.setMinimumHeight(100)
             self.notes.setPlaceholderText("Add notes about the guest...")
             card_layout.addRow("Notes:", self.notes)
 
@@ -276,6 +281,132 @@ class BookingDialog(QDialog):
             print(f"Error in booking dialog: {title} - {message}")
 
 
+def _load_package_info():
+    """Load PACKAGE_INFO.json from project root. Returns dict or None."""
+    try:
+        base = Path(__file__).resolve().parent.parent
+        path = base / "PACKAGE_INFO.json"
+        if path.is_file():
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"Could not load PACKAGE_INFO.json: {e}")
+    return None
+
+
+class FullDescriptionDialog(QDialog):
+    """Dialog showing full app description and all package info (walkdown / see everything)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("SoapBoxx — Full Description & Package Info")
+        self.setModal(False)
+        self.setMinimumSize(520, 420)
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+
+        info = _load_package_info()
+        if info:
+            walkdown = self._format_full_walkdown(info)
+        else:
+            walkdown = (
+                "<h3>SoapBoxx</h3><p>AI-Powered Podcast Production Studio — Demo Version</p>"
+                "<p><i>PACKAGE_INFO.json not found. Run from SoapBoxx-Demo root.</i></p>"
+            )
+
+        text = QTextEdit()
+        text.setReadOnly(True)
+        text.setAcceptRichText(True)
+        text.setHtml(walkdown)
+        text.setMinimumHeight(320)
+        text.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        content_layout.addWidget(text)
+        scroll.setWidget(content)
+        layout.addWidget(scroll)
+
+        close_btn = ModernButton("Close", style="primary")
+        close_btn.clicked.connect(self.accept)
+        layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignRight)
+
+    def _format_full_walkdown(self, info: dict) -> str:
+        """Format full description walkdown as HTML so user can see everything."""
+        lines = [
+            "<h2>SoapBoxx — Full Description & Package Info</h2>",
+            "<p>Below is the complete package and app description (full walkdown).</p>",
+            "<hr/>",
+            "<h3>Description</h3>",
+            f"<p>{info.get('description', '—')}</p>",
+            "<h3>Package name</h3>",
+            f"<p><code>{info.get('package_name', '—')}</code></p>",
+            "<h3>Author</h3>",
+            f"<p>{info.get('author', '—')}</p>",
+            "<h3>License</h3>",
+            f"<p>{info.get('license', '—')}</p>",
+            "<h3>Homepage</h3>",
+            f"<p><a href=\"{info.get('homepage', '')}\">{info.get('homepage', '—')}</a></p>",
+            "<h3>Demo features</h3>",
+            f"<p>{info.get('demo_features', '—')}</p>",
+            "<h3>Upgrade path</h3>",
+            f"<p>{info.get('upgrade_path', '—')}</p>",
+            "<h3>Support</h3>",
+            f"<p>{info.get('support', '—')}</p>",
+            "<hr/>",
+            "<p><small>Use Help → Full description anytime to see this.</small></p>",
+        ]
+        return "".join(lines)
+
+
+class LoginDialog(QDialog):
+    """Simple beta login dialog (email or tester ID)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("SoapBoxx Beta Login")
+        self.setModal(True)
+        self.user_id = ""
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+
+        title = QLabel("Sign in to start your 3-episode beta trial")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #2C3E50;")
+        layout.addWidget(title)
+
+        form = QFormLayout()
+        self.user_input = QLineEdit()
+        self.user_input.setPlaceholderText("you@example.com or tester ID")
+        form.addRow("Email / Tester ID:", self.user_input)
+        layout.addLayout(form)
+
+        hint = QLabel("Your usage is tracked per account: 1/3, 2/3, 3/3 episodes.")
+        hint.setStyleSheet("color: #7F8C8D;")
+        layout.addWidget(hint)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self._on_accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _on_accept(self):
+        value = self.user_input.text().strip()
+        if not value:
+            QMessageBox.warning(self, "Login required", "Please enter an email or tester ID.")
+            return
+        self.user_id = value
+        self.accept()
+
+
 class MainWindow(QMainWindow):
     """Main application window with enhanced resilience and error handling"""
 
@@ -291,6 +422,10 @@ class MainWindow(QMainWindow):
             self._is_switching_tab = False
             self._error_count = 0
             self._last_error_time = None
+            self._beta_state = {}
+            self._current_user_id = ""
+            self._current_api_key = ""
+            self._episodes_used = 0
             print("✅ MainWindow: State tracking initialized")
 
             # Setup global exception handler
@@ -302,6 +437,9 @@ class MainWindow(QMainWindow):
             print("🎨 MainWindow: Setting up UI...")
             self.setup_ui()
             print("✅ MainWindow: UI setup complete")
+
+            # Login gate for beta access
+            self._ensure_beta_login()
 
             # Mark initialization complete
             self._is_initializing = False
@@ -485,6 +623,11 @@ class MainWindow(QMainWindow):
             settings_button = ModernButton("Settings", style="secondary")
             settings_button.clicked.connect(self._show_settings)
             layout.addWidget(settings_button)
+
+            # Complete workflow action (consumes one beta episode credit)
+            complete_button = ModernButton("Complete Episode Workflow", style="primary")
+            complete_button.clicked.connect(self._complete_episode_workflow)
+            layout.addWidget(complete_button)
 
         except Exception as e:
             self._track_error(
@@ -796,6 +939,19 @@ class MainWindow(QMainWindow):
             )
             self.status_bar.addPermanentWidget(self.error_indicator)
 
+            # Beta user + usage indicators
+            self.user_indicator = QLabel("User: not signed in")
+            self.user_indicator.setStyleSheet("color: #2C3E50;")
+            self.status_bar.addPermanentWidget(self.user_indicator)
+
+            self.usage_indicator = QLabel("Usage: 0/3")
+            self.usage_indicator.setStyleSheet("color: #8E44AD; font-weight: bold;")
+            self.status_bar.addPermanentWidget(self.usage_indicator)
+
+            self.api_indicator = QLabel("API key: local mode")
+            self.api_indicator.setStyleSheet("color: #7F8C8D;")
+            self.status_bar.addPermanentWidget(self.api_indicator)
+
             # Update status
             self._update_status_display()
 
@@ -822,8 +978,28 @@ class MainWindow(QMainWindow):
             exit_action.triggered.connect(self.close)
             file_menu.addAction(exit_action)
 
+            # Beta menu
+            beta_menu = menubar.addMenu("Beta")
+
+            login_action = QAction("Login / Switch User", self)
+            login_action.triggered.connect(self._ensure_beta_login)
+            beta_menu.addAction(login_action)
+
+            api_key_action = QAction("Set API Key", self)
+            api_key_action.triggered.connect(self._set_api_key)
+            beta_menu.addAction(api_key_action)
+
+            workflow_action = QAction("Complete Episode Workflow", self)
+            workflow_action.triggered.connect(self._complete_episode_workflow)
+            beta_menu.addAction(workflow_action)
+
             # Help menu
             help_menu = menubar.addMenu("Help")
+
+            # Full description (walkdown / see everything)
+            full_desc_action = QAction("Full description", self)
+            full_desc_action.triggered.connect(self._show_full_description)
+            help_menu.addAction(full_desc_action)
 
             # About action
             about_action = QAction("About", self)
@@ -859,9 +1035,10 @@ class MainWindow(QMainWindow):
     def _show_settings(self):
         """Show settings dialog"""
         try:
-            # Placeholder for settings dialog
             QMessageBox.information(
-                self, "Settings", "Settings dialog not implemented yet."
+                self,
+                "Settings",
+                "For beta setup, use Beta -> Login / Switch User and Beta -> Set API Key.",
             )
         except Exception as e:
             self._track_error("SettingsError", f"Failed to show settings: {str(e)}")
@@ -876,6 +1053,16 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self._track_error("ExportError", f"Failed to export data: {str(e)}")
 
+    def _show_full_description(self):
+        """Show full description dialog (walkdown of package info — see everything)."""
+        try:
+            dialog = FullDescriptionDialog(self)
+            dialog.show()
+        except Exception as e:
+            self._track_error(
+                "FullDescriptionError", f"Failed to show full description: {str(e)}"
+            )
+
     def _show_about(self):
         """Show about dialog"""
         try:
@@ -884,10 +1071,132 @@ class MainWindow(QMainWindow):
             <p>AI-Powered Podcast Production Studio</p>
             <p>Version: 1.0.0</p>
             <p>Production Ready - 9/10 Reliability Rating</p>
+            <br/>
+            <p>Use <b>Help → Full description</b> to see the complete package info and description.</p>
             """
             QMessageBox.about(self, "About SoapBoxx", about_text)
         except Exception as e:
             self._track_error("AboutError", f"Failed to show about dialog: {str(e)}")
+
+    def _load_beta_state(self):
+        """Load persisted beta state (user usage and API keys)."""
+        try:
+            if BETA_STATE_FILE.is_file():
+                with open(BETA_STATE_FILE, "r", encoding="utf-8") as f:
+                    state = json.load(f)
+                    if isinstance(state, dict):
+                        self._beta_state = state
+                        return
+            self._beta_state = {"users": {}}
+        except Exception as e:
+            print(f"Failed to load beta state: {e}")
+            self._beta_state = {"users": {}}
+
+    def _save_beta_state(self):
+        """Persist beta state to disk."""
+        try:
+            if "users" not in self._beta_state:
+                self._beta_state["users"] = {}
+            with open(BETA_STATE_FILE, "w", encoding="utf-8") as f:
+                json.dump(self._beta_state, f, indent=2)
+        except Exception as e:
+            self._track_error("BetaStateSaveError", f"Failed to save beta state: {str(e)}")
+
+    def _ensure_beta_login(self):
+        """Require login for beta usage and load user usage/API state."""
+        try:
+            self._load_beta_state()
+            dialog = LoginDialog(self)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                self.close()
+                return
+
+            user_id = dialog.user_id.strip().lower()
+            users = self._beta_state.setdefault("users", {})
+            users.setdefault(user_id, {"episodes_used": 0, "api_key": ""})
+
+            self._current_user_id = user_id
+            self._episodes_used = int(users[user_id].get("episodes_used", 0))
+            self._current_api_key = users[user_id].get("api_key", "")
+            self._update_status_display()
+            self._show_status_message(
+                f"Signed in as {self._current_user_id}. Usage: {self._episodes_used}/{BETA_EPISODE_LIMIT}"
+            )
+        except Exception as e:
+            self._track_error("LoginError", f"Failed to login: {str(e)}")
+
+    def _set_api_key(self):
+        """Set per-user API key for optional cloud AI usage."""
+        try:
+            if not self._current_user_id:
+                QMessageBox.warning(self, "Login required", "Please login first.")
+                return
+
+            key, ok = QInputDialog.getText(
+                self,
+                "Set API Key",
+                "Enter your API key (optional):",
+                QLineEdit.EchoMode.Password,
+                self._current_api_key,
+            )
+            if not ok:
+                return
+
+            self._current_api_key = key.strip()
+            users = self._beta_state.setdefault("users", {})
+            users.setdefault(self._current_user_id, {})
+            users[self._current_user_id]["api_key"] = self._current_api_key
+            self._save_beta_state()
+            self._update_status_display()
+
+            if self._current_api_key:
+                self._show_status_message("API key saved for this tester.")
+            else:
+                self._show_status_message("API key cleared. Using local-only processing.")
+        except Exception as e:
+            self._track_error("ApiKeyError", f"Failed to set API key: {str(e)}")
+
+    def _remaining_credits(self) -> int:
+        return max(0, BETA_EPISODE_LIMIT - self._episodes_used)
+
+    def _complete_episode_workflow(self):
+        """Consume one full episode beta credit with hard cap enforcement."""
+        try:
+            if not self._current_user_id:
+                QMessageBox.warning(self, "Login required", "Please login first.")
+                return
+
+            if self._episodes_used >= BETA_EPISODE_LIMIT:
+                QMessageBox.information(
+                    self,
+                    "Beta limit reached",
+                    "You've used all 3 test episodes. If this saved you time or improved your podcast, continue for $X/month.",
+                )
+                return
+
+            self._episodes_used += 1
+            users = self._beta_state.setdefault("users", {})
+            users.setdefault(self._current_user_id, {})
+            users[self._current_user_id]["episodes_used"] = self._episodes_used
+            self._save_beta_state()
+            self._update_status_display()
+
+            mode = "API key mode" if self._current_api_key else "local-only mode"
+            if self._episodes_used >= BETA_EPISODE_LIMIT:
+                QMessageBox.information(
+                    self,
+                    "Episode completed (3/3)",
+                    "Episode workflow completed.\n\nYou've used all 3 test episodes. If this saved you time or improved your podcast, continue for $X/month.",
+                )
+            else:
+                self._show_status_message(
+                    f"Episode workflow completed ({self._episodes_used}/{BETA_EPISODE_LIMIT}) in {mode}.",
+                    5000,
+                )
+        except Exception as e:
+            self._track_error(
+                "EpisodeCreditError", f"Failed to complete episode workflow: {str(e)}"
+            )
 
     def _show_user_friendly_error(
         self, title: str, message: str, detailed_error: str = None
@@ -924,6 +1233,18 @@ class MainWindow(QMainWindow):
                 self.error_indicator.setText(f"⚠️ {self._error_count} error(s)")
             else:
                 self.error_indicator.setText("")
+
+            if hasattr(self, "user_indicator"):
+                user_text = self._current_user_id if self._current_user_id else "not signed in"
+                self.user_indicator.setText(f"User: {user_text}")
+            if hasattr(self, "usage_indicator"):
+                self.usage_indicator.setText(
+                    f"Usage: {self._episodes_used}/{BETA_EPISODE_LIMIT}"
+                )
+            if hasattr(self, "api_indicator"):
+                self.api_indicator.setText(
+                    "API key: set" if self._current_api_key else "API key: local mode"
+                )
 
         except Exception as e:
             print(f"Failed to update status display: {e}")
