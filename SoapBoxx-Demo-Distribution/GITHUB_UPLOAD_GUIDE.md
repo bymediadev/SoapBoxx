@@ -2,26 +2,33 @@
 
 Build the zip, attach it to a release, then point testers at one URL.
 
+**Whenever you change `SoapBoxx-Demo-Distribution/SoapBoxx-Demo`**, run **`build_demo_release_zip.ps1`** again and upload the **new** zip(s) to GitHub Releases. Testers download the release asset — not your local folder.
+
 ## 1. Build the zip (Windows)
 
-From `demo/soapboxx-barebones` (or your demo branch):
+From **`demo/soapboxx-barebones`** (or your demo branch), with changes committed:
 
 ```powershell
 cd SoapBoxx-Demo-Distribution\scripts
-.\build_demo_release_zip.ps1 -Version "1.0.0"
-```
-
-Output: **`SoapBoxx-Demo-Distribution\release\SoapBoxx-Demo-v1.0.0.zip`**
-
-Optional **stable filename** for every release (same download URL):
-
-```powershell
 .\build_demo_release_zip.ps1 -Version "1.0.0" -AlsoStableName
 ```
 
-Also creates **`SoapBoxx-Demo.zip`** — upload **this** as the asset if you want:
+**Outputs** (default **`SoapBoxx-Demo-Distribution\release\`**):
 
-`https://github.com/bymediadev/SoapBoxx/releases/latest/download/SoapBoxx-Demo.zip`
+| File | Purpose |
+|------|---------|
+| **`SoapBoxx-Demo-v1.0.0.zip`** | Versioned asset; align with your Git tag (e.g. `demo-v1.0.0`). |
+| **`SoapBoxx-Demo.zip`** | Same contents; stable filename for `.../releases/latest/download/SoapBoxx-Demo.zip`. |
+
+**Included in the zip:** the full **`SoapBoxx-Demo`** tree — **`READ_ME_FIRST.txt`**, **`setup_and_run.bat` / `.ps1` / `.sh` / `.command`**, **`docs/`**, **`frontend/`**, **`backend/`**, **`requirements_demo.txt`**, **`PACKAGE_INFO.json`**, launchers, etc.
+
+**Excluded:** `.env`, `.venv`, `__pycache__`, `.git`, local beta state files (see script source).
+
+**Version only** (no stable copy):
+
+```powershell
+.\build_demo_release_zip.ps1 -Version "1.0.0"
+```
 
 ## 2. Create a GitHub Release
 

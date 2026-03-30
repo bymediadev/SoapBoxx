@@ -22,10 +22,15 @@ Usage:
   -AlsoStableName  Also write SoapBoxx-Demo.zip (same contents) for a stable GitHub asset name:
                     .../releases/latest/download/SoapBoxx-Demo.zip
 
+Re-run this script whenever SoapBoxx-Demo changes; testers get the release ZIP only.
+
+Zip includes: READ_ME_FIRST.txt, setup_and_run.*, docs/, frontend/, backend/, requirements_demo.txt,
+PACKAGE_INFO.json, launchers.
+
 Steps after build:
   1. Create a release on https://github.com/bymediadev/SoapBoxx/releases
-  2. Upload SoapBoxx-Demo-vVERSION.zip
-  3. Point testers at: Releases -> latest, or paste the asset URL into your email
+  2. Upload SoapBoxx-Demo-vVERSION.zip and/or SoapBoxx-Demo.zip
+  3. Point testers at Releases or paste the asset URL into your email
 
 Excludes: .env, .venv, __pycache__, .git, local beta state files (see script).
 "@

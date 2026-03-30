@@ -35,17 +35,27 @@ This document is the **up-to-date** overview: how the demo works, how to get it,
 3. Unzip. You should see a single top-level folder **`SoapBoxx-Demo`** with `frontend/`, `requirements_demo.txt`, **`READ_ME_FIRST.txt`**, and the setup scripts below.
 4. Go to [Install and run](#install-and-run) — **use the plug-and-play scripts** if you want one double-click / one command (no copy-paste into a terminal).
 
-**Maintainers — build the zip** (on branch `demo/soapboxx-barebones`, from repo root):
+**Maintainers — rebuild the release ZIP whenever `SoapBoxx-Demo` changes**
 
-```text
-SoapBoxx-Demo-Distribution\scripts\build_demo_release_zip.ps1 -Version "1.0.0"
+Testers only get what you attach to **GitHub Releases**. After you edit the demo folder, **always run the build script again** before uploading a new asset.
+
+1. Check out **`demo/soapboxx-barebones`** (or your demo branch) and commit your changes.  
+2. From the repo, run:
+
+```powershell
+cd SoapBoxx-Demo-Distribution\scripts
+.\build_demo_release_zip.ps1 -Version "1.0.0" -AlsoStableName
 ```
 
-Optional **`-AlsoStableName`**: also writes **`SoapBoxx-Demo.zip`** so testers can use a stable URL:
+3. Outputs go to **`SoapBoxx-Demo-Distribution\release\`** by default:  
+   - **`SoapBoxx-Demo-v1.0.0.zip`** — versioned filename (match your release tag, e.g. `demo-v1.0.0`).  
+   - **`SoapBoxx-Demo.zip`** — same contents; use for a stable URL:  
+     `https://github.com/bymediadev/SoapBoxx/releases/latest/download/SoapBoxx-Demo.zip`
 
-`https://github.com/bymediadev/SoapBoxx/releases/latest/download/SoapBoxx-Demo.zip`
+4. Upload one or both zips to **[Releases](https://github.com/bymediadev/SoapBoxx/releases)**.  
+5. Set **`github_release_demo_zip_url`** in **`PACKAGE_INFO.json`** to that asset URL (if you want **File → Download from GitHub** to open the same file). Commit **`PACKAGE_INFO.json`** on the branch you ship from.
 
-After publishing, set **`github_release_demo_zip_url`** in **`PACKAGE_INFO.json`** to that URL (or the versioned asset URL). Then **File → Download from GitHub** can open the release ZIP directly.
+**What’s inside the zip:** the whole **`SoapBoxx-Demo`** folder — **`READ_ME_FIRST.txt`**, **`setup_and_run.bat` / `.ps1` / `.sh` / `.command`**, **`docs/`**, **`frontend/`**, **`backend/`**, **`requirements_demo.txt`**, launchers, **`PACKAGE_INFO.json`**, etc. The script **excludes** secrets and local junk (`.env`, `.venv`, `__pycache__`, `.git`, local beta state files). See **`../../GITHUB_UPLOAD_GUIDE.md`** for the full release checklist.
 
 ---
 
@@ -248,7 +258,7 @@ SoapBoxx-Demo/
 
 - **[TUTORIAL_DEMO.md](TUTORIAL_DEMO.md)** — Step-by-step UI tour (some sections may still reference older menu names; **README_DEMO.md** is authoritative for the current build).  
 - **[TESTER_EMAIL_TEMPLATE.md](TESTER_EMAIL_TEMPLATE.md)** — Short text you can paste into an email to testers.  
-- **[../../GITHUB_UPLOAD_GUIDE.md](../../GITHUB_UPLOAD_GUIDE.md)** (maintainers) — build the release ZIP and attach it to GitHub Releases.
+- **[../../GITHUB_UPLOAD_GUIDE.md](../../GITHUB_UPLOAD_GUIDE.md)** (maintainers) — rebuild **`release/*.zip`** with **`scripts/build_demo_release_zip.ps1`** whenever the demo folder changes, then attach to GitHub Releases.
 
 ---
 

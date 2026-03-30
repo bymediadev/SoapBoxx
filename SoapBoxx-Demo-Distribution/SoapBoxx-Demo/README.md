@@ -42,7 +42,7 @@ python3 frontend/main_window.py
 - **[docs/README_DEMO.md](docs/README_DEMO.md)** — **Start here:** download, install, run, credits, email, troubleshooting.
 - **[docs/TUTORIAL_DEMO.md](docs/TUTORIAL_DEMO.md)** — Longer UI walkthrough.
 - **[docs/TESTER_EMAIL_TEMPLATE.md](docs/TESTER_EMAIL_TEMPLATE.md)** — Copy-paste text for tester emails.
-- **[../GITHUB_UPLOAD_GUIDE.md](../GITHUB_UPLOAD_GUIDE.md)** — Maintainers: build **`SoapBoxx-Demo-….zip`** and publish a GitHub Release.
+- **[../GITHUB_UPLOAD_GUIDE.md](../GITHUB_UPLOAD_GUIDE.md)** — Maintainers: after any change under **`SoapBoxx-Demo`**, run **`../scripts/build_demo_release_zip.ps1`** and upload the new zip from **`../release/`** to GitHub Releases.
 
 ## 🧪 Testing
 
