@@ -75,7 +75,7 @@
 ### **Installation:**
 ```bash
 # 1. Clone the repository
-git clone https://github.com/yourusername/SoapBoxx.git
+git clone https://github.com/bymediadev/SoapBoxx.git
 cd SoapBoxx
 
 # 2. Switch to demo branch

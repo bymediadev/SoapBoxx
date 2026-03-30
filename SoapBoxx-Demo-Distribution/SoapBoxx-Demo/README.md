@@ -1,43 +1,47 @@
-# 🎙️ SoapBoxx Demo - AI-Powered Podcast Production Studio
+# SoapBoxx Demo — AI podcast workflow (local / mock)
 
-> **A fully functional, offline-capable demo of SoapBoxx that showcases all features without external dependencies**
+Self-contained **Python + PyQt6** desktop demo: **SoapBoxx**, **Scoop**, and **Reverb** tabs with sign-in, optional API keys, and a **3-episode credit** limit for the “Complete Episode Workflow” action (unless you use playground mode).
 
-## 🚀 Quick Start
+**Repository:** [github.com/bymediadev/SoapBoxx](https://github.com/bymediadev/SoapBoxx) — `git clone https://github.com/bymediadev/SoapBoxx.git` or `git clone git@github.com:bymediadev/SoapBoxx.git`, then `git checkout demo/soapboxx-barebones`.
 
-### Windows Users:
+See **`docs/README_DEMO.md`** for the full, current story.
+
+## Quick start
+
+**Always run commands from the `SoapBoxx-Demo` folder** (the one that contains `frontend/` and `requirements_demo.txt`).
+
+### Windows
+
+- Double-click **`run_demo.bat`** in this folder, **or** run `scripts\run_demo.bat` from this folder, **or**:
 ```bash
-# Double-click the launcher
-scripts\run_demo.bat
-
-# Or run manually
 python -m pip install -r requirements_demo.txt
 python frontend/main_window.py
 ```
 
-### macOS/Linux Users:
-```bash
-# Make script executable and run
-chmod +x scripts/run_demo.sh
-./scripts/run_demo.sh
+### macOS / Linux
 
-# Or run manually
+```bash
+chmod +x scripts/run_demo.sh   # if present
+./scripts/run_demo.sh
+# or:
 python3 -m pip install -r requirements_demo.txt
 python3 frontend/main_window.py
 ```
 
-## ✨ What You Get
+**Internal testing (unlimited episode credits):** `run_playground.bat` / `scripts/run_playground.bat`, or set `SOAPBOXX_DEV_PLAYGROUND=1`.
 
-- **🧠 Content Analysis**: Local text analysis with detailed feedback
-- **🔍 Guest Research**: Sample guest profiles and company information  
-- **🎵 Audio Features**: Mock transcription and text-to-speech
-- **📊 Session Management**: Track and export your work
-- **🎨 Modern UI**: Professional interface with theme customization
-- **⌨️ Keyboard Shortcuts**: Full accessibility support
+## What you get
 
-## 📚 Documentation
+- **SoapBoxx / Scoop / Reverb** — full UI with local/mock backends (no cloud required for the core tour).
+- **Login / sign-up** portal on first launch; **Settings** and **Beta → API Keys** for optional OpenAI / Google keys.
+- **File** menu: export, zip local folder, GitHub local-setup links.
+- **Help** menu: full description (from `PACKAGE_INFO.json`), About.
 
-- **[TUTORIAL_DEMO.md](docs/TUTORIAL_DEMO.md)** - Complete usage guide
-- **[README_DEMO.md](docs/README_DEMO.md)** - Detailed feature overview
+## Documentation
+
+- **[docs/README_DEMO.md](docs/README_DEMO.md)** — **Start here:** download, install, run, credits, email, troubleshooting.
+- **[docs/TUTORIAL_DEMO.md](docs/TUTORIAL_DEMO.md)** — Longer UI walkthrough.
+- **[docs/TESTER_EMAIL_TEMPLATE.md](docs/TESTER_EMAIL_TEMPLATE.md)** — Copy-paste text for tester emails.
 
 ## 🧪 Testing
 
@@ -68,12 +72,11 @@ python test_barebones_modules.py
 - **Transcription**: Mock results, not actual audio processing
 - **TTS**: File path generation, not real audio creation
 
-## 🆘 Getting Help
+## Getting help
 
-1. Check the **docs/** folder for detailed guides
-2. Run the test script to verify installation
-3. Use the built-in help system (F1 key)
-4. Check the status bar for system information
+1. **[docs/README_DEMO.md](docs/README_DEMO.md)** — download, run, credits, optional email, troubleshooting  
+2. Run **`python test_barebones_modules.py`** if present, to verify barebones modules  
+3. **Help** menu in the app — full description, About
 
 ---
 

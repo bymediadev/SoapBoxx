@@ -1,281 +1,222 @@
-# 🎙️ **SoapBoxx Demo - AI-Powered Podcast Production Studio**
+# SoapBoxx Demo — Guide
 
-> **A fully functional, offline-capable demo of SoapBoxx that showcases all features without external dependencies**
+**SoapBoxx Demo** is a self-contained desktop app (Python + PyQt6) that shows the SoapBoxx-style workflow: **SoapBoxx**, **Scoop**, and **Reverb** tabs with **local / mock** backends so testers can explore the UI and flows without a full production stack.
 
----
+This document is the **up-to-date** overview: how the demo works, how to get it, how to run it, and what is real vs simulated.
 
-## 🚀 **What is SoapBoxx Demo?**
+**Official repository (bymediadev/SoapBoxx)**
 
-**SoapBoxx Demo** is a complete, working version of the SoapBoxx podcast production software that runs completely offline. It provides the full user experience with mock data and local analysis, making it perfect for:
-
-- **Demoing SoapBoxx capabilities** to potential users
-- **Learning the interface** before upgrading to the full version
-- **Testing workflows** without API costs or internet requirements
-- **Presentations and showcases** in any environment
+- **Web:** [https://github.com/bymediadev/SoapBoxx](https://github.com/bymediadev/SoapBoxx)  
+- **Clone (HTTPS):** `git clone https://github.com/bymediadev/SoapBoxx.git`  
+- **Clone (SSH):** `git clone git@github.com:bymediadev/SoapBoxx.git` (if you use SSH keys with GitHub)  
+- **Demo branch:** `demo/soapboxx-barebones` — checkout after cloning, then go to **`SoapBoxx-Demo`** (usually `SoapBoxx-Demo-Distribution/SoapBoxx-Demo`).
 
 ---
 
-## ✨ **Key Features**
+## What you get (in one minute)
 
-### 🧠 **Content Analysis (SoapBoxx Tab)**
-- **Local text analysis** with detailed metrics
-- **Feedback scoring** (1-10) for clarity, engagement, structure, energy, and professionalism
-- **Improvement suggestions** based on content analysis
-- **Multiple analysis depths**: Basic, Standard, Comprehensive, Expert
-- **Content metrics**: Word count, sentence count, reading time, topic coherence
-
-### 🔍 **Guest Research (Scoop Tab)**
-- **Sample guest profiles** with realistic data
-- **Company information** and industry insights
-- **Contact details** and social media information
-- **Expertise areas** and podcast topics
-- **Achievement tracking** and professional background
-
-### 🎵 **Audio Features (Reverb Tab)**
-- **Mock transcription** with realistic results
-- **Text-to-speech generation** with multiple voices
-- **Audio metrics** and timing calculations
-- **Voice customization** (US English, British English)
-- **Speed control** (0.5x to 2.0x)
-
-### 📊 **Session Management**
-- **Session tracking** with unique IDs
-- **Usage statistics** and performance metrics
-- **Export functionality** (JSON, TXT formats)
-- **System health monitoring**
-- **Module status tracking**
+| Topic | Summary |
+|--------|---------|
+| **Offline-first** | Core demo runs without cloud AI; optional API keys add cloud features later. |
+| **Sign-in** | On first launch you see a **Login / Sign up** portal (and optional **Setup** tab for API keys and GitHub links). |
+| **Beta credits** | **3 full episode credits** per account (hard limit) for the “Complete Episode Workflow” action, unless you use playground mode (see below). |
+| **Tabs** | **SoapBoxx** — recording / export style UI (demo). **Scoop** — search / research style UI (sample data). **Reverb** — analysis / feedback style UI (local mock metrics). |
+| **Settings** | **Settings** button and **Beta → API Keys** — OpenAI, Google, optional “other” provider; stored per user on this machine. |
+| **Email (optional)** | If you configure `.env` with Gmail SMTP (or Resend/SendGrid), the app can send **welcome/login-style** mail to **addresses people use when they sign up**. See [Email (optional)](#email-optional). |
 
 ---
 
-## 🎯 **Demo Capabilities vs. Limitations**
+## Download the demo
 
-### ✅ **What Works (Real Features):**
-- **Full PyQt6 user interface** with all tabs and navigation
-- **Local data processing** and calculations
-- **File export** and session management
-- **Theme customization** (8 different themes)
-- **Keyboard shortcuts** and accessibility features
-- **Error handling** and graceful fallbacks
+**Option A — Git (recommended for updates)**
 
-### 🔄 **What's Simulated (Mock Features):**
-- **AI Analysis**: Local text analysis instead of GPT
-- **Guest Research**: Sample data instead of web scraping
-- **Transcription**: Mock results instead of actual audio processing
-- **TTS**: File path generation instead of real audio creation
+Use HTTPS or SSH, then check out the demo branch.
 
----
-
-## 🚀 **Quick Start**
-
-### **Prerequisites:**
-- Python 3.8 or higher
-- Windows 10/11 (tested), macOS, or Linux
-- No internet connection required! 🎉
-
-### **Installation:**
 ```bash
-# 1. Clone the repository
-git clone https://github.com/yourusername/SoapBoxx.git
+# HTTPS
+git clone https://github.com/bymediadev/SoapBoxx.git
 cd SoapBoxx
 
-# 2. Switch to demo branch
+# or SSH (same repo)
+# git clone git@github.com:bymediadev/SoapBoxx.git
+# cd SoapBoxx
+
 git checkout demo/soapboxx-barebones
+```
 
-# 3. Install minimal dependencies
-pip install PyQt6 numpy requests python-dotenv
+Then open the folder that contains **`SoapBoxx-Demo`** (usually `SoapBoxx-Demo-Distribution/SoapBoxx-Demo` inside the repo).
 
-# 4. Run SoapBoxx Demo
+**Option B — ZIP from GitHub**
+
+1. Open **[github.com/bymediadev/SoapBoxx](https://github.com/bymediadev/SoapBoxx)**.
+2. **Code → Download ZIP** (downloads the default branch; you still need the **`SoapBoxx-Demo`** path inside the tree), **or** use a release ZIP if you publish one.
+3. Unzip and navigate to **`SoapBoxx-Demo`** (folder with `frontend/`, `backend/`, `requirements_demo.txt`). If your ZIP is only `main` and the demo folder is on another branch, clone with Git instead (Option A).
+
+**Option C — From inside the app**
+
+After install: **File → Download from GitHub (local setup)** opens the repo page and ZIP; **File → Download Everything** zips your local demo folder for backup (not a substitute for cloning from GitHub).
+
+If you **fork** the repo, update **`PACKAGE_INFO.json`** (`github_repo_url`, `github_repo_ssh`, `github_zip_url`) so in-app links match your fork.
+
+---
+
+## Install and run
+
+### Requirements
+
+- **Python 3.8+**
+- **Windows**, **macOS**, or **Linux**
+- Internet optional for the UI; **only needed** if you use cloud APIs or SMTP.
+
+### Install dependencies
+
+From the **`SoapBoxx-Demo`** directory (the folder that contains `frontend` and `requirements_demo.txt`):
+
+```bash
+python -m pip install -r requirements_demo.txt
+```
+
+(Using a virtual environment is recommended: `python -m venv .venv` then activate it.)
+
+### Windows — quick launch
+
+- Double-click **`run_demo.bat`** in the **SoapBoxx-Demo** folder, **or**
+- `scripts\run_demo.bat` (must be run with the current directory set to **SoapBoxx-Demo**).
+
+### Run manually (all platforms)
+
+```bash
+cd SoapBoxx-Demo
 python frontend/main_window.py
 ```
 
-### **Alternative: Quick Launch Script**
-```bash
-# Windows
-.\run_demo.bat
+### Playground mode (unlimited episode credits for testing)
 
-# macOS/Linux
-./run_demo.sh
-```
+For internal testing only:
 
-### **Email in 1 minute (signup/login alerts to your inbox)**
-
-Use **Gmail** with an [App Password](https://myaccount.google.com/apppasswords) (not your normal login password).
-
-1. In the `SoapBoxx-Demo` folder, copy `.env.example` to `.env`.
-2. Edit `.env` and set only these lines (use your Gmail and app password):
-
-```env
-MAIL_TO=whymastermind@gmail.com
-MAIL_FROM=youraddress@gmail.com
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=youraddress@gmail.com
-SMTP_PASSWORD=xxxx xxxx xxxx xxxx
-```
-
-3. Run the app: `python frontend/main_window.py` — sign up or log in; you should get a plain email at `MAIL_TO`.
-
-No server to deploy. To turn mail off, add `NOTIFY_DISABLED=1` to `.env`. Events still append to `beta_events.jsonl`.
+- **Windows:** `run_playground.bat` or `scripts\run_playground.bat`
+- Or set **`SOAPBOXX_DEV_PLAYGROUND=1`** before starting the app.
 
 ---
 
-## 🎮 **How to Use**
+## First launch — what to expect
 
-### **1. Content Analysis**
-1. Go to **SoapBoxx Tab**
-2. Enter your podcast script or transcript
-3. Choose analysis depth (Basic → Expert)
-4. Click "Analyze Content"
-5. Review scores and improvement suggestions
-
-### **2. Guest Research**
-1. Go to **Scoop Tab**
-2. Enter guest name (e.g., "John Doe")
-3. Optionally add company name
-4. Click "Search Guest" or "Search Company"
-5. Review profile and contact information
-
-### **3. Audio Features**
-1. Go to **Reverb Tab**
-2. For transcription: Enter audio filename and click "Transcribe"
-3. For TTS: Enter text, choose voice/speed, click "Generate Speech"
-4. View metrics and output information
-
-### **4. Session Management**
-1. Use **File → Start Session** to begin tracking
-2. Monitor session progress in status bar
-3. Export data with **File → Export Session**
-4. End session with **File → End Session**
+1. **Sign in / Sign up** — Create an account or sign in (email or tester ID).  
+2. **Setup tab (optional)** — Configure API keys or open **GitHub local setup** before entering the main window.  
+3. **Main window** — Tabs **SoapBoxx**, **Scoop**, **Reverb**; header **Settings**, **GitHub setup**, **Complete Episode Workflow**; status bar shows user, **usage (0/3)**, and API key status.  
+4. **Menus** — **File** (export, download bundle, GitHub setup, exit), **Beta** (switch user, API keys, episode workflow), **Help** (full description, about).
 
 ---
 
-## 🎨 **Customization**
+## Demo vs production (honest list)
 
-### **Themes Available:**
-- **Modern**: Light, Dark, Blue, Green
-- **Classic**: Light, Dark, Blue, Green
+### Works in the demo (real)
 
-### **Keyboard Shortcuts:**
-- `Ctrl+1/2/3`: Switch between tabs
-- `Ctrl+A`: Content analysis
-- `Ctrl+G`: Guest research
-- `F1`: Help system
-- `Ctrl+?`: Show all shortcuts
+- Full **PyQt6** UI, tabs, menus, dialogs.
+- **Local** state: sign-in, credits, API keys (saved under **`SoapBoxx-Demo`** — see `.soapboxx_beta_state.json` and `.env` handling).
+- **Mock** analysis / research / audio flows that match the **product** feel without real cloud transcription.
 
----
+### Simulated or simplified
 
-## 🔧 **Troubleshooting**
-
-### **Common Issues:**
-
-#### **"Module Not Found" Error:**
-```
-❌ Error: No module named 'openai'
-✅ Solution: This is expected in the demo! 
-   The barebones modules provide mock functionality.
-```
-
-#### **"API Key Required" Message:**
-```
-❌ Error: OpenAI API key required
-✅ Solution: Demo works offline - no API keys needed!
-   All features use sample data and local analysis.
-```
-
-#### **Blank UI or Missing Tabs:**
-```
-❌ Issue: Only some tabs visible
-✅ Solution: Ensure you're on demo branch and 
-   all barebones modules are present.
-```
-
-### **Performance Tips:**
-- Close other applications for best performance
-- Use shorter text for faster analysis
-- Restart if the application becomes slow
-- Check system resources (CPU, memory)
+- **No real GPT** in the barebones path — local / placeholder analysis.
+- **Guest research** — sample data, not live web scraping.
+- **Transcription / TTS** — mock or simplified paths unless you wire a full backend.
+- **“Magic link”** in the portal is a **demo** flow; real magic links need your auth backend.
 
 ---
 
-## 📁 **File Structure**
+## Beta credits and workflow
+
+- Each account has **3 episode credits** (hard cap) for **Complete Episode Workflow** (header button or **Beta** menu).
+- **Usage** shows in the status bar (`1/3`, `2/3`, `3/3`).
+- After the third episode, a **paywall-style** message appears (copy is configurable in code).
+
+---
+
+## API keys (optional)
+
+- **Settings** or **Beta → API Keys** — OpenAI, Google, custom label + key.
+- Keys are stored **per user** in local state and applied to **`os.environ`** for backends that read `OPENAI_API_KEY`, `GOOGLE_API_KEY`, etc.
+- **No keys required** to click through the demo UI.
+
+---
+
+## Email (optional)
+
+The demo can send **plain-text** emails via **Gmail SMTP** (or Resend / SendGrid / a small webhook server — see `backend/notify_client.py`).
+
+1. Copy **`.env.example`** to **`.env`** in **`SoapBoxx-Demo`** or use **`SoapBoxx/.env`** at the monorepo root (both are loaded; demo `.env` overrides if both exist).  
+2. Set **`MAIL_FROM`**, **`SMTP_USER`**, **`SMTP_PASSWORD`** (Gmail [App Password](https://myaccount.google.com/apppasswords)), and SMTP host/port.  
+3. **Sign-ups with an email** receive messages at **that address** (welcome / login notices). **`MAIL_TO`** is a **fallback** for tester IDs or if you set **`NOTIFY_USER_EMAILS=0`**.  
+4. To disable all outbound mail: **`NOTIFY_DISABLED=1`**.  
+5. Local logs: **`beta_events.jsonl`** (same folder as the demo).
+
+Details: see **`.env.example`** and **`beta_config.json`**.
+
+---
+
+## Menu reference (current build)
+
+| Menu | Items |
+|------|--------|
+| **File** | Export Data, Download Everything, Download from GitHub (local setup), Exit |
+| **Beta** | Login / Switch User, API Keys, Complete Episode Workflow |
+| **Help** | Full description, About |
+
+---
+
+## Troubleshooting
+
+| Issue | What to try |
+|--------|-------------|
+| **`Module not found`** on optional modules | Demo stubs exist for some modules; run from **`SoapBoxx-Demo`** — `python frontend/main_window.py`. |
+| **Import errors for `notify_client`** | Run from **`SoapBoxx-Demo`**; project root is on `sys.path`. |
+| **Email not sending** | Check terminal for `notify smtp:` lines; verify App Password, spam folder, **`NOTIFY_DISABLED`**. |
+| **Blank tabs** | Wait for lazy load; switch tab and back; see console for errors. |
+
+---
+
+## Project layout (important paths)
 
 ```
-SoapBoxx/
-├── backend/
-│   ├── feedback_engine_barebones.py    # Local content analysis
-│   ├── guest_research_barebones.py     # Sample guest data
-│   ├── transcriber_barebones.py        # Mock transcription
-│   ├── tts_generator_barebones.py      # Mock TTS generation
-│   └── soapboxx_core_barebones.py      # Session management
+SoapBoxx-Demo/
 ├── frontend/
-│   ├── main_window.py                  # Main application
-│   ├── soapboxx_tab.py                # Content analysis tab
-│   ├── scoop_tab.py                   # Guest research tab
-│   └── reverb_tab.py                  # Audio features tab
-├── TUTORIAL_DEMO.md                   # Detailed usage guide
-├── README_DEMO.md                     # This file
-└── run_demo.bat                       # Windows quick launch
+│   └── main_window.py          # Entry point
+├── backend/
+│   ├── notify_client.py        # Optional email
+│   └── *_barebones.py          # Mock / local backends
+├── docs/
+│   ├── README_DEMO.md          # This file
+│   ├── TUTORIAL_DEMO.md        # Longer walkthrough
+│   └── TESTER_EMAIL_TEMPLATE.md # Copy-paste for invites
+├── requirements_demo.txt
+├── run_demo.bat                # launcher (root)
+├── run_playground.bat
+├── scripts/
+│   ├── run_demo.bat
+│   └── run_playground.bat
+├── PACKAGE_INFO.json
+├── .env.example
+└── beta_config.json
 ```
 
 ---
 
-## 🚀 **Upgrading to Full SoapBoxx**
+## Upgrade to full SoapBoxx
 
-When you're ready for the complete experience:
-
-1. **Switch to main branch**: `git checkout main`
-2. **Install full dependencies**: `pip install -r requirements.txt`
-3. **Add API keys**: OpenAI, Google, etc.
-4. **Test real functionality**: Actual transcription, AI analysis
-5. **Enjoy full features**: All the power of real SoapBoxx!
+1. Use the **main** branch and full **`requirements.txt`** from the main repo.  
+2. Configure real API keys and services.  
+3. Replace barebones modules with production integrations as documented in the main project.
 
 ---
 
-## 🎯 **Perfect For:**
+## More reading
 
-- **Podcast creators** exploring production tools
-- **Content marketers** evaluating AI assistance
-- **Educators** teaching podcast production
-- **Developers** understanding the SoapBoxx architecture
-- **Sales teams** demonstrating capabilities
-- **Anyone** wanting to experience SoapBoxx without setup
+- **[TUTORIAL_DEMO.md](TUTORIAL_DEMO.md)** — Step-by-step UI tour (some sections may still reference older menu names; **README_DEMO.md** is authoritative for the current build).  
+- **[TESTER_EMAIL_TEMPLATE.md](TESTER_EMAIL_TEMPLATE.md)** — Short text you can paste into an email to testers.
 
 ---
 
-## 📚 **Documentation**
+## License
 
-- **[TUTORIAL_DEMO.md](TUTORIAL_DEMO.md)** - Complete step-by-step guide
-- **[README_DEMO.md](README_DEMO.md)** - This overview (you're reading it!)
-- **Built-in Help** - Press F1 in the application
-- **Status Bar** - Real-time system information
-
----
-
-## 🤝 **Support & Community**
-
-- **Demo Issues**: Check troubleshooting section above
-- **Feature Requests**: Create issue on GitHub
-- **Contributions**: Fork and submit pull requests
-- **Questions**: Use GitHub Discussions
-
----
-
-## 📄 **License**
-
-This demo version is provided under the same license as the main SoapBoxx project.
-
----
-
-## 🎉 **Get Started Now!**
-
-```bash
-git checkout demo/soapboxx-barebones
-pip install PyQt6 numpy requests python-dotenv
-python frontend/main_window.py
-```
-
-**🎯 Experience the future of podcast production with SoapBoxx Demo!**
-
----
-
-*This is the SoapBoxx Demo version. For full functionality with real AI analysis and transcription, switch to the main branch.*
+Same as the main SoapBoxx project unless otherwise stated in **`PACKAGE_INFO.json`**.

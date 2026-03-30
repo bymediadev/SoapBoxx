@@ -172,13 +172,13 @@ If you have GitHub CLI installed:
 gh release create v1.1.0 \\
   --title "SoapBoxx Demo v1.1.0 - Enhanced Interactive Experience" \\
   --notes-file RELEASE_NOTES_v1.1.0.md \\
-  --repo yourusername/SoapBoxx \\
+  --repo bymediadev/SoapBoxx \\
   SoapBoxx-Demo-Enhanced-v1.1.0.zip
 ```
 
 ## Option 2: GitHub Web Interface
 
-1. Go to your repository: https://github.com/yourusername/SoapBoxx
+1. Go to your repository: https://github.com/bymediadev/SoapBoxx
 2. Click "Releases" on the right side
 3. Click "Create a new release"
 4. Tag: `v1.1.0`

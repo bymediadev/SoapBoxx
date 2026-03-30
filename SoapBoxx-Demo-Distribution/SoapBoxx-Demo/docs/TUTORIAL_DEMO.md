@@ -2,7 +2,7 @@
 
 ## 🚀 **Welcome to SoapBoxx Demo!**
 
-This tutorial will walk you through using the **fully functional SoapBoxx demo** that works completely offline. You'll learn how to use all the features without needing any external API keys or internet connection.
+This tutorial walks through the **SoapBoxx demo** UI. The core tour works **without** API keys; optional keys enable cloud-backed features where wired. For **download, install, credits, and email**, use **[README_DEMO.md](README_DEMO.md)** as the source of truth.
 
 ---
 
@@ -13,7 +13,7 @@ This tutorial will walk you through using the **fully functional SoapBoxx demo**
 3. [Content Analysis (SoapBoxx Tab)](#content-analysis-soapboxx-tab)
 4. [Guest Research (Scoop Tab)](#guest-research-scoop-tab)
 5. [Audio Features (Reverb Tab)](#audio-features-reverb-tab)
-6. [Session Management](#session-management)
+6. [Export, workflow, and usage](#export-workflow-and-usage)
 7. [Keyboard Shortcuts](#keyboard-shortcuts)
 8. [Theme Customization](#theme-customization)
 9. [Troubleshooting](#troubleshooting)
@@ -26,25 +26,21 @@ This tutorial will walk you through using the **fully functional SoapBoxx demo**
 ### **Prerequisites:**
 - Python 3.8+ installed
 - Basic understanding of desktop applications
-- No internet connection required! 🎉
+- Internet optional unless you use cloud APIs or SMTP
 
 ### **Installation:**
+From the **`SoapBoxx-Demo`** folder (see **[README_DEMO.md](README_DEMO.md)** for clone/ZIP paths):
+
 ```bash
-# 1. Switch to demo branch
-git checkout demo/soapboxx-barebones
-
-# 2. Install minimal dependencies
-pip install PyQt6 numpy requests python-dotenv
-
-# 3. Run SoapBoxx Demo
+python -m pip install -r requirements_demo.txt
 python frontend/main_window.py
 ```
 
-### **First Launch:**
-When you first launch SoapBoxx Demo, you'll see:
-- **Modern interface** with three main tabs
-- **Welcome message** explaining demo features
-- **Status bar** showing "Demo Mode - Offline Capable"
+### **First launch:**
+When you first launch the demo, you'll typically see:
+- **Login / Sign up** (or similar portal) — create an account or sign in
+- **Setup** tab (optional) — API keys, GitHub local setup
+- **Main window** with **SoapBoxx**, **Scoop**, **Reverb** tabs; **Settings**; status bar with usage (e.g. **0/3** episode credits)
 
 ---
 
@@ -61,20 +57,19 @@ When you first launch SoapBoxx Demo, you'll see:
 │                    Tab Content                          │
 │                                                         │
 ├─────────────────────────────────────────────────────────┤
-│ Status: Demo Mode - Offline Capable                     │
+│ Status: user, usage (e.g. 1/3), API key status          │
 └─────────────────────────────────────────────────────────┘
 ```
 
-### **Tab Navigation:**
-- **SoapBoxx Tab**: Content analysis and feedback
-- **Scoop Tab**: Guest research and company information
-- **Reverb Tab**: Audio features and effects
+### **Tab navigation:**
+- **SoapBoxx Tab**: Recording / export style workflow (demo)
+- **Scoop Tab**: Search / research style UI (sample data)
+- **Reverb Tab**: Analysis / feedback style UI (local mock metrics)
 
-### **Menu Bar:**
-- **File**: Session management, export options
-- **Edit**: Basic editing functions
-- **View**: Theme switching, window options
-- **Help**: Tutorial, about information
+### **Menu bar (current demo build):**
+- **File**: Export Data, Download Everything, Download from GitHub (local setup), Exit
+- **Beta**: Login / Switch User, API Keys, Complete Episode Workflow
+- **Help**: Full description, About
 
 ---
 
@@ -315,70 +310,15 @@ For each audio operation, you get:
 
 ---
 
-## 📊 **Session Management**
+## 📊 **Export, workflow, and usage**
 
-### **What You Can Do:**
-- Start and end SoapBoxx sessions
-- Track usage and performance
-- Export session data
-- Monitor system health
+### **What you can do**
+- **File → Export Data** — export app data in a portable form (formats depend on build).
+- **File → Download Everything** — zip the local demo folder for backup.
+- **Header “Complete Episode Workflow”** or **Beta → Complete Episode Workflow** — runs the demo episode pipeline; consumes **one** of your **3 episode credits** per run (unless playground mode is on — see **[README_DEMO.md](README_DEMO.md)**).
+- **Status bar** — shows signed-in user and usage (e.g. **2/3**).
 
-### **Step-by-Step Session Management:**
-
-#### **1. Start a Session:**
-```
-┌─────────────────────────────────────────┐
-│ Session Name: [My Podcast Session]      │
-│                                         │
-│ [Start Session]                          │
-└─────────────────────────────────────────┘
-```
-
-**What Happens:**
-- Creates unique session ID
-- Records start time
-- Initializes all modules
-- Shows session status
-
-#### **2. Monitor Session:**
-View real-time information:
-- Session duration
-- Modules active
-- Features enabled
-- System status
-
-#### **3. Export Session Data:**
-Choose export format:
-- **JSON**: Structured data for applications
-- **TXT**: Human-readable summary
-
-#### **4. End Session:**
-- Saves session summary
-- Records final metrics
-- Cleans up resources
-- Generates completion report
-
-### **Example Session Summary:**
-```
-📊 Session Summary
-
-🆔 Session ID: session_1234567890
-📝 Name: My Podcast Session
-⏰ Duration: 45 minutes 23 seconds
-📈 Status: Completed
-
-🔧 Modules Used:
-- feedback_engine: barebones
-- guest_research: barebones
-- transcriber: barebones
-- tts_generator: barebones
-
-✨ Features Used:
-- local_analysis: Yes
-- sample_data: Yes
-- mock_transcription: Yes
-- mock_tts: Yes
-```
+The older “Start Session / End Session” flow is **not** the primary model in this demo build; use **Export** and **Complete Episode Workflow** instead.
 
 ---
 
@@ -482,7 +422,7 @@ Ctrl+?          Show Shortcuts
 ✅ **Content Analysis**: How to analyze and improve podcast content
 ✅ **Guest Research**: How to find and research potential guests
 ✅ **Audio Features**: How to use transcription and TTS features
-✅ **Session Management**: How to track and export your work
+✅ **Export and workflow**: File export, episode workflow, usage credits
 ✅ **Navigation**: How to use keyboard shortcuts and themes
 
 ### **Practice Exercises:**
@@ -530,15 +470,14 @@ When you're ready for the full SoapBoxx experience:
 - **Navigation**: All tabs and features work
 - **Data Processing**: Real calculations and metrics
 - **Export Features**: Actual file generation
-- **Session Management**: Real tracking and logging
+- **Usage / export**: Real local state and file export where implemented
 
 ---
 
 ## 🆘 **Getting Help**
 
-### **Built-in Help:**
-- **F1 Key**: Access help system
-- **Help Menu**: Tutorial and about information
+### **Built-in help:**
+- **Help Menu**: Full description (from `PACKAGE_INFO.json`), About
 - **Status Bar**: Current system status
 - **Error Messages**: Clear explanations of issues
 

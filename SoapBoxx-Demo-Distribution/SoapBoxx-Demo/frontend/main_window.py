@@ -14,8 +14,12 @@ import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-# Add backend directory to path
-backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend"))
+# Project root so `from backend.notify_client import ...` resolves (IDE + runtime).
+_project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+# Legacy: top-level imports like `import notify_client` (same as before)
+backend_dir = os.path.join(_project_root, "backend")
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
@@ -137,7 +141,7 @@ def _load_beta_config():
     """Optional admin email + notes. No SMTP in demo — see beta_events.jsonl for local tracking."""
     defaults = {
         "admin_email": "",
-        "notes": "This demo does not send email over the internet. Events append to beta_events.jsonl.",
+        "notes": "Optional: recipient for alerts if MAIL_TO is unset in .env. Use a different address than your sending Gmail unless you want self-copies.",
     }
     try:
         if BETA_CONFIG_FILE.is_file():
@@ -167,7 +171,7 @@ def _log_beta_event(event: str, user_id: str, detail=None):
     except Exception as e:
         print(f"beta_events log failed: {e}")
     try:
-        from notify_client import notify_admin_async
+        from backend.notify_client import notify_admin_async
 
         notify_admin_async(event, user_id, detail)
     except Exception as e:
@@ -464,6 +468,28 @@ class FullDescriptionDialog(QDialog):
 
     def _format_full_walkdown(self, info: dict) -> str:
         """Format full description walkdown as HTML so user can see everything."""
+        repo_url = (info.get("github_repo_url") or info.get("homepage") or "").strip()
+        repo_parts = []
+        if repo_url:
+            repo_parts.append(f"<p><a href=\"{repo_url}\">{repo_url}</a></p>")
+        https_git = ""
+        if repo_url.startswith("https://github.com/"):
+            https_git = repo_url.rstrip("/")
+            if not https_git.endswith(".git"):
+                https_git = https_git + ".git"
+        if https_git:
+            repo_parts.append(
+                f"<p><strong>Clone (HTTPS):</strong> <code>git clone {https_git}</code></p>"
+            )
+        ssh = (info.get("github_repo_ssh") or "").strip()
+        if ssh:
+            repo_parts.append(
+                f"<p><strong>Clone (SSH):</strong> <code>git clone {ssh}</code></p>"
+                "<p><small>Requires GitHub SSH keys.</small></p>"
+            )
+        repo_html = "".join(repo_parts) if repo_parts else "<p>—</p>"
+        zip_url = (info.get("github_zip_url") or "").strip()
+        branch = (info.get("github_clone_branch") or "").strip()
         lines = [
             "<h2>SoapBoxx — Full Description & Package Info</h2>",
             "<p>Below is the complete package and app description (full walkdown).</p>",
@@ -476,8 +502,12 @@ class FullDescriptionDialog(QDialog):
             f"<p>{info.get('author', '—')}</p>",
             "<h3>License</h3>",
             f"<p>{info.get('license', '—')}</p>",
-            "<h3>Homepage</h3>",
-            f"<p><a href=\"{info.get('homepage', '')}\">{info.get('homepage', '—')}</a></p>",
+            "<h3>Repository</h3>",
+            repo_html,
+            "<h3>Source download (ZIP)</h3>",
+            f"<p><a href=\"{zip_url}\">{zip_url}</a></p>" if zip_url else "<p>—</p>",
+            "<h3>Default clone branch</h3>",
+            f"<p><code>{branch}</code></p>" if branch else "<p>—</p>",
             "<h3>Demo features</h3>",
             f"<p>{info.get('demo_features', '—')}</p>",
             "<h3>Upgrade path</h3>",
@@ -657,11 +687,15 @@ class AuthPortalDialog(QDialog):
         _log_beta_event(
             "magic_link_demo",
             email.lower(),
-            {"note": "No real email sent; configure SMTP later to notify admin_email in beta_config.json"},
+            {"note": "No real email sent; configure SMTP + MAIL_TO in .env for alerts to your chosen recipient."},
         )
         cfg = _load_beta_config()
         admin = (cfg.get("admin_email") or "").strip()
-        extra = f"\n\nAdmin tracking email configured: {admin}" if admin else "\n\nSet admin_email in beta_config.json for your records (still no SMTP in this demo)."
+        extra = (
+            f"\n\nAlert recipient configured (beta_config): {admin}"
+            if admin
+            else "\n\nSet MAIL_TO in .env (who receives alerts). Use a different address than your sending Gmail if you prefer."
+        )
         QMessageBox.information(
             self,
             "Magic Link (demo)",
@@ -886,7 +920,7 @@ class LocalSetupDialog(QDialog):
 
         info = QLabel(
             "Get the full project on your machine: clone with Git, or download the ZIP. "
-            "Update PACKAGE_INFO.json with your real GitHub user/repo URLs."
+            "Set github_repo_url (and optional github_zip_url) in PACKAGE_INFO.json if you fork."
         )
         info.setWordWrap(True)
         layout.addWidget(info)

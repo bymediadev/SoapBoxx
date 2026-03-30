@@ -1,121 +1,105 @@
-# 🚀 SoapBoxx Demo - Installation Guide
+# SoapBoxx Demo — Installation
 
-## 📋 Prerequisites
+**Canonical guide:** **[docs/README_DEMO.md](docs/README_DEMO.md)** (download options, first launch, beta credits, optional email, playground mode).
 
-- **Python 3.8+** installed and in PATH
-- **Git** (optional, for updates)
-- **4GB RAM** minimum (8GB recommended)
-- **500MB disk space**
+**Get the source:** [https://github.com/bymediadev/SoapBoxx](https://github.com/bymediadev/SoapBoxx) — clone with HTTPS (`git clone https://github.com/bymediadev/SoapBoxx.git`) or SSH (`git clone git@github.com:bymediadev/SoapBoxx.git`), then `git checkout demo/soapboxx-barebones`, then open **`SoapBoxx-Demo`** as described in the canonical guide.
 
-## 🖥️ Windows Installation
+This file is a short OS-specific install checklist. **All commands assume your current directory is the `SoapBoxx-Demo` folder** (the one that contains `frontend/`, `backend/`, and `requirements_demo.txt`).
 
-### Option 1: Automatic Launcher (Recommended)
-1. **Extract** the distribution package
-2. **Double-click** `scripts\run_demo.bat`
-3. **Wait** for dependencies to install
-4. **Enjoy** SoapBoxx Demo!
+---
 
-### Option 2: Manual Installation
+## Prerequisites
+
+- **Python 3.8+** on PATH  
+- **Git** (optional, for cloning)  
+- **4GB RAM** minimum (8GB recommended)  
+- **~500MB** disk space  
+
+---
+
+## Windows
+
+### Option 1 — Launcher (recommended)
+
+1. Extract or clone so you have the **`SoapBoxx-Demo`** folder.  
+2. Double-click **`run_demo.bat`** in **`SoapBoxx-Demo`**, **or** run **`scripts\run_demo.bat`** from **`SoapBoxx-Demo`**.  
+3. Wait for dependencies to install if prompted, then the app starts.
+
+### Option 2 — Manual
+
 ```cmd
-# Open Command Prompt as Administrator
 cd path\to\SoapBoxx-Demo
-
-# Install dependencies
 python -m pip install -r requirements_demo.txt
-
-# Run the demo
-python frontend/main_window.py
+python frontend\main_window.py
 ```
 
-## 🍎 macOS Installation
+---
 
-### Option 1: Automatic Launcher (Recommended)
-1. **Extract** the distribution package
-2. **Open Terminal** and navigate to the package
-3. **Run**: `./scripts/run_demo.sh`
-4. **Wait** for dependencies to install
-5. **Enjoy** SoapBoxx Demo!
+## macOS
 
-### Option 2: Manual Installation
+### Option 1 — Shell script (if present)
+
 ```bash
-# Open Terminal
 cd path/to/SoapBoxx-Demo
+chmod +x scripts/run_demo.sh
+./scripts/run_demo.sh
+```
 
-# Install dependencies
+### Option 2 — Manual
+
+```bash
+cd path/to/SoapBoxx-Demo
 python3 -m pip install -r requirements_demo.txt
-
-# Run the demo
 python3 frontend/main_window.py
 ```
 
-## 🐧 Linux Installation
+---
 
-### Option 1: Automatic Launcher (Recommended)
-1. **Extract** the distribution package
-2. **Open Terminal** and navigate to the package
-3. **Make script executable**: `chmod +x scripts/run_demo.sh`
-4. **Run**: `./scripts/run_demo.sh`
-5. **Wait** for dependencies to install
-6. **Enjoy** SoapBoxx Demo!
+## Linux
 
-### Option 2: Manual Installation
+### Option 1 — Shell script (if present)
+
 ```bash
-# Open Terminal
 cd path/to/SoapBoxx-Demo
+chmod +x scripts/run_demo.sh
+./scripts/run_demo.sh
+```
 
-# Install system dependencies (Ubuntu/Debian)
-sudo apt update
-sudo apt install python3-pip python3-venv
+### Option 2 — Manual
 
-# Install Python dependencies
+```bash
+cd path/to/SoapBoxx-Demo
+# Ubuntu/Debian example:
+sudo apt update && sudo apt install -y python3-pip python3-venv
 python3 -m pip install -r requirements_demo.txt
-
-# Run the demo
 python3 frontend/main_window.py
 ```
 
-## 🔧 Troubleshooting
+---
 
-### Common Issues:
+## Verify (optional)
 
-#### **"Python not found"**
-- Install Python 3.8+ from [python.org](https://python.org)
-- Ensure Python is added to PATH during installation
+If **`test_barebones_modules.py`** exists in **`SoapBoxx-Demo`**:
 
-#### **"PyQt6 installation failed"**
-- Update pip: `python -m pip install --upgrade pip`
-- Install system dependencies (Linux: `sudo apt install python3-pyqt6`)
-
-#### **"Module not found" errors**
-- Run: `python test_barebones_modules.py`
-- Ensure you're in the correct directory
-- Check that all files were extracted properly
-
-#### **"Permission denied" (Linux/macOS)**
-- Make scripts executable: `chmod +x scripts/*.sh`
-- Run with appropriate permissions
-
-### Performance Tips:
-- **Close other applications** for best performance
-- **Use shorter text** for faster analysis
-- **Restart** if the application becomes slow
-
-## ✅ Verification
-
-After installation, verify everything works:
 ```bash
 python test_barebones_modules.py
 ```
 
-You should see: **"🎉 All modules working correctly!"**
+---
 
-## 🆘 Still Having Issues?
+## Troubleshooting
 
-1. **Check the logs** in the `logs/` directory
-2. **Run the test script** to identify specific problems
-3. **Check system requirements** and Python version
-4. **Try manual installation** instead of launcher scripts
+| Issue | What to try |
+|--------|-------------|
+| **Python not found** | Install from [python.org](https://www.python.org/) and check “Add to PATH”. |
+| **PyQt6 fails** | `python -m pip install --upgrade pip` then retry; on Linux, install distro Qt/Python packages if needed. |
+| **Wrong folder** | You must be **inside** `SoapBoxx-Demo` when running `python frontend/main_window.py`. |
+| **Module not found** | See **[docs/README_DEMO.md](docs/README_DEMO.md)** troubleshooting. |
 
 ---
 
-**🎯 Ready to start? Launch SoapBoxx Demo and begin creating amazing podcasts!**
+## After install
+
+- First launch: **sign-in / sign-up** portal, then main window.  
+- **3 episode credits** for **Complete Episode Workflow** (unless **`SOAPBOXX_DEV_PLAYGROUND=1`** or playground launcher).  
+- Optional **`.env`** for email: copy **`.env.example`** — details in **`docs/README_DEMO.md`**.

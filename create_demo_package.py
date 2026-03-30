@@ -532,10 +532,14 @@ Remember, this is a demo - all features work offline with sample data!
         "description": "AI-Powered Podcast Production Studio - Demo Version",
         "author": "SoapBoxx Team",
         "license": "Same as main SoapBoxx project",
-        "homepage": "https://github.com/yourusername/SoapBoxx",
+        "homepage": "https://github.com/bymediadev/SoapBoxx",
+        "github_repo_url": "https://github.com/bymediadev/SoapBoxx",
+        "github_repo_ssh": "git@github.com:bymediadev/SoapBoxx.git",
+        "github_zip_url": "https://github.com/bymediadev/SoapBoxx/archive/refs/heads/main.zip",
+        "github_clone_branch": "demo/soapboxx-barebones",
         "demo_features": "Offline-capable with mock data and local analysis",
         "upgrade_path": "Switch to main branch for full functionality",
-        "support": "Check documentation and test scripts for help"
+        "support": "https://github.com/bymediadev/SoapBoxx/issues",
     }
     
     with open(app_dir / "PACKAGE_INFO.json", "w", encoding="utf-8") as f:

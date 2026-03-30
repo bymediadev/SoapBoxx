@@ -1,4 +1,4 @@
 {
-  "admin_email": "whymastermind@gmail.com",
-  "notes": "Events log to beta_events.jsonl. To email this address: copy .env.example to .env and set SMTP_* (Gmail app password), or RESEND_API_KEY / SENDGRID_API_KEY. Optional: deploy server/notify_server.py and set NOTIFY_WEBHOOK_URL in .env."
+  "admin_email": "",
+  "notes": "Optional fallback recipient if MAIL_TO is unset in .env. Put the *team or personal inbox that should receive* signup/login alerts here — not the same as your sending Gmail unless you really want copies to yourself. Prefer MAIL_TO in .env."
 }
