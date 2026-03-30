@@ -28,7 +28,28 @@ This document is the **up-to-date** overview: how the demo works, how to get it,
 
 ## Download the demo
 
-**Option A — Git (recommended for updates)**
+**Option A — GitHub Release ZIP (easiest for testers — no Git, no branch)**
+
+1. Open **[Releases](https://github.com/bymediadev/SoapBoxx/releases)**.
+2. Download the attached **`SoapBoxx-Demo-vX.Y.Z.zip`** (or **`SoapBoxx-Demo.zip`** if you publish a stable asset name).
+3. Unzip. You should see a single top-level folder **`SoapBoxx-Demo`** with `frontend/`, `requirements_demo.txt`, **`READ_ME_FIRST.txt`**, and the setup scripts below.
+4. Go to [Install and run](#install-and-run) — **use the plug-and-play scripts** if you want one double-click / one command (no copy-paste into a terminal).
+
+**Maintainers — build the zip** (on branch `demo/soapboxx-barebones`, from repo root):
+
+```text
+SoapBoxx-Demo-Distribution\scripts\build_demo_release_zip.ps1 -Version "1.0.0"
+```
+
+Optional **`-AlsoStableName`**: also writes **`SoapBoxx-Demo.zip`** so testers can use a stable URL:
+
+`https://github.com/bymediadev/SoapBoxx/releases/latest/download/SoapBoxx-Demo.zip`
+
+After publishing, set **`github_release_demo_zip_url`** in **`PACKAGE_INFO.json`** to that URL (or the versioned asset URL). Then **File → Download from GitHub** can open the release ZIP directly.
+
+---
+
+**Option B — Git (good for updates and developers)**
 
 Use HTTPS or SSH, then check out the demo branch.
 
@@ -44,19 +65,22 @@ cd SoapBoxx
 git checkout demo/soapboxx-barebones
 ```
 
-Then open the folder that contains **`SoapBoxx-Demo`** (usually `SoapBoxx-Demo-Distribution/SoapBoxx-Demo` inside the repo).
+Then open **`SoapBoxx-Demo`** (usually `SoapBoxx-Demo-Distribution/SoapBoxx-Demo`).
 
-**Option B — ZIP from GitHub**
+---
+
+**Option C — “Code → Download ZIP” on GitHub (full repo tree)**
 
 1. Open **[github.com/bymediadev/SoapBoxx](https://github.com/bymediadev/SoapBoxx)**.
-2. **Code → Download ZIP** (downloads the default branch; you still need the **`SoapBoxx-Demo`** path inside the tree), **or** use a release ZIP if you publish one.
-3. Unzip and navigate to **`SoapBoxx-Demo`** (folder with `frontend/`, `backend/`, `requirements_demo.txt`). If your ZIP is only `main` and the demo folder is on another branch, clone with Git instead (Option A).
+2. **Code → Download ZIP** (often **`main`** only). You may still need **`demo/soapboxx-barebones`** to see the latest demo layout — **Option A or B** is more reliable.
 
-**Option C — From inside the app**
+---
 
-After install: **File → Download from GitHub (local setup)** opens the repo page and ZIP; **File → Download Everything** zips your local demo folder for backup (not a substitute for cloning from GitHub).
+**Option D — From inside the app**
 
-If you **fork** the repo, update **`PACKAGE_INFO.json`** (`github_repo_url`, `github_repo_ssh`, `github_zip_url`) so in-app links match your fork.
+**File → Download from GitHub (local setup)** — repo page, source ZIP, and (if configured) **release ZIP**. **File → Download Everything** zips your local demo folder for backup.
+
+If you **fork**, update **`PACKAGE_INFO.json`** (`github_repo_url`, `github_repo_ssh`, `github_zip_url`, `github_release_demo_zip_url`).
 
 ---
 
@@ -68,33 +92,38 @@ If you **fork** the repo, update **`PACKAGE_INFO.json`** (`github_repo_url`, `gi
 - **Windows**, **macOS**, or **Linux**
 - Internet optional for the UI; **only needed** if you use cloud APIs or SMTP.
 
-### Install dependencies
+### Plug-and-play (recommended — especially for the GitHub Release ZIP)
 
-From the **`SoapBoxx-Demo`** directory (the folder that contains `frontend` and `requirements_demo.txt`):
+From inside **`SoapBoxx-Demo`** (open **`READ_ME_FIRST.txt`** for the same steps):
+
+| OS | What to run |
+|----|----------------|
+| **Windows** | Double-click **`setup_and_run.bat`** — runs **`setup_and_run.ps1`**, installs **`requirements_demo.txt`**, then starts the app. |
+| **macOS** | Double-click **`setup_and_run.command`** (first time you may need **Right-click → Open**, or run `chmod +x setup_and_run.command` in Terminal). |
+| **Linux** | In a terminal: `chmod +x setup_and_run.sh && ./setup_and_run.sh` |
+
+These scripts print each step so you can see **install deps → launch app**. They do **not** require Git.
+
+### Manual install (if you prefer the terminal yourself)
+
+From **`SoapBoxx-Demo`**:
 
 ```bash
 python -m pip install -r requirements_demo.txt
-```
-
-(Using a virtual environment is recommended: `python -m venv .venv` then activate it.)
-
-### Windows — quick launch
-
-- Double-click **`run_demo.bat`** in the **SoapBoxx-Demo** folder, **or**
-- `scripts\run_demo.bat` (must be run with the current directory set to **SoapBoxx-Demo**).
-
-### Run manually (all platforms)
-
-```bash
-cd SoapBoxx-Demo
 python frontend/main_window.py
 ```
+
+On macOS/Linux, use **`python3`** if **`python`** is not available. A virtual environment is optional: `python -m venv .venv` then activate it.
+
+### Other launchers (after deps are installed)
+
+- **Windows:** **`run_demo.bat`** at the **SoapBoxx-Demo** root (calls **`scripts\run_demo.bat`**). Skips full `pip install -r` if PyQt6 is already present; use **`setup_and_run.bat`** for a clean first run from a fresh unzip.
 
 ### Playground mode (unlimited episode credits for testing)
 
 For internal testing only:
 
-- **Windows:** `run_playground.bat` or `scripts\run_playground.bat`
+- **Windows:** **`run_playground.bat`** or **`scripts\run_playground.bat`**
 - Or set **`SOAPBOXX_DEV_PLAYGROUND=1`** before starting the app.
 
 ---
@@ -180,6 +209,11 @@ Details: see **`.env.example`** and **`beta_config.json`**.
 
 ```
 SoapBoxx-Demo/
+├── READ_ME_FIRST.txt           # 3-step quick start after unzip
+├── setup_and_run.bat           # Windows: double-click (runs .ps1)
+├── setup_and_run.ps1           # Windows: pip install + launch (verbose)
+├── setup_and_run.sh            # macOS / Linux: chmod +x && ./setup_and_run.sh
+├── setup_and_run.command       # macOS: double-click in Finder
 ├── frontend/
 │   └── main_window.py          # Entry point
 ├── backend/
@@ -195,7 +229,7 @@ SoapBoxx-Demo/
 ├── scripts/
 │   ├── run_demo.bat
 │   └── run_playground.bat
-├── PACKAGE_INFO.json
+├── PACKAGE_INFO.json           # github_release_demo_zip_url = release asset URL (optional)
 ├── .env.example
 └── beta_config.json
 ```
@@ -213,7 +247,8 @@ SoapBoxx-Demo/
 ## More reading
 
 - **[TUTORIAL_DEMO.md](TUTORIAL_DEMO.md)** — Step-by-step UI tour (some sections may still reference older menu names; **README_DEMO.md** is authoritative for the current build).  
-- **[TESTER_EMAIL_TEMPLATE.md](TESTER_EMAIL_TEMPLATE.md)** — Short text you can paste into an email to testers.
+- **[TESTER_EMAIL_TEMPLATE.md](TESTER_EMAIL_TEMPLATE.md)** — Short text you can paste into an email to testers.  
+- **[../../GITHUB_UPLOAD_GUIDE.md](../../GITHUB_UPLOAD_GUIDE.md)** (maintainers) — build the release ZIP and attach it to GitHub Releases.
 
 ---
 

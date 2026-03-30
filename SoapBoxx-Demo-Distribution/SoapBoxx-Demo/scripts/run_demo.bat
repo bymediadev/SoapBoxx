@@ -22,20 +22,22 @@ if not exist "frontend\main_window.py" (
     exit /b 1
 )
 
-REM Check if we're on the demo branch
-git branch --show-current | findstr "demo/soapboxx-barebones" >nul
-if errorlevel 1 (
-    echo ⚠️  Warning: Not on demo branch
-    echo Current branch: 
-    git branch --show-current
-    echo.
-    echo To switch to demo branch: git checkout demo/soapboxx-barebones
-    echo.
-    set /p continue="Continue anyway? (y/N): "
-    if /i not "%continue%"=="y" (
-        echo Aborted.
-        pause
-        exit /b 1
+REM Git branch check only when this folder is a git clone (not a release ZIP)
+if exist ".git\" (
+    git branch --show-current 2>nul | findstr "demo/soapboxx-barebones" >nul
+    if errorlevel 1 (
+        echo ⚠️  Warning: Not on demo branch
+        echo Current branch:
+        git branch --show-current
+        echo.
+        echo To switch to demo branch: git checkout demo/soapboxx-barebones
+        echo.
+        set /p continue="Continue anyway? (y/N): "
+        if /i not "%continue%"=="y" (
+            echo Aborted.
+            pause
+            exit /b 1
+        )
     )
 )
 

@@ -19,11 +19,13 @@ This file is a short OS-specific install checklist. **All commands assume your c
 
 ## Windows
 
-### Option 1 — Launcher (recommended)
+### Option 1 — Plug-and-play (recommended for release ZIP)
 
 1. Extract or clone so you have the **`SoapBoxx-Demo`** folder.  
-2. Double-click **`run_demo.bat`** in **`SoapBoxx-Demo`**, **or** run **`scripts\run_demo.bat`** from **`SoapBoxx-Demo`**.  
-3. Wait for dependencies to install if prompted, then the app starts.
+2. Double-click **`setup_and_run.bat`** — it installs **`requirements_demo.txt`** and starts the app (steps print in the window).  
+3. Or use **`run_demo.bat`** if dependencies are already installed.
+
+**Mac:** **`setup_and_run.command`** (see **`READ_ME_FIRST.txt`**). **Linux:** `chmod +x setup_and_run.sh && ./setup_and_run.sh`.
 
 ### Option 2 — Manual
 

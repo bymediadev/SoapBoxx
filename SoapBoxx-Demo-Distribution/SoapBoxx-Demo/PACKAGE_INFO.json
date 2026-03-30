@@ -7,6 +7,7 @@
   "github_repo_url": "https://github.com/bymediadev/SoapBoxx",
   "github_repo_ssh": "git@github.com:bymediadev/SoapBoxx.git",
   "github_zip_url": "https://github.com/bymediadev/SoapBoxx/archive/refs/heads/main.zip",
+  "github_release_demo_zip_url": "",
   "github_clone_branch": "demo/soapboxx-barebones",
   "demo_features": "Offline-capable with mock data and local analysis",
   "upgrade_path": "Switch to main branch for full functionality",

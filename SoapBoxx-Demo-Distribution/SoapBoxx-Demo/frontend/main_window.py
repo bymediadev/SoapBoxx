@@ -365,11 +365,17 @@ def _get_github_setup_urls():
     repo = (info.get("github_repo_url") or info.get("homepage") or "").strip()
     zip_url = (info.get("github_zip_url") or "").strip()
     branch = (info.get("github_clone_branch") or "main").strip()
+    release_demo_zip = (info.get("github_release_demo_zip_url") or "").strip()
     if repo and not zip_url:
         m = re.match(r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$", repo.rstrip("/"))
         if m:
             zip_url = f"https://github.com/{m.group(1)}/{m.group(2)}/archive/refs/heads/{branch}.zip"
-    return {"repo": repo, "zip": zip_url, "branch": branch}
+    return {
+        "repo": repo,
+        "zip": zip_url,
+        "branch": branch,
+        "release_demo_zip": release_demo_zip,
+    }
 
 
 def _default_user_record():
@@ -489,6 +495,7 @@ class FullDescriptionDialog(QDialog):
             )
         repo_html = "".join(repo_parts) if repo_parts else "<p>—</p>"
         zip_url = (info.get("github_zip_url") or "").strip()
+        release_demo = (info.get("github_release_demo_zip_url") or "").strip()
         branch = (info.get("github_clone_branch") or "").strip()
         lines = [
             "<h2>SoapBoxx — Full Description & Package Info</h2>",
@@ -506,6 +513,12 @@ class FullDescriptionDialog(QDialog):
             repo_html,
             "<h3>Source download (ZIP)</h3>",
             f"<p><a href=\"{zip_url}\">{zip_url}</a></p>" if zip_url else "<p>—</p>",
+            "<h3>Release ZIP (ready-made demo folder)</h3>",
+            (
+                f"<p><a href=\"{release_demo}\">{release_demo}</a></p>"
+                if release_demo
+                else "<p>—</p>"
+            ),
             "<h3>Default clone branch</h3>",
             f"<p><code>{branch}</code></p>" if branch else "<p>—</p>",
             "<h3>Demo features</h3>",
@@ -917,24 +930,37 @@ class LocalSetupDialog(QDialog):
         repo = urls["repo"] or "(set github_repo_url in PACKAGE_INFO.json)"
         zip_u = urls["zip"] or ""
         branch = urls["branch"]
+        rel = urls.get("release_demo_zip") or ""
 
         info = QLabel(
-            "Get the full project on your machine: clone with Git, or download the ZIP. "
-            "Set github_repo_url (and optional github_zip_url) in PACKAGE_INFO.json if you fork."
+            "Clone the repo or download source ZIP. "
+            "Testers can use a GitHub Release ZIP (ready-made SoapBoxx-Demo folder) when configured — no branch checkout."
         )
         info.setWordWrap(True)
         layout.addWidget(info)
 
+        if rel:
+            layout.addWidget(
+                QLabel("Release ZIP (testers — unzip, then open SoapBoxx-Demo):")
+            )
+            rel_row = QHBoxLayout()
+            open_rel = ModernButton("Open release ZIP", style="primary")
+            open_rel.clicked.connect(
+                lambda: webbrowser.open(rel) if rel.startswith("http") else None
+            )
+            rel_row.addWidget(open_rel)
+            layout.addLayout(rel_row)
+
         layout.addWidget(QLabel(f"Repository: {repo}"))
         if zip_u:
-            layout.addWidget(QLabel(f"ZIP: {zip_u}"))
+            layout.addWidget(QLabel(f"Source ZIP (branch archive): {zip_u}"))
 
         row = QHBoxLayout()
-        open_repo = ModernButton("Open repository page", style="primary")
+        open_repo = ModernButton("Open repository page", style="secondary")
         open_repo.clicked.connect(lambda: webbrowser.open(repo) if repo.startswith("http") else None)
         row.addWidget(open_repo)
 
-        open_zip = ModernButton("Download ZIP", style="secondary")
+        open_zip = ModernButton("Download source ZIP", style="secondary")
         open_zip.clicked.connect(lambda: webbrowser.open(zip_u) if zip_u.startswith("http") else None)
         row.addWidget(open_zip)
         layout.addLayout(row)

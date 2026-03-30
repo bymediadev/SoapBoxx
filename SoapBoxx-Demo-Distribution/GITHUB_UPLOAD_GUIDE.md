@@ -1,51 +1,56 @@
-# GitHub Release Upload Script
+# SoapBoxx Demo — GitHub Release (ready-made ZIP)
 
-## Option 1: GitHub CLI (Recommended)
+Build the zip, attach it to a release, then point testers at one URL.
 
-If you have GitHub CLI installed:
+## 1. Build the zip (Windows)
+
+From `demo/soapboxx-barebones` (or your demo branch):
+
+```powershell
+cd SoapBoxx-Demo-Distribution\scripts
+.\build_demo_release_zip.ps1 -Version "1.0.0"
+```
+
+Output: **`SoapBoxx-Demo-Distribution\release\SoapBoxx-Demo-v1.0.0.zip`**
+
+Optional **stable filename** for every release (same download URL):
+
+```powershell
+.\build_demo_release_zip.ps1 -Version "1.0.0" -AlsoStableName
+```
+
+Also creates **`SoapBoxx-Demo.zip`** — upload **this** as the asset if you want:
+
+`https://github.com/bymediadev/SoapBoxx/releases/latest/download/SoapBoxx-Demo.zip`
+
+## 2. Create a GitHub Release
+
+**Web:** [github.com/bymediadev/SoapBoxx/releases](https://github.com/bymediadev/SoapBoxx) → **Draft a new release**
+
+- **Tag:** e.g. `demo-v1.0.0`
+- **Title:** e.g. SoapBoxx Demo v1.0.0
+- **Attach:** `SoapBoxx-Demo-v1.0.0.zip` and/or `SoapBoxx-Demo.zip`
+- Publish
+
+**CLI (gh):**
 
 ```bash
-# Create a new release
-gh release create v1.1.0 \
-  --title "SoapBoxx Demo v1.1.0 - Enhanced Interactive Experience" \
-  --notes-file RELEASE_NOTES_v1.1.0.md \
+gh release create demo-v1.0.0 \
   --repo bymediadev/SoapBoxx \
-  SoapBoxx-Demo-Enhanced-v1.1.0.zip
+  --title "SoapBoxx Demo v1.0.0" \
+  --notes "See docs in SoapBoxx-Demo/docs/README_DEMO.md" \
+  SoapBoxx-Demo-Distribution/release/SoapBoxx-Demo-v1.0.0.zip
 ```
 
-## Option 2: GitHub Web Interface
+## 3. Point the app and docs at the asset URL
 
-1. Go to your repository: https://github.com/bymediadev/SoapBoxx
-2. Click "Releases" on the right side
-3. Click "Create a new release"
-4. Tag: `v1.1.0`
-5. Title: `SoapBoxx Demo v1.1.0 - Enhanced Interactive Experience`
-6. Description: Copy content from `RELEASE_NOTES_v1.1.0.md`
-7. Upload `SoapBoxx-Demo-Enhanced-v1.1.0.zip` as a binary
-8. Click "Publish release"
+In **`SoapBoxx-Demo/PACKAGE_INFO.json`**, set **`github_release_demo_zip_url`** to either:
 
-## Option 3: Git Commands
+- Versioned: `https://github.com/bymediadev/SoapBoxx/releases/download/demo-v1.0.0/SoapBoxx-Demo-v1.0.0.zip`
+- Or stable: `https://github.com/bymediadev/SoapBoxx/releases/latest/download/SoapBoxx-Demo.zip` (only if you always upload an asset named **`SoapBoxx-Demo.zip`**)
 
-```bash
-# Add the new package
-git add SoapBoxx-Demo-Enhanced-v1.1.0.zip
-git add RELEASE_NOTES_v1.1.0.md
+## 4. Tester email (one line)
 
-# Commit
-git commit -m "Add enhanced SoapBoxx Demo v1.1.0 with interactive features"
+“Download **`SoapBoxx-Demo.zip`** from the latest release, unzip, open **`SoapBoxx-Demo`**, then double-click **`setup_and_run.bat`** (Windows) or **`setup_and_run.command`** (Mac), or run **`setup_and_run.sh`** on Linux — see **`READ_ME_FIRST.txt`**. ”
 
-# Push
-git push origin main
-
-# Create and push tag
-git tag -a v1.1.0 -m "Enhanced Demo v1.1.0"
-git push origin v1.1.0
-```
-
-## Package Details
-
-- **File**: SoapBoxx-Demo-Enhanced-v1.1.0.zip
-- **Size**: ~84KB
-- **Version**: 1.1.0
-- **Features**: Interactive recording, live search, real-time analysis
-- **Compatibility**: Windows, macOS, Linux
+Full copy: **`SoapBoxx-Demo/docs/TESTER_EMAIL_TEMPLATE.md`**

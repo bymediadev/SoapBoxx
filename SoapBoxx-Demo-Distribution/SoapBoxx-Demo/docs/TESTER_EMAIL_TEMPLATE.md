@@ -1,6 +1,6 @@
 # Tester invite — copy into your email
 
-Use the **plain text** block below as-is, or replace `<YOUR_NAME>`.
+Replace `<YOUR_NAME>`. Prefer **Option 1** if you have published a GitHub Release with a ZIP.
 
 ---
 
@@ -10,48 +10,46 @@ Use the **plain text** block below as-is, or replace `<YOUR_NAME>`.
 
 Hi,
 
-**Repository (official):** https://github.com/bymediadev/SoapBoxx  
+**Option 1 — Easiest (GitHub Release ZIP)**
 
-**Clone with Git (pick one):**
+1. Open **https://github.com/bymediadev/SoapBoxx/releases** and download **`SoapBoxx-Demo.zip`** or **`SoapBoxx-Demo-vX.Y.Z.zip`** from the latest release.  
+2. Unzip. You should get a folder **`SoapBoxx-Demo`**. Open **`READ_ME_FIRST.txt`** inside it — same steps as below.  
+3. **Plug-and-play (recommended):**  
+   - **Windows:** double-click **`setup_and_run.bat`** (it runs PowerShell: installs dependencies, then starts the app — you’ll see each step in the window).  
+   - **Mac:** double-click **`setup_and_run.command`** (if macOS blocks it the first time, right-click → **Open**, or run `chmod +x setup_and_run.command` in Terminal, then double-click again).  
+   - **Linux:** in a terminal, `cd` into **`SoapBoxx-Demo`**, then: `chmod +x setup_and_run.sh && ./setup_and_run.sh`  
 
-- HTTPS: `git clone https://github.com/bymediadev/SoapBoxx.git`
-- SSH: `git clone git@github.com:bymediadev/SoapBoxx.git`
-
-Then:
+4. **Manual alternative:** open a terminal in **`SoapBoxx-Demo`**, then:
 
 ```text
+python -m pip install -r requirements_demo.txt
+python frontend/main_window.py
+```
+
+(On Mac/Linux, use **`python3`** if **`python`** isn’t found. On Windows you can still use **`run_demo.bat`** after dependencies are installed.)
+
+---
+
+**Option 2 — Git (developers)**
+
+**Repository:** https://github.com/bymediadev/SoapBoxx  
+
+```bash
+git clone https://github.com/bymediadev/SoapBoxx.git
+# or: git clone git@github.com:bymediadev/SoapBoxx.git
 cd SoapBoxx
 git checkout demo/soapboxx-barebones
 ```
 
-Open the **`SoapBoxx-Demo`** folder (usually `SoapBoxx-Demo-Distribution/SoapBoxx-Demo` inside the repo).
+Open **`SoapBoxx-Demo`** (usually `SoapBoxx-Demo-Distribution/SoapBoxx-Demo`), then use **`setup_and_run`** as above or the manual **`pip`** / **`python`** commands.
 
-Thanks for trying **SoapBoxx Demo** — a desktop preview of the podcast workflow (SoapBoxx, Scoop, Reverb) with local/mock backends so you can explore the UI without a full production setup.
+---
 
-**What you need**
+**First launch:** sign-in / sign-up, then the main window. **3 episode credits** for “Complete Episode Workflow.” API keys optional (**Settings** or **Beta → API Keys**).
 
-- **Python 3.8+** on Windows, Mac, or Linux  
-- A few minutes to install dependencies and start the app
+**Full guide:** **`docs/README_DEMO.md`** in the package.
 
-**If you don’t use Git:** download the repo as a ZIP from the green **Code** button on GitHub, unzip, and find **`SoapBoxx-Demo`** inside (you may need the **`demo/soapboxx-barebones`** branch for the latest demo layout — cloning is more reliable).
-
-**Run it**
-
-1. Open a terminal in the **`SoapBoxx-Demo`** folder (the one with `frontend/`, `requirements_demo.txt`).  
-2. Install: `python -m pip install -r requirements_demo.txt`  
-3. Start: `python frontend/main_window.py`  
-
-**Windows:** double-click **`run_demo.bat`** in **`SoapBoxx-Demo`** instead.
-
-**First launch**
-
-You’ll see a **sign-in / sign-up** screen, then the main window. You have **3 episode credits** for the “Complete Episode Workflow” demo. Optional **API keys**: **Settings** or **Beta → API Keys** — not required to try the UI.
-
-**Full instructions**
-
-See **`docs/README_DEMO.md`** in the package (download, optional email, playground mode, troubleshooting).
-
-If anything fails, reply with your OS, Python version (`python --version`), and the error text from the terminal.
+If something fails, reply with your OS, `python --version`, and the terminal error.
 
 Thanks,  
 `<YOUR_NAME>`
@@ -60,4 +58,4 @@ Thanks,
 
 ## Short version (chat / Slack)
 
-**Repo:** https://github.com/bymediadev/SoapBoxx — `git clone` (HTTPS or `git@github.com:bymediadev/SoapBoxx.git` for SSH) → `git checkout demo/soapboxx-barebones` → **`SoapBoxx-Demo`** → `pip install -r requirements_demo.txt` → `python frontend/main_window.py` (Windows: **`run_demo.bat`**). Sign in on first launch; 3 episode credits for the workflow demo. Full guide: **`docs/README_DEMO.md`**.
+**Releases:** https://github.com/bymediadev/SoapBoxx/releases — download **`SoapBoxx-Demo.zip`**, unzip → open **`SoapBoxx-Demo`** → **Windows:** double-click **`setup_and_run.bat`** · **Mac:** **`setup_and_run.command`** · **Linux:** `chmod +x setup_and_run.sh && ./setup_and_run.sh`. Details: **`docs/README_DEMO.md`**.

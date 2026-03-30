@@ -12,7 +12,8 @@ See **`docs/README_DEMO.md`** for the full, current story.
 
 ### Windows
 
-- Double-click **`run_demo.bat`** in this folder, **or** run `scripts\run_demo.bat` from this folder, **or**:
+- **First time / release ZIP:** double-click **`setup_and_run.bat`** (installs dependencies, then launches — uses PowerShell under the hood).  
+- **After deps are installed:** **`run_demo.bat`**, or `scripts\run_demo.bat`, or:
 ```bash
 python -m pip install -r requirements_demo.txt
 python frontend/main_window.py
@@ -20,10 +21,9 @@ python frontend/main_window.py
 
 ### macOS / Linux
 
+- **First time / release ZIP:** **`setup_and_run.command`** (Mac, double-click) or **`chmod +x setup_and_run.sh && ./setup_and_run.sh`** (Linux / Mac terminal).  
+- **Or** manual:
 ```bash
-chmod +x scripts/run_demo.sh   # if present
-./scripts/run_demo.sh
-# or:
 python3 -m pip install -r requirements_demo.txt
 python3 frontend/main_window.py
 ```
@@ -42,6 +42,7 @@ python3 frontend/main_window.py
 - **[docs/README_DEMO.md](docs/README_DEMO.md)** — **Start here:** download, install, run, credits, email, troubleshooting.
 - **[docs/TUTORIAL_DEMO.md](docs/TUTORIAL_DEMO.md)** — Longer UI walkthrough.
 - **[docs/TESTER_EMAIL_TEMPLATE.md](docs/TESTER_EMAIL_TEMPLATE.md)** — Copy-paste text for tester emails.
+- **[../GITHUB_UPLOAD_GUIDE.md](../GITHUB_UPLOAD_GUIDE.md)** — Maintainers: build **`SoapBoxx-Demo-….zip`** and publish a GitHub Release.
 
 ## 🧪 Testing
 
