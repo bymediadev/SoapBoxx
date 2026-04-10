@@ -1,0 +1,56 @@
+# Episode pipeline + doctor-style checks (no PowerShell required).
+name: Doctor checks
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'requirements*.txt'
+  push:
+    branches: [main, master]
+    paths:
+      - 'backend/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'requirements*.txt'
+  workflow_dispatch:
+
+jobs:
+  python-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          pip install -r requirements-episode-intelligence.txt
+
+      - name: Import smoke check
+        env:
+          PYTHONUTF8: '1'
+        run: |
+          python -c "import pydantic, tenacity; import backend.episode_report_v3, backend.soapboxx_v3_workflow, backend.episode_intelligence; print('imports ok')"
+
+      - name: Unit tests (v3 + doctor validator)
+        env:
+          PYTHONUTF8: '1'
+        run: |
+          python -m unittest tests.test_episode_report_v3 tests.test_soapboxx_v3_workflow tests.test_episode_intelligence tests.test_doctor_validate_report
+
+      - name: Workflow JSON + validate (sample transcript)
+        env:
+          PYTHONUTF8: '1'
+        run: |
+          mkdir -p runs
+          python backend/soapboxx_v3_workflow.py --transcript sample_transcript.txt --output runs/smoke_workflow_report.json
+          python scripts/doctor_validate_report.py runs/smoke_workflow_report.json

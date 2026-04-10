@@ -1,4 +1,8 @@
 @echo off
+setlocal
+REM Run from the folder where this .bat lives (SoapBoxx repo root) so backend/ loads correctly.
+cd /d "%~dp0"
+
 title SoapBoxx Launcher
 echo.
 echo ========================================
@@ -9,26 +13,23 @@ echo.
 echo 🚀 Starting SoapBoxx...
 echo.
 
-REM Check if virtual environment exists in parent directory
-if not exist "..\..\.venv\Scripts\activate.bat" (
-    echo ❌ Virtual environment not found!
+if not exist ".venv\Scripts\activate.bat" (
+    echo ❌ Virtual environment not found in this folder!
     echo.
-    echo Please run the setup first from the main SoapBoxx folder:
-    echo python -m venv .venv
-    echo .\.venv\Scripts\Activate.ps1
-    echo pip install -r requirements.txt
+    echo From the SoapBoxx repo root, run:
+    echo   python -m venv .venv
+    echo   .\.venv\Scripts\activate.bat
+    echo   pip install -r requirements.txt
     echo.
     pause
     exit /b 1
 )
 
-REM Activate virtual environment and run
 echo ✅ Virtual environment found
 echo 🔧 Activating environment...
 echo.
 
-REM Activate virtual environment from parent directory and run Python directly
-call "..\..\.venv\Scripts\activate.bat"
+call ".venv\Scripts\activate.bat"
 python frontend\main_window.py
 
 echo.

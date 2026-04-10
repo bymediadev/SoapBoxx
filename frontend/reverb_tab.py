@@ -124,8 +124,59 @@ class EpisodeAnalysisThread(QThread):
 
             self.progress_updated.emit(60)
 
-            # Analyze content
-            analysis = feedback_engine.analyze(transcript=transcript)
+            # Analyze content or episode report / network brief
+            network_brief_md = None
+            network_brief_payload = None
+            if self.analysis_type == "Episode Report (v3 — primary)":
+                if not hasattr(feedback_engine, "generate_network_brief_v3"):
+                    self.error_occurred.emit(
+                        "Episode Report (v3) requires FeedbackEngine.generate_network_brief_v3."
+                    )
+                    return
+                base = os.path.splitext(os.path.basename(self.file_path))[0]
+                nb = feedback_engine.generate_network_brief_v3(
+                    transcript,
+                    title=base,
+                    creator="",
+                    genre="",
+                )
+                # Prefer unified export (v3 + workflow sections); coach-only markdown_v3 omits a lot.
+                network_brief_md = (
+                    nb.get("markdown_export")
+                    or nb.get("markdown_v3")
+                    or nb.get("markdown")
+                    or ""
+                )
+                network_brief_payload = nb
+                analysis = {
+                    "listener_feedback": "Primary v3 Episode Report generated (see below).",
+                    "coaching_suggestions": nb.get("warnings") or [],
+                    "benchmark": f"Model: {nb.get('model', 'unknown')}",
+                    "confidence": 1.0,
+                }
+            elif self.analysis_type == "Network Brief (v2 — compact)":
+                if not hasattr(feedback_engine, "generate_network_brief"):
+                    self.error_occurred.emit(
+                        "Network Brief requires an updated FeedbackEngine with generate_network_brief."
+                    )
+                    return
+                base = os.path.splitext(os.path.basename(self.file_path))[0]
+                nb = feedback_engine.generate_network_brief(
+                    transcript,
+                    title=base,
+                    creator="",
+                    genre="",
+                )
+                network_brief_md = nb.get("markdown", "")
+                network_brief_payload = nb
+                analysis = {
+                    "listener_feedback": "Compact v2 network brief generated (see below).",
+                    "coaching_suggestions": nb.get("warnings") or [],
+                    "benchmark": f"Model: {nb.get('model', 'unknown')}",
+                    "confidence": 1.0,
+                }
+            else:
+                analysis = feedback_engine.analyze(transcript=transcript)
 
             self.progress_updated.emit(80)
 
@@ -139,6 +190,8 @@ class EpisodeAnalysisThread(QThread):
                 "word_count": len(transcript.split()),
                 "duration_estimate": len(transcript.split())
                 / 150,  # Rough estimate: 150 words per minute
+                "network_brief_markdown": network_brief_md,
+                "network_brief": network_brief_payload,
             }
 
             self.progress_updated.emit(100)
@@ -222,6 +275,8 @@ class ReverbTab(QWidget):
         self.analysis_combo = QComboBox()
         self.analysis_combo.addItems(
             [
+                "Episode Report (v3 — primary)",
+                "Network Brief (v2 — compact)",
                 "Content Analysis",
                 "Performance Coaching",
                 "Engagement Analysis",
@@ -497,6 +552,14 @@ class ReverbTab(QWidget):
             # Add analysis results
             analysis = results.get("analysis", {})
             if isinstance(analysis, dict):
+                if results.get("network_brief_markdown"):
+                    if results.get("analysis_type") == "Episode Report (v3 — primary)":
+                        output += "📋 EPISODE REPORT (v3 — primary)\n"
+                    else:
+                        output += "📋 NETWORK BRIEF (v2 — compact)\n"
+                    output += "─" * 50 + "\n"
+                    output += results["network_brief_markdown"]
+                    output += "\n\n"
                 if "listener_feedback" in analysis:
                     output += (
                         f"🎯 Listener Feedback:\n{analysis['listener_feedback']}\n\n"

@@ -9,3 +9,9 @@ pydub
 snscrape
 google-api-python-client
 websocket-client
+plotly>=5.0.0
+yt-dlp>=2025.1.0
+faster-whisper>=1.0.0
+tenacity
+pydantic
+tiktoken

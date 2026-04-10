@@ -27,14 +27,8 @@ except ImportError:
             print(f"API error: {message}")
 
 
-# Try to import OpenAI
-try:
-    import openai
-
-    OPENAI_AVAILABLE = True
-except ImportError:
-    OPENAI_AVAILABLE = False
-    print("Warning: OpenAI package not available. Install with: pip install openai")
+def _ollama_llm_configured() -> bool:
+    return bool(os.getenv("SOAPBOXX_OLLAMA_MODEL", "").strip())
 
 
 @dataclass
@@ -66,20 +60,10 @@ class FeedbackScore:
 
 class FeedbackEngine:
     def __init__(self, api_key: Optional[str] = None):
+        # Legacy: some callers still pass OPENAI_API_KEY (e.g. Whisper transcription); LLM uses Ollama only.
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        if self.api_key and OPENAI_AVAILABLE:
-            try:
-                # Try new OpenAI client first
-                self.client = openai.OpenAI(api_key=self.api_key)
-                self.use_new_api = True
-            except Exception:
-                # Fallback to old API
-                openai.api_key = self.api_key
-                self.use_new_api = False
-        else:
-            print("Warning: No OpenAI API key provided. Feedback will be limited.")
-            self.client = None
-            self.use_new_api = False
+        self.client = None
+        self.use_new_api = False
 
         # Initialize analysis cache
         self.analysis_cache = {}
@@ -120,7 +104,7 @@ class FeedbackEngine:
             if time.time() - cached_result.get("timestamp", 0) < self.cache_ttl:
                 return cached_result["result"]
 
-        if not self.api_key or not OPENAI_AVAILABLE:
+        if not _ollama_llm_configured():
             result = self._get_enhanced_fallback_feedback(transcript, analysis_depth)
         else:
             try:
@@ -140,6 +124,126 @@ class FeedbackEngine:
         self.analysis_cache[cache_key] = {"result": result, "timestamp": time.time()}
 
         return result
+
+    def generate_network_brief(
+        self,
+        transcript: str,
+        *,
+        title: str = "",
+        creator: str = "",
+        genre: str = "",
+    ) -> Dict:
+        """
+        One-page network brief: structured JSON + markdown (compact **v2** format).
+        **Primary** episode workflow is **v3** — use ``generate_network_brief_v3`` for the
+        SoapBoxx Episode Report. See backend/episode_intelligence.py and episode_report_v3.py.
+        """
+        try:
+            from .episode_intelligence import generate_episode_brief
+        except ImportError:
+            from episode_intelligence import generate_episode_brief
+
+        meta = {
+            "title": title,
+            "creator": creator,
+            "genre": genre,
+        }
+        return generate_episode_brief(
+            transcript,
+            meta,
+            client=self.client,
+            use_new_api=self.use_new_api,
+            api_key=self.api_key,
+        )
+
+    def generate_network_brief_v3(
+        self,
+        transcript: str,
+        *,
+        title: str = "",
+        creator: str = "",
+        genre: str = "",
+        strict_references: bool = True,
+        include_v2_markdown: bool = True,
+        include_workflow_json: bool = True,
+    ) -> Dict:
+        """
+        **Primary** episode report workflow (v3): coach report, clean insights, structured evidence,
+        tension questions, claim-mapped guests, executable segments, actionable analytics,
+        optional workflow JSON. See backend/episode_report_v3.py and docs/network_episode_brief_v3.md.
+
+        When ``include_workflow_json`` is True (default), also builds the **workflow JSON report**
+        (highlights, evidence_map, follow-ups, guests, segments, analytics) via
+        ``soapboxx_v3_workflow.soapboxx_v3_workflow_local``, using the same ``report_v3`` so the
+        brief is not generated twice. Requires ``SOAPBOXX_OLLAMA_MODEL`` (Ollama) for AI-filled
+        sections; set ``SOAPBOXX_WORKFLOW_USE_AI=0`` to skip AI enrichment.
+        """
+        try:
+            from .episode_report_v3 import generate_episode_report_v3
+        except ImportError:
+            from episode_report_v3 import generate_episode_report_v3
+
+        meta = {
+            "title": title,
+            "creator": creator,
+            "genre": genre,
+        }
+        out = generate_episode_report_v3(
+            transcript,
+            meta,
+            client=self.client,
+            use_new_api=self.use_new_api,
+            api_key=self.api_key,
+            strict_references=strict_references,
+            include_v2_markdown=include_v2_markdown,
+        )
+        if include_workflow_json:
+            try:
+                try:
+                    from .soapboxx_v3_workflow import soapboxx_v3_workflow_local
+                except ImportError:
+                    from soapboxx_v3_workflow import soapboxx_v3_workflow_local
+
+                out["workflow_report"] = soapboxx_v3_workflow_local(
+                    transcript,
+                    meta,
+                    strict_references=strict_references,
+                    validate=True,
+                    client=self.client,
+                    report_v3=out.get("report_v3"),
+                    brief_warnings=out.get("warnings"),
+                )
+            except Exception as e:
+                out.setdefault("warnings", []).append(
+                    f"workflow_report attachment failed: {e}"
+                )
+        wf = out.get("workflow_report")
+        r3 = out.get("report_v3")
+        try:
+            from .episode_report_v3 import (
+                build_episode_spine,
+                merge_workflow_followups_into_engagement,
+                render_episode_report_v3_markdown,
+                render_unified_episode_export_markdown,
+            )
+        except ImportError:
+            from episode_report_v3 import (
+                build_episode_spine,
+                merge_workflow_followups_into_engagement,
+                render_episode_report_v3_markdown,
+                render_unified_episode_export_markdown,
+            )
+
+        wf_arg = wf if isinstance(wf, dict) else None
+        if isinstance(r3, dict):
+            if wf_arg:
+                merge_workflow_followups_into_engagement(r3, wf_arg)
+            out["episode_spine"] = build_episode_spine(r3, wf_arg)
+            out["markdown_v3"] = render_episode_report_v3_markdown(
+                r3, workflow_report=wf_arg
+            )
+        out["markdown_export"] = render_unified_episode_export_markdown(out)
+        return out
 
     def _perform_ai_analysis(self, transcript: str, analysis_depth: str) -> Dict:
         """Perform AI-powered analysis with varying depth levels"""
@@ -161,48 +265,20 @@ class FeedbackEngine:
             prompt = self._create_expert_analysis_prompt(transcript, metrics)
             max_tokens = 1200
 
-        # Call OpenAI API
-            if self.use_new_api and self.client:
-                response = self.client.chat.completions.create(
-                model=(
-                    "gpt-4"
-                    if analysis_depth in ["comprehensive", "expert"]
-                    else "gpt-3.5-turbo"
-                ),
-                    messages=[
-                        {
-                            "role": "system",
-                        "content": self._get_system_prompt(analysis_depth),
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                max_tokens=max_tokens,
-                temperature=(
-                    0.3 if analysis_depth in ["comprehensive", "expert"] else 0.7
-                ),
-                )
-                analysis_text = response.choices[0].message.content.strip()
-            else:
-            # Fallback to old API
-                try:
-                    response = openai.ChatCompletion.create(
-                        model="gpt-3.5-turbo",
-                        messages=[
-                            {
-                                "role": "system",
-                            "content": self._get_system_prompt(analysis_depth),
-                            },
-                            {"role": "user", "content": prompt},
-                        ],
-                    max_tokens=max_tokens,
-                    temperature=(
-                        0.3 if analysis_depth in ["comprehensive", "expert"] else 0.7
-                    ),
-                    )
-                    analysis_text = response.choices[0].message.content.strip()
-                except Exception as old_api_error:
-                    print(f"Old API failed: {old_api_error}")
-                raise
+        temp = 0.3 if analysis_depth in ["comprehensive", "expert"] else 0.7
+
+        try:
+            from .soapboxx_v3_workflow import call_llm
+        except ImportError:
+            from soapboxx_v3_workflow import call_llm
+
+        analysis_text = call_llm(
+            prompt,
+            max_tokens=max_tokens,
+            temperature=temp,
+            system=self._get_system_prompt(analysis_depth),
+            client=None,
+        ).strip()
 
         # Parse and enhance the response
         parsed_response = self._parse_enhanced_analysis_response(
