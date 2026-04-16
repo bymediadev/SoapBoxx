@@ -8,6 +8,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 # Load environment variables from .env file
 try:
     from dotenv import load_dotenv
@@ -36,7 +38,7 @@ def test_youtube_api():
             print(
                 "❌ YouTube API key not configured. Please set YOUTUBE_API_KEY in your .env file"
             )
-            return False
+            pytest.skip("YOUTUBE_API_KEY not set")
 
         print("✅ YouTube API key found!")
 
@@ -102,16 +104,15 @@ def test_youtube_api():
             print(f"❌ Trending videos test failed: {e}")
 
         print("🎉 YouTube API tests completed!")
-        return True
 
     except ImportError:
         print(
             "❌ Google API client not available. Please install with: pip install google-api-python-client"
         )
-        return False
+        pytest.skip("google-api-python-client not installed")
     except Exception as e:
         print(f"❌ Test failed with error: {e}")
-        return False
+        pytest.fail(str(e))
 
 
 if __name__ == "__main__":

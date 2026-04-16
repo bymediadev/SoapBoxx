@@ -29,12 +29,13 @@ This document summarizes the comprehensive hardening improvements made to SoapBo
 ### 2. Testing & Quality Assurance
 
 #### Comprehensive Frontend Testing
-- **UI Testing Framework**: Created `tests/test_frontend.py` with pytest-qt
+- **UI Testing Framework**: `tests/qt_frontend_tests.py` (pytest + pytest-qt + PyQt6). Default `python -m unittest discover` skips this file so machines without pytest/Qt stay green; run `python -m pytest tests/qt_frontend_tests.py -v` after `pip install -r requirements-dev.txt` and `pip install -r requirements-dev-qt.txt`.
 - **Component Testing**: Individual tests for ModernCard, ModernButton, and tab components
 - **Error Scenario Testing**: Tests for missing modules, network failures, and edge cases
 - **Performance Testing**: Memory usage and thread safety testing
 
 #### Enhanced Backend Testing
+- **Report reality checks** (`backend/report_reality_checks.py`): golden-style expectations (thesis needles, forbidden terms, grounding ratio, “would ship” bar) so tests measure usefulness, not only JSON shape. **Default rules** ship as `backend/data/v3_reality_expected.json` and run automatically inside `soapboxx_v3_workflow_local` (results on `metadata.v3_reality_check`). Stricter per-episode JSON can be pointed at with `SOAPBOXX_V3_REALITY_RULES` (e.g. `tests/golden/episode_001/v3_reality_expected.json` for CI). Unit tests: `tests/test_report_reality_checks.py`, `tests/test_soapboxx_v3_workflow.py` (`TestV3RealityChecksInWorkflow`).
 - **Error Tracking Tests**: Comprehensive error tracking validation
 - **Performance Monitoring**: System health and resource usage testing
 - **Integration Testing**: Full system integration validation

@@ -1,0 +1,366 @@
+{
+  "report_v3": {
+    "workflow_version": "3",
+    "signal_mode": "LOW_SIGNAL",
+    "dual_lens": {
+      "episode_lens_type": "NARRATIVE",
+      "confidence": 90,
+      "weights": {
+        "narrative": 0.8,
+        "analytical": 0.2
+      },
+      "prompt_injection": "This episode has been classified as: NARRATIVE\n\nOptimization rules:\n\nIf ANALYTICAL:\n- Prioritize claims, arguments, and structured reasoning\n- Emphasize verification, counterarguments, and logic\n\nIf NARRATIVE:\n- Prioritize storytelling, interpersonal dynamics, and emotional context\n- Focus on memory, perception, and human tension\n- Avoid over-emphasizing claim verification or formal argumentation\n\nIf HYBRID:\n- Balance storytelling with analysis\n- Extract both narrative meaning and actionable insights\n\nCRITICAL:\n- Do not force analytical structure onto narrative content.\n- Do not ignore insights just because content is conversational.",
+      "normalized_input": {
+        "title": "Weekly Thoughts",
+        "summary": "Weekly Thoughts",
+        "transcript": "[00:00:10] Host: Lots happening this week. [00:01:00] Host: We touched on habits, news, and mindset. [00:02:10] Host: It was a good conversation and we will do more next week.",
+        "entities": [],
+        "topics": [
+          "Weekly Thoughts",
+          "Talk"
+        ],
+        "tone_signals": [],
+        "structure_signals": [
+          "claim_count:0",
+          "narrative_bullet_count:0",
+          "transcript_word_count:35"
+        ]
+      },
+      "narrative_lens": {
+        "lens": "narrative",
+        "core_story": "Weekly Thoughts is a claim about who gets protected when incentives and rules collide — and the episode must pick a side. Listeners will hear policy, personal commentary, and rhetorical claims in parallel; that fragmentation makes clip and takeaway packaging unreliable until edited. Before you optimize for clips: separate factual reporting from opinion, flag what still needs verification, then choose one thread worth defending in public.",
+        "stakes": [],
+        "dynamics": [
+          "Theme 1: The show is treating this as actionable for the listener, not background noise.",
+          "Theme 2: The show is treating this as actionable for the listener, not background noise.",
+          "Theme 3: The show is treating this as actionable for the listener, not background noise."
+        ],
+        "memory_and_perception": [],
+        "open_loops": [
+          "If you had to cut half this episode and keep one idea, what stays - and what becomes its own episode: Weekly Thoughts?",
+          "What metric would prove the opening worked - and what would you change if it didn't?",
+          "What would a skeptical listener say you assumed without saying?"
+        ],
+        "clip_hooks_narrative": []
+      },
+      "analytical_lens": {
+        "lens": "analytical",
+        "thesis_candidate": "Weekly Thoughts is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+        "claims": [],
+        "incentives_and_stakes": [],
+        "logic_gaps": [],
+        "verification_moves": [],
+        "clip_hooks_analytical": []
+      },
+      "synthesis": {
+        "lens": "synthesis",
+        "episode_type_used": "NARRATIVE",
+        "weights_used": {
+          "narrative": 0.8,
+          "analytical": 0.2
+        },
+        "core_positioning": "Lead with story, stakes, and human tension (80% narrative weight); keep analytical pressure as guardrails (20%). Weekly Thoughts is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+        "collision_notes": [
+          "Sparse brief hooks for both lenses — expand transcript grounding before packaging."
+        ],
+        "differentiation_line": "Weekly Thoughts is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+        "execution_bias": {
+          "clips": "Weight clips toward human beats and tension.",
+          "actions": "Weight next actions toward deepening the story and follow-up interviews."
+        },
+        "risk_flags": []
+      },
+      "engine_prompts": {
+        "narrative": "You are the Narrative Lens for a podcast intelligence system.\n\nYou receive a single normalized input object (shared across all engines). Treat it as\nthe only source of truth; do not invent entities or topics not grounded there.\n\nShape (fields may be empty arrays when unknown):\n{{\n  \"title\": \"...\",\n  \"summary\": \"...\",\n  \"transcript\": \"...\",\n  \"entities\": [],\n  \"topics\": [],\n  \"tone_signals\": [],\n  \"structure_signals\": []\n}}\n\nYour job:\n- Surface story, dynamics, memory, stakes, and human tension.\n- Name who is involved and how relationships or roles shift (when inferable from input).\n- Call out beats: setup, turn, resolution or open loop — even if implicit.\n- Prefer concrete scene language over abstract labels.\n\nHard rules:\n- Do not fabricate events absent from transcript/summary; you may infer *dynamics* only\n  when strongly supported by repeated themes or explicit speaker intent.\n- Do not optimize for \"sounding smart\"; optimize for clarity of what happened emotionally\n  and interpersonally.\n- If the input is thin, say what is thin and what is still fair to infer (one short line).\n\nOutput (JSON only, no markdown fences):\n{\n  \"lens\": \"narrative\",\n  \"core_story\": \"2–4 sentences\",\n  \"stakes\": [\"max 4 bullets\"],\n  \"dynamics\": [\"max 5 bullets: relationships, power, vulnerability, conflict, alliance\"],\n  \"memory_and_perception\": [\"max 4 bullets: how speakers frame past, identity, blame, hope\"],\n  \"open_loops\": [\"max 3 unresolved tensions or unanswered questions grounded in input\"],\n  \"clip_hooks_narrative\": [\"max 3: moment types worth cutting for story — not raw timestamps unless given\"]\n}",
+        "analytical": "You are the Analytical Lens for a podcast intelligence system.\n\nYou receive a single normalized input object (shared across all engines). Treat it as\nthe only source of truth; do not invent entities or topics not grounded there.\n\nShape (fields may be empty arrays when unknown):\n{{\n  \"title\": \"...\",\n  \"summary\": \"...\",\n  \"transcript\": \"...\",\n  \"entities\": [],\n  \"topics\": [],\n  \"tone_signals\": [],\n  \"structure_signals\": []\n}}\n\nYour job:\n- Extract defensible claims, incentives, mechanisms, and what would falsify them.\n- Separate evidence-supported assertions from belief or interpretation (tag each).\n- Surface counterarguments, missing proof, and logical leaps.\n\nHard rules:\n- Every non-trivial claim must tie to something in transcript/summary (paraphrase is fine).\n- Prefer \"what we can say\" over \"nice sounding thesis\".\n- If evidence is anecdotal only, say so explicitly.\n\nOutput (JSON only, no markdown fences):\n{\n  \"lens\": \"analytical\",\n  \"thesis_candidate\": \"one sentence: the strongest arguable through-line (may be qualified)\",\n  \"claims\": [\n    {\n      \"text\": \"one sentence\",\n      \"kind\": \"fact|interpretation|belief\",\n      \"support\": \"brief: what in the input backs this (or 'thin / anecdotal only')\",\n      \"falsifier\": \"what would prove this wrong or incomplete\"\n    }\n  ],\n  \"incentives_and_stakes\": [\"max 4 bullets: who benefits, what is being sold, reputational risk\"],\n  \"logic_gaps\": [\"max 4: leaps, missing premises, correlation vs causation, etc.\"],\n  \"verification_moves\": [\"max 4 concrete checks: data, expert, document, counter-interview\"],\n  \"clip_hooks_analytical\": [\"max 3: contradiction, strong claim, or methodological tension worth cutting\"]\n}",
+        "synthesis": "You are the Synthesis Layer. You receive:\n1) The same normalized input object (source of truth)\n2) JSON output from the Narrative Lens\n3) JSON output from the Analytical Lens\n4) Episode classification: NARRATIVE | ANALYTICAL | HYBRID\n5) Weights: narrative_weight and analytical_weight (0–1, sum to 1)\n\nYou receive a single normalized input object (shared across all engines). Treat it as\nthe only source of truth; do not invent entities or topics not grounded there.\n\nShape (fields may be empty arrays when unknown):\n{{\n  \"title\": \"...\",\n  \"summary\": \"...\",\n  \"transcript\": \"...\",\n  \"entities\": [],\n  \"topics\": [],\n  \"tone_signals\": [],\n  \"structure_signals\": []\n}}\n\nYour job:\n- Do NOT duplicate long lists from the two lenses; reference them by theme.\n- Produce collisions: where story framing and evidence/logic agree or disagree.\n- State one clear \"so what\" for a creator or editor (what to do with this episode).\n\nWeighting:\n- Core positioning and execution guidance should reflect the dominant lens without\n  silencing the secondary lens.\n- If classification is NARRATIVE: lead with human/story implications; analytical as guardrails.\n- If ANALYTICAL: lead with argument integrity; narrative as context for why audiences care.\n- If HYBRID: explicit 50/50 balance in the synthesis paragraphs.\n\nHard rules:\n- If the analytical lens says evidence is thin, the synthesis must not pretend certainty.\n- If the narrative lens flags open loops, the synthesis should not \"close\" them without support.\n- No generic praise; every sentence should earn its place.\n\nOutput (JSON only, no markdown fences):\n{\n  \"lens\": \"synthesis\",\n  \"episode_type_used\": \"NARRATIVE|ANALYTICAL|HYBRID\",\n  \"weights_used\": { \"narrative\": 0.0, \"analytical\": 0.0 },\n  \"core_positioning\": \"2–3 sentences; dominant-lens voice\",\n  \"collision_notes\": [\n    \"max 4: each states agreement or tension between narrative and analytical reads\"\n  ],\n  \"differentiation_line\": \"one sentence: the sharpest honest positioning line for marketing or packaging\",\n  \"execution_bias\": {\n    \"clips\": \"one line: lean narrative-heavy vs analytical-heavy and why\",\n    \"actions\": \"one line: lean narrative-heavy vs analytical-heavy and why\"\n  },\n  \"risk_flags\": [\"max 3: misframing risks if grounding is weak\"]\n}"
+      }
+    },
+    "coach_report": {
+      "signal_mode": "LOW_SIGNAL",
+      "output_mode": "diagnostic",
+      "episode_diagnosis": {
+        "mode": "LOW_SIGNAL",
+        "body": [
+          "**Report output:** Diagnostic mode — spin-off, clip, and habit-action blocks below are review-first, not publish-ready packaging.",
+          "**Why diagnostic:** Episode classified LOW_SIGNAL (thin thesis or weak claims) — prescriptive packaging withheld.",
+          "**Thesis (one sentence):** Weekly Thoughts is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+          "**Honest read:** The transcript reads exploratory or thin for one arc — or SoapBoxx could not extract a claim without inventing it.",
+          "**Competing threads:** Host: We touched on habits, news, and mindset. | Host: It was a good conversation and we will do more next week.",
+          "**Retention:** One thesis → one repeatable idea for clips and shares."
+        ]
+      },
+      "thesis_quality": null,
+      "episode_thesis": "Weekly Thoughts is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+      "personalized_intro": "*For **Morning Chat**'s show - **Talk** format - tailored to this episode:*",
+      "contrarian_hook": {
+        "title": "The angle listeners might miss",
+        "body": "The edit points at: No single thesis line yet; competing ideas may split attention. — the hidden angle is often **who benefits** if listeners stay emotional but never name the rule, sponsor, or metric. Say that actor once, on mic."
+      },
+      "uncomfortable_insight": {
+        "title": "The uncomfortable read",
+        "body": "The tape has more *topics* than *proof* — listeners may agree in the room and still repeat nothing specific tomorrow. The pressure point is: No single thesis line yet; competing ideas may split attention. If your thesis is “Weekly Thoughts is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.”, ask what would make you *wrong* on mic — not just what would make you sound fair. Someone scanning only the title may expect a harder verdict on “Weekly Thoughts” than the conversation actually delivers."
+      },
+      "claim_stakes": [],
+      "themes": [
+        {
+          "label": "Theme 1",
+          "discussed": "Weekly Thoughts",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        },
+        {
+          "label": "Theme 2",
+          "discussed": "Host: We touched on habits, news, and mindset.",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        },
+        {
+          "label": "Theme 3",
+          "discussed": "Host: It was a good conversation and we will do more next week.",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        }
+      ],
+      "what_worked": [
+        "Topic angles that could anchor a thesis once you pick one main line."
+      ],
+      "where_it_breaks": {
+        "issues": [
+          "No single thesis line yet; competing ideas may split attention.",
+          "Hard for listeners to know what to clip or share."
+        ],
+        "rule": "One episode = one decision: pick the tradeoff you are defending, then cut everything that does not serve it."
+      },
+      "opportunities": {
+        "spinoff_title": "Defer spin-off planning until one thesis thread survives an edit pass.",
+        "spinoff_structure": "Not assigned — the episode reads as multi-threaded or under-verified for a packaged spin-off brief.",
+        "clip_moments": [
+          "No high-signal auto clip picks. No timestamped evidence rows — skim the transcript for moments that pair one clear claim with one concrete detail.",
+          "Skip outros, transitions, and lyric fragments; favor one claim plus one checkable detail."
+        ],
+        "segment_idea": "Next recording: a **validation block** — state the strongest public-facing claim, what would change your mind, and what primary source you would accept."
+      },
+      "follow_up_questions": [
+        "If you had to cut half this episode and keep one idea, what stays - and what becomes its own episode: Weekly Thoughts?",
+        "What metric would prove the opening worked - and what would you change if it didn't?",
+        "What would a skeptical listener say you assumed without saying?"
+      ],
+      "guest_strategy": {
+        "intro": "Diagnostic bookings: prioritize verification, sourcing, and steel-manned counterarguments — not generic motivation angles.",
+        "guests": [
+          {
+            "guest_type": "Reporter or records researcher",
+            "adds": "Primary documents and timelines — reduces reliance on rhetorical peaks alone."
+          },
+          {
+            "guest_type": "Friendly skeptic (peer)",
+            "adds": "Surfaces the strongest counter-case before you publish or clip."
+          }
+        ]
+      },
+      "segment_upgrade": "**Diagnostic close (90s):** Name the single sentence you'd defend if quoted; flag what still needs sourcing before you optimize for distribution.",
+      "immediate_fix_plan": [
+        "Tag assertions as reporting vs. inference vs. opinion before clipping.",
+        "Write down two primary sources you want before repeating the hottest claim in public.",
+        "Isolate segments that mix incompatible frames (news vs. rally vs. personal story)."
+      ],
+      "bottom_line": {
+        "good": "There is usable tension for an informed audience; the gap is defensibility and arc — not chemistry or effort.",
+        "must_change": "Stop expanding with growth packaging on a fragmented spine — verify or edit before you clip.",
+        "if_fixed": "Clips and repurposing work once one arc is legible and claims are labeled for the audience you want."
+      },
+      "meta": {
+        "title": "Weekly Thoughts",
+        "transcript_words": 29
+      }
+    },
+    "episode_snapshot": {
+      "title": "Weekly Thoughts",
+      "creator": "Morning Chat",
+      "genre": "Talk",
+      "primary_topic": "Weekly Thoughts",
+      "why_it_matters": ""
+    },
+    "narrative_reconstruction": {
+      "core_thesis": "Weekly Thoughts is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+      "supporting_mechanism": "Listeners will hear policy, personal commentary, and rhetorical claims in parallel; that fragmentation makes clip and takeaway packaging unreliable until edited.",
+      "practical_translation": "Before you optimize for clips: separate factual reporting from opinion, flag what still needs verification, then choose one thread worth defending in public.",
+      "reconstructed": true,
+      "diagnostic": true
+    },
+    "clean_insights": [
+      "Host: We touched on habits, news, and mindset.",
+      "Host: It was a good conversation and we will do more next week."
+    ],
+    "evidence_mapping": [],
+    "strategies": [
+      {
+        "insight": "Host: We touched on habits, news, and mindset.",
+        "application": "Convert this into one weekly test: Host: We touched on habits, news, and mindset.",
+        "content_angle": "Use this as a segment hook, then pressure-test it with one counterexample."
+      },
+      {
+        "insight": "Host: It was a good conversation and we will do more next week.",
+        "application": "Convert this into one weekly test: Host: It was a good conversation and we will do more next week.",
+        "content_angle": "Use this as a segment hook, then pressure-test it with one counterexample."
+      }
+    ],
+    "engagement_questions": {},
+    "guests": [
+      {
+        "guest": "Behavioral Psychologist",
+        "role": "Behavioral Psychologist",
+        "why_this_episode": "Validates or challenges the thesis: No dominant thesis line — the episode splits across competing threads rather tha…",
+        "target_claim": "No dominant thesis line — the episode splits across competing threads rather than one defensible arc.",
+        "angle": "science vs self-help framing"
+      },
+      {
+        "guest": "Operator / Founder",
+        "role": "Operator / Founder",
+        "why_this_episode": "Tests execution under real constraints and tradeoffs.",
+        "target_claim": "No dominant thesis line — the episode splits across competing threads rather than one defensible arc.",
+        "angle": "what actually works in production"
+      },
+      {
+        "guest": "Skeptical Domain Expert",
+        "role": "Skeptical Domain Expert",
+        "why_this_episode": "Challenges assumptions and surfaces failure cases the host may miss.",
+        "target_claim": "No dominant thesis line — the episode splits across competing threads rather than one defensible arc.",
+        "angle": "contrarian quality control"
+      },
+      {
+        "guest": "Implementation Coach",
+        "role": "Implementation Coach",
+        "why_this_episode": "Mechanism is implied but not explicit.",
+        "target_claim": "No dominant thesis line — the episode splits across competing threads rather than one defensible arc.",
+        "angle": "turn insight into a repeatable weekly action plan"
+      }
+    ],
+    "segments": [],
+    "takeaway": "Diagnostic mode: verify before you package — pick one thread, label fact vs. opinion, then decide what is safe to clip or repeat.",
+    "analytics_actionable": {
+      "what_worked": [
+        "Topic angles that could anchor a thesis once you pick one main line."
+      ],
+      "what_failed": [
+        "No single thesis line yet; competing ideas may split attention.",
+        "Hard for listeners to know what to clip or share."
+      ],
+      "next_move": [
+        "Pick one thesis before you hit record; queue other topics for later episodes.",
+        "Open with one story or number, not a topic list.",
+        "Close with one test: what you'll measure and what would change your mind."
+      ]
+    },
+    "claims": [],
+    "output_mode": "diagnostic",
+    "meta": {
+      "title": "Weekly Thoughts",
+      "creator": "Morning Chat",
+      "genre": "Talk",
+      "generated_at": "2026-04-14T14:15:18Z"
+    },
+    "report_readiness": {
+      "band": "minimal",
+      "notes": [
+        "Transcript is very short — claims and evidence will be thin.",
+        "No claims were extracted from the episode brief.",
+        "Brief is classified as LOW_SIGNAL (thin thesis or weak / few claims)."
+      ],
+      "suggested_actions": [
+        "Upload a longer transcript or full episode text for stronger structure.",
+        "Re-run with a richer brief pass or enable Ollama (SOAPBOXX_OLLAMA_MODEL).",
+        "Tighten one thesis line and add timestamped examples in the source."
+      ],
+      "metrics": {
+        "transcript_word_count": 29,
+        "claim_count": 0,
+        "evidence_row_count": 0,
+        "signal_mode": "LOW_SIGNAL"
+      },
+      "quality_gates": {
+        "force_diagnostic": false,
+        "notes": [],
+        "title_topic_coherence": 0.4
+      },
+      "output_mode": "diagnostic",
+      "diagnostic_reasons": [
+        "Episode classified LOW_SIGNAL (thin thesis or weak claims) — prescriptive packaging withheld."
+      ]
+    }
+  },
+  "markdown_v3": "# SoapBoxx Episode Report\n\n*SoapBoxx Episode Intelligence · v3 · Full spec: `docs/network_episode_brief_v3.md` · Compact brief: `docs/network_episode_brief_v2.md`*\n\n**Title:** Weekly Thoughts\n**Show / creator:** Morning Chat\n**Genre:** Talk\n**Generated:** 2026-04-14T14:15:18Z\n**Classifier signal:** LOW_SIGNAL · **Readiness:** low\n*This run is **review-first**: verify claims and arc before clips or growth packaging.*\n\n## 0. Readiness & expectations\n**Band:** minimal\n**Output mode:** diagnostic\n**Why diagnostic:**\n- Episode classified LOW_SIGNAL (thin thesis or weak claims) — prescriptive packaging withheld.\n*Words: 29 · Claims: 0 · Evidence rows: 0 · Signal: LOW_SIGNAL*\n\n**What this means:**\n- Transcript is very short — claims and evidence will be thin.\n- No claims were extracted from the episode brief.\n- Brief is classified as LOW_SIGNAL (thin thesis or weak / few claims).\n\n**Suggested next steps:**\n- Upload a longer transcript or full episode text for stronger structure.\n- Re-run with a richer brief pass or enable Ollama (SOAPBOXX_OLLAMA_MODEL).\n- Tighten one thesis line and add timestamped examples in the source.\n\n## The spine\n\n**Thesis (one sentence):** Weekly Thoughts is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.\n\n**Claims:**\n- *(No claims in this run — enable Ollama + brief extraction, or paste claims into the v2 brief.)*\n\n**Guests:**\n| Guest | Role | Serves claim | Why book them |\n| --- | --- | --- | --- |\n| Behavioral Psychologist | Behavioral Psychologist | — | Validates or challenges the thesis: No dominant thesis line — the episode splits across competing threads rather tha… |\n| Operator / Founder | Operator / Founder | — | Tests execution under real constraints and tradeoffs. |\n| Skeptical Domain Expert | Skeptical Domain Expert | — | Challenges assumptions and surfaces failure cases the host may miss. |\n| Implementation Coach | Implementation Coach | — | Mechanism is implied but not explicit. |\n\n*Below: detail that should back the thesis, claims, and guest picks.*\n\n## 1. Episode Diagnosis\n*For **Morning Chat**'s show - **Talk** format - tailored to this episode:*\n**Report output:** Diagnostic mode — spin-off, clip, and habit-action blocks below are review-first, not publish-ready packaging.\n**Why diagnostic:** Episode classified LOW_SIGNAL (thin thesis or weak claims) — prescriptive packaging withheld.\n**Thesis (one sentence):** Weekly Thoughts is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.\n**Honest read:** The transcript reads exploratory or thin for one arc — or SoapBoxx could not extract a claim without inventing it.\n**Competing threads:** Host: We touched on habits, news, and mindset. | Host: It was a good conversation and we will do more next week.\n**Retention:** One thesis → one repeatable idea for clips and shares.\n\n## 1a. The uncomfortable read\nThe tape has more *topics* than *proof* — listeners may agree in the room and still repeat nothing specific tomorrow. The pressure point is: No single thesis line yet; competing ideas may split attention. If your thesis is “Weekly Thoughts is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.”, ask what would make you *wrong* on mic — not just what would make you sound fair. Someone scanning only the title may expect a harder verdict on “Weekly Thoughts” than the conversation actually delivers.\n\n## 1b. The angle listeners might miss\nThe edit points at: No single thesis line yet; competing ideas may split attention. — the hidden angle is often **who benefits** if listeners stay emotional but never name the rule, sponsor, or metric. Say that actor once, on mic.\n\n## 2. Extracted Themes (Clean + Structured)\n**Theme 1:**\n- What was discussed: Weekly Thoughts\n- What the host is implying: The show is treating this as actionable for the listener, not background noise.\n- Why it matters: Turn this into one decision, one example, and one next step - or it stays noise.\n\n**Theme 2:**\n- What was discussed: Host: We touched on habits, news, and mindset.\n- What the host is implying: The show is treating this as actionable for the listener, not background noise.\n- Why it matters: Turn this into one decision, one example, and one next step - or it stays noise.\n\n**Theme 3:**\n- What was discussed: Host: It was a good conversation and we will do more next week.\n- What the host is implying: The show is treating this as actionable for the listener, not background noise.\n- Why it matters: Turn this into one decision, one example, and one next step - or it stays noise.\n\n## 3. What Worked\n- Topic angles that could anchor a thesis once you pick one main line.\n\n## 4. Where It Breaks\n- No single thesis line yet; competing ideas may split attention.\n- Hard for listeners to know what to clip or share.\n- **Rule:** One episode = one decision: pick the tradeoff you are defending, then cut everything that does not serve it.\n\n## 5. Actionable Content Opportunities\n**A. Spin-off episode idea**\n- **Title:** Defer spin-off planning until one thesis thread survives an edit pass.\n- **Structure:** Not assigned — the episode reads as multi-threaded or under-verified for a packaged spin-off brief.\n\n**B. Clip opportunity**\n- No high-signal auto clip picks. No timestamped evidence rows — skim the transcript for moments that pair one clear claim with one concrete detail.\n- Skip outros, transitions, and lyric fragments; favor one claim plus one checkable detail.\n\n**C. Segment idea**\n- Next recording: a **validation block** — state the strongest public-facing claim, what would change your mind, and what primary source you would accept.\n\n## 6. Smarter Follow-Up Questions\n- If you had to cut half this episode and keep one idea, what stays - and what becomes its own episode: Weekly Thoughts?\n- What metric would prove the opening worked - and what would you change if it didn't?\n- What would a skeptical listener say you assumed without saying?\n\n## 7. Guest Strategy\nDiagnostic bookings: prioritize verification, sourcing, and steel-manned counterarguments — not generic motivation angles.\n- **Reporter or records researcher** - Primary documents and timelines — reduces reliance on rhetorical peaks alone.\n- **Friendly skeptic (peer)** - Surfaces the strongest counter-case before you publish or clip.\n\n## 8. Segment Upgrade\n**Diagnostic close (90s):** Name the single sentence you'd defend if quoted; flag what still needs sourcing before you optimize for distribution.\n\n## 9. Immediate Fix Plan (CRITICAL)\n1. Tag assertions as reporting vs. inference vs. opinion before clipping.\n2. Write down two primary sources you want before repeating the hottest claim in public.\n3. Isolate segments that mix incompatible frames (news vs. rally vs. personal story).\n\n## 10. Bottom Line\nThere is usable tension for an informed audience; the gap is defensibility and arc — not chemistry or effort. Stop expanding with growth packaging on a fragmented spine — verify or edit before you clip. Clips and repurposing work once one arc is legible and claims are labeled for the audience you want.\n\n## 11. Dual lens (parallel read + weights)\n**Episode lens:** NARRATIVE (heuristic confidence 90) · **Weights:** narrative 0.8 / analytical 0.2\n\n### Core positioning (weighted)\nLead with story, stakes, and human tension (80% narrative weight); keep analytical pressure as guardrails (20%). Weekly Thoughts is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.\n\n### Synthesis (collisions)\n- Sparse brief hooks for both lenses — expand transcript grounding before packaging.\n\n### Execution bias\n- **Clips:** Weight clips toward human beats and tension.\n- **Actions:** Weight next actions toward deepening the story and follow-up interviews.\n\n### Prompt injection (downstream LLM)\n```text\nThis episode has been classified as: NARRATIVE\n\nOptimization rules:\n\nIf ANALYTICAL:\n- Prioritize claims, arguments, and structured reasoning\n- Emphasize verification, counterarguments, and logic\n\nIf NARRATIVE:\n- Prioritize storytelling, interpersonal dynamics, and emotional context\n- Focus on memory, perception, and human tension\n- Avoid over-emphasizing claim verification or formal argumentation\n\nIf HYBRID:\n- Balance storytelling with analysis\n- Extract both narrative meaning and actionable insights\n\nCRITICAL:\n- Do not force analytical structure onto narrative content.\n- Do not ignore insights just because content is conversational.\n```\n\n---\n## Appendix - Evidence & engagement (structured)\n- *(No evidence rows; low-signal or offline brief - coach sections above still apply.)*\n\n**Per-claim pressure tests (detail — optional)**\n\n---\n*SoapBoxx Episode Intelligence - workflow v3*",
+  "brief": {
+    "episode_snapshot": {
+      "title": "Weekly Thoughts",
+      "creator": "Morning Chat",
+      "genre": "Talk",
+      "primary_topic": "Weekly Thoughts",
+      "why_it_matters": ""
+    },
+    "narrative": [],
+    "claims": [],
+    "evidence_gaps": {
+      "supported": [],
+      "weak_or_unsupported": [],
+      "proof_needed": []
+    },
+    "production_moves": {
+      "segment_to_run": {
+        "name": "",
+        "goal": ""
+      },
+      "host_questions": [],
+      "clip_candidates": [],
+      "risk_note": ""
+    },
+    "guests": [],
+    "action_plan_7d": [],
+    "_quality_warnings": [
+      "primary_topic was empty — defaulted to title or first claim."
+    ]
+  },
+  "warnings": [
+    "SOAPBOXX_OLLAMA_MODEL is not set; no LLM brief was produced. Install Ollama, pull a model, and set SOAPBOXX_OLLAMA_MODEL for v2 brief extraction."
+  ],
+  "model": "brief-unavailable",
+  "workflow_version": "3",
+  "meta": {
+    "generated_at": null,
+    "title": "Weekly Thoughts",
+    "creator": "Morning Chat",
+    "genre": "Talk"
+  },
+  "episode_spine": {
+    "thesis": "Weekly Thoughts is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+    "claims": [],
+    "guests": [
+      {
+        "name": "Behavioral Psychologist",
+        "title": "Behavioral Psychologist",
+        "claim_id": "",
+        "angle": "Validates or challenges the thesis: No dominant thesis line — the episode splits across competing threads rather tha…"
+      },
+      {
+        "name": "Operator / Founder",
+        "title": "Operator / Founder",
+        "claim_id": "",
+        "angle": "Tests execution under real constraints and tradeoffs."
+      },
+      {
+        "name": "Skeptical Domain Expert",
+        "title": "Skeptical Domain Expert",
+        "claim_id": "",
+        "angle": "Challenges assumptions and surfaces failure cases the host may miss."
+      },
+      {
+        "name": "Implementation Coach",
+        "title": "Implementation Coach",
+        "claim_id": "",
+        "angle": "Mechanism is implied but not explicit."
+      }
+    ]
+  },
+  "markdown_export": "# SoapBoxx Episode Report\n\n## Podcast performance & growth intelligence\n\n**Title:** Weekly Thoughts\n**Show / creator:** Morning Chat\n**Genre:** Talk\n**Positioning:** A podcast performance and growth intelligence layer\n\n## Podcast Performance Insight\n> Strong topic, but the episode keeps shifting claims instead of defending one argument. Reframe around one claim and engagement rises.\n\n## Snapshot\n- Score: 6 / 10\n- Signal: Moderate\n- Diagnosis: Stop expanding with growth packaging on a fragmented spine — verify or edit before you clip.\n- Core problem: Stop expanding with growth packaging on a fragmented spine — verify or edit before you clip.\n\n## Core Breakdown\n**Thesis (fixed):** Weekly Thoughts is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.\n\n**Claims:**\n\n## Tension Call\n- This episode treats this as true: Weekly Thoughts is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.\n- But the stronger position is this: Weekly Thoughts is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.\n\n## What's Working\n- Host: We touched on habits, news, and mindset.\n- Host: It was a good conversation and we will do more next week.\n\n## What's Missing\n- Stop expanding with growth packaging on a fragmented spine — verify or edit before you clip.\n- Clips and repurposing work once one arc is legible and claims are labeled for the audience you want.\n- The close ends without one explicit listener action.\n\n## Upgrade Plan\n**Reposition:** This episode should be about Weekly Thoughts is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.\n\n**Structure:**\n- Hook: State the argument immediately.\n- Tension: Test the argument against the strongest opposing view.\n- Takeaway: Commit one specific listener action.\n- Recommendation: Open with one explicit argument in the first 60 seconds.\n- Recommendation: Force a midpoint counterargument that challenges the core claim.\n- Recommendation: Close with one concrete listener action and proof of progress.\n\n**Clips:**\n\n## Questions That Should Have Been Asked\n- What is the strongest counterargument to your main claim?\n- Which specific proof would validate or falsify your claim?\n- What should the listener do differently this week?\n\n## Guest Opportunities\n- Domain practitioner -> Grounds claims in execution reality. Concrete tradeoffs.\n- Skeptical expert -> Introduces productive tension. Shareable conflict.\n- Research analyst -> Separates claims from assumptions. Defensible evidence.\n\n## Strategic Value\n- Higher retention, stronger clip yield, and clearer show positioning.\n- Argument clarity and tension are not carrying the episode.\n\n## Network Insight\n- Weak positioning across shows\n- Lack of shareable moments\n- Structural engagement issues\n- High-upside opportunities\n\n> If we applied this across your network, we would identify which shows are underperforming, which episodes are most shareable, and where audience growth is being lost.\n\n## Conviction\nThis episode is underperforming because it avoids taking a hard position on its core debate.\n\n## 1-Line Fix\nIf this episode were reframed around a clear argument and structured for tension, it would become significantly more engaging and shareable.\n"
+}

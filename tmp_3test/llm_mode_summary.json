@@ -1,0 +1,20 @@
+{
+  "strong": {
+    "report_mode": "evidence",
+    "score": 8,
+    "signal": "Strong",
+    "core_problem": "Lack of specific data or metrics to support the claim about attrition among senior operators"
+  },
+  "mid": {
+    "report_mode": "evidence",
+    "score": 8,
+    "signal": "Strong",
+    "core_problem": "More data on the effectiveness of regenerative farming at different scales and a deeper exploration of its relationship with logistics and seasonal volatility are needed to fully address counterpoints."
+  },
+  "weak": {
+    "report_mode": "interpretive",
+    "score": 8,
+    "signal": "Strong",
+    "core_problem": "The analysis lacks concrete strategies for improving mindset, instead relying on anecdotal reasoning, which may not be sufficient to support claims."
+  }
+}

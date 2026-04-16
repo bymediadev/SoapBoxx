@@ -16,6 +16,15 @@ backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "bac
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
+# Load repo-root .env (Ollama model, blueprint flag, etc.)
+try:
+    from dotenv import load_dotenv
+
+    _repo_root = Path(__file__).resolve().parent.parent
+    load_dotenv(_repo_root / ".env")
+except ImportError:
+    pass
+
 # Use package-relative imports to support `python -m frontend.main_window`
 try:
     from .batch_processor import BatchProcessorDialog

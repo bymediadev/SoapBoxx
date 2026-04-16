@@ -25,6 +25,19 @@ def validate_report(data: Dict[str, Any]) -> List[str]:
     if not isinstance(data, dict):
         return ["Root must be a JSON object"]
 
+    md = data.get("metadata")
+    if isinstance(md, dict) and md.get("export_status") == "insufficient_signal":
+        if "summary" not in data or not _nonempty_str(data.get("summary")):
+            errors.append("Missing or empty 'summary' field (insufficient_signal export)")
+        sc = data.get("score")
+        if not isinstance(sc, int) or sc < 0 or sc > 100:
+            errors.append(
+                "'score' must be an integer between 0 and 100 inclusive (use 0 when export is withheld)"
+            )
+        if not _nonempty_str(data.get("markdown_export")):
+            errors.append("insufficient_signal export requires non-empty 'markdown_export'")
+        return errors
+
     if "summary" not in data or not _nonempty_str(data.get("summary")):
         errors.append("Missing or empty 'summary' field")
 

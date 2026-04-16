@@ -7,6 +7,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 # Add backend to path
 sys.path.insert(0, str(Path("backend")))
 
@@ -31,7 +33,9 @@ def test_soapboxx_local():
             print(
                 f"❌ Local Whisper not available: {model_info.get('error', 'Unknown error')}"
             )
-            return False
+            pytest.skip(
+                f"local Whisper not available: {model_info.get('error', 'unknown')}"
+            )
 
         # Test service selection
         print("\n🔧 Testing service selection...")
@@ -52,11 +56,10 @@ def test_soapboxx_local():
                 print(f"❌ {service}: {str(e)}")
 
         print("\n🎯 Local Whisper integration test completed!")
-        return True
 
     except Exception as e:
         print(f"❌ Test failed: {e}")
-        return False
+        pytest.fail(str(e))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,12 @@
+{
+  "output_mode_one_of": ["full"],
+  "signal_mode": "HIGH_SIGNAL",
+  "expected_thesis_contains": ["systems", "goals"],
+  "forbidden_terms": ["unknown", "various aspects"],
+  "min_evidence_rows": 3,
+  "min_segments": 2,
+  "min_clip_proxies": 1,
+  "forbid_generic_thesis": true,
+  "must_have_tension": false,
+  "min_thesis_grounding_ratio": 0.2
+}

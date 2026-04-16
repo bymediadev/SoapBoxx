@@ -17,10 +17,12 @@ sys.path.insert(0, str(backend_dir))
 try:
     from feedback_engine import ContentMetrics, FeedbackEngine, FeedbackScore
 
-    print("✅ Enhanced FeedbackEngine imported successfully")
+    _FEEDBACK_IMPORT_OK = True
+    _FEEDBACK_IMPORT_ERROR = ""
 except ImportError as e:
-    print(f"❌ Failed to import enhanced FeedbackEngine: {e}")
-    sys.exit(1)
+    ContentMetrics = FeedbackEngine = FeedbackScore = None  # type: ignore
+    _FEEDBACK_IMPORT_OK = False
+    _FEEDBACK_IMPORT_ERROR = str(e)
 
 
 def dataclass_to_dict(obj):
@@ -37,7 +39,7 @@ def dataclass_to_dict(obj):
 
 def test_basic_functionality():
     """Test basic functionality with different analysis depths"""
-    print("\n🧪 Testing Basic Functionality")
+    print("\nTesting Basic Functionality")
     print("=" * 50)
 
     fe = FeedbackEngine()
@@ -53,12 +55,10 @@ def test_basic_functionality():
         serializable_result = dataclass_to_dict(result)
         print(json.dumps(serializable_result, indent=2))
 
-    return True
-
 
 def test_quantitative_metrics():
     """Test quantitative metrics calculation"""
-    print("\n📊 Testing Quantitative Metrics")
+    print("\nTesting Quantitative Metrics")
     print("=" * 50)
 
     fe = FeedbackEngine()
@@ -91,8 +91,6 @@ def test_quantitative_metrics():
             f"  Scores - Clarity: {scores.clarity}, Engagement: {scores.engagement}, Overall: {scores.overall}"
         )
 
-    return True
-
 
 def test_focus_specific_feedback():
     """Test focus-specific feedback capabilities"""
@@ -123,8 +121,6 @@ def test_focus_specific_feedback():
             overall_score = scores.get("overall", "N/A")
         print(f"  Overall score: {overall_score}")
 
-    return True
-
 
 def test_comparative_analysis():
     """Test comparative analysis between two transcripts"""
@@ -145,8 +141,6 @@ def test_comparative_analysis():
     # Convert dataclass objects to dictionaries for JSON serialization
     serializable_comparison = dataclass_to_dict(comparison)
     print(json.dumps(serializable_comparison, indent=2))
-
-    return True
 
 
 def test_caching_functionality():
@@ -189,12 +183,10 @@ def test_caching_functionality():
     cache_stats_after = fe.get_cache_stats()
     print(f"Cache stats after clearing: {cache_stats_after}")
 
-    return True
-
 
 def test_error_handling():
     """Test error handling and edge cases"""
-    print("\n⚠️ Testing Error Handling")
+    print("\n[WARN] Testing Error Handling")
     print("=" * 50)
 
     fe = FeedbackEngine()
@@ -217,12 +209,10 @@ def test_error_handling():
         f"Long transcript word count: {result.get('metrics', {}).get('word_count', 'N/A')}"
     )
 
-    return True
-
 
 def test_advanced_features():
     """Test advanced features and configurations"""
-    print("\n🚀 Testing Advanced Features")
+    print("\nTesting Advanced Features")
     print("=" * 50)
 
     fe = FeedbackEngine()
@@ -243,12 +233,13 @@ def test_advanced_features():
         except Exception as e:
             print(f"  Error in {depth} analysis: {e}")
 
-    return True
-
 
 def main():
     """Run all tests"""
-    print("🧪 Enhanced FeedbackEngine Test Suite")
+    if not _FEEDBACK_IMPORT_OK:
+        print(f"[FAIL] Enhanced FeedbackEngine import failed: {_FEEDBACK_IMPORT_ERROR}")
+        sys.exit(1)
+    print("Enhanced FeedbackEngine Test Suite")
     print("=" * 60)
 
     tests = [
@@ -268,18 +259,18 @@ def main():
         try:
             if test():
                 passed += 1
-                print(f"✅ {test.__name__} passed")
+                print(f"[OK] {test.__name__} passed")
             else:
-                print(f"❌ {test.__name__} failed")
+                print(f"[FAIL] {test.__name__} failed")
         except Exception as e:
-            print(f"❌ {test.__name__} failed with error: {e}")
+            print(f"[FAIL] {test.__name__} failed with error: {e}")
 
-    print(f"\n📊 Test Results: {passed}/{total} tests passed")
+    print(f"\nTest Results: {passed}/{total} tests passed")
 
     if passed == total:
-        print("🎉 All tests passed! Enhanced FeedbackEngine is working correctly.")
+        print("All tests passed. Enhanced FeedbackEngine is working correctly.")
     else:
-        print("⚠️ Some tests failed. Please review the output above.")
+        print("[WARN] Some tests failed. Please review the output above.")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,14 @@
+{
+  "id": "wm3VMuTK2Z4",
+  "title": "Meet the Press Full Episode",
+  "ollama_model": "llama3.2:3b",
+  "overall_score": 7,
+  "signal_strength": "Moderate",
+  "mode": "interpretive",
+  "core_problem": "The host fails to escalate the argument and create tension in the conversation about Cuba's future, leading to a lack of engagement with the audience.",
+  "thesis_preview": "The host does not take a clear stance on Cuba's future.",
+  "conviction_preview": "The US government's regime change doctrine is a threat to global stability, and Cuba's future should be determined by its people, not the whims of President Tru",
+  "claims_count": 1,
+  "anchors_count": 1,
+  "llm_used": true
+}

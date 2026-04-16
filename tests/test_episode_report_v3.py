@@ -10,6 +10,162 @@ import episode_report_v3 as v3  # noqa: E402
 
 
 class TestEpisodeReportV3(unittest.TestCase):
+    def test_apply_identity_consistency_resets_off_topic_thesis(self):
+        report = {
+            "meta": {"title": "Nez Perce War"},
+            "episode_snapshot": {
+                "title": "Chief Joseph & the Nez Perce War",
+                "primary_topic": "Nez Perce resistance and forced relocation",
+                "genre": "History",
+            },
+            "narrative_reconstruction": {
+                "core_thesis": "Agricultural commodity futures and crop insurance reshape rural economies.",
+            },
+            "coach_report": {
+                "episode_thesis": "Agricultural commodity futures and crop insurance reshape rural economies.",
+            },
+            "clean_insights": [],
+        }
+        out = v3.apply_identity_consistency_to_report_v3(report)
+        self.assertTrue(out.get("_consistency_fix_applied"))
+        self.assertIn("Nez", str(out["narrative_reconstruction"]["core_thesis"]))
+        self.assertIn("Nez", str(out["coach_report"]["episode_thesis"]))
+        self.assertIsInstance(out.get("_consistency_drift_notes"), list)
+
+    def test_compressed_action_bullets_fallback_when_no_derived_signal(self):
+        out = v3.compressed_action_bullets({"report_v3": {}}, {})
+        self.assertEqual(len(out), 1)
+        self.assertIn("No actionable steps could be derived", out[0])
+        self.assertIn("next episode", out[0])
+
+    def test_compressed_export_includes_if_you_had_to_act_anyway(self):
+        """Compressed tier adds practical bullets from existing signal only (no new inference)."""
+        old_c = os.environ.get("SOAPBOXX_EXPORT_COMPRESSION")
+        old_s = os.environ.get("SOAPBOXX_STRICT_EXPORT")
+        try:
+            os.environ["SOAPBOXX_EXPORT_COMPRESSION"] = "1"
+            os.environ["SOAPBOXX_STRICT_EXPORT"] = "1"
+            r3 = {
+                "episode_snapshot": {"title": "Action test"},
+                "signal_mode": "LOW_SIGNAL",
+                "report_readiness": {"metrics": {"transcript_word_count": 200}},
+                "segments": [{"segment_title": "Open"}],
+                "evidence_mapping": [
+                    {
+                        "claim": "First grounded claim line is long enough for export checks.",
+                        "evidence": "First evidence quote from the transcript is long enough here.",
+                    },
+                    {
+                        "claim": "Second grounded claim line is long enough for export checks.",
+                        "evidence": "Second evidence quote from the transcript is long enough here.",
+                    },
+                ],
+                "coach_report": {
+                    "episode_thesis": "One clear thesis the episode keeps circling.",
+                },
+            }
+            md = v3.render_unified_episode_export_markdown({"report_v3": r3})
+            self.assertIn("If You Had to Act Anyway", md)
+            self.assertIn("Rebuild the open", md)
+        finally:
+            if old_c is None:
+                os.environ.pop("SOAPBOXX_EXPORT_COMPRESSION", None)
+            else:
+                os.environ["SOAPBOXX_EXPORT_COMPRESSION"] = old_c
+            if old_s is None:
+                os.environ.pop("SOAPBOXX_STRICT_EXPORT", None)
+            else:
+                os.environ["SOAPBOXX_STRICT_EXPORT"] = old_s
+
+    def test_export_structural_tier_compresses_on_low_signal(self):
+        old = os.environ.get("SOAPBOXX_EXPORT_COMPRESSION")
+        try:
+            os.environ["SOAPBOXX_EXPORT_COMPRESSION"] = "1"
+            b = {
+                "report_v3": {
+                    "signal_mode": "LOW_SIGNAL",
+                    "report_readiness": {"metrics": {"transcript_word_count": 2000}},
+                    "evidence_mapping": [
+                        {
+                            "claim": "A long enough grounded claim line for the gate.",
+                            "evidence": "A long enough evidence quote from the transcript here.",
+                        },
+                        {
+                            "claim": "Second grounded claim line that passes length checks.",
+                            "evidence": "Second evidence quote from the transcript passes checks.",
+                        },
+                    ],
+                }
+            }
+            self.assertEqual(v3.export_structural_tier(b), "compressed")
+            b2 = dict(b)
+            b2["report_v3"] = {
+                **b["report_v3"],
+                "signal_mode": "HIGH_SIGNAL",
+                "evidence_mapping": b["report_v3"]["evidence_mapping"]
+                + [
+                    {
+                        "claim": "Third grounded claim line for density.",
+                        "evidence": "Third evidence quote from the transcript passes checks.",
+                    }
+                ],
+            }
+            self.assertEqual(v3.export_structural_tier(b2), "full")
+        finally:
+            if old is None:
+                os.environ.pop("SOAPBOXX_EXPORT_COMPRESSION", None)
+            else:
+                os.environ["SOAPBOXX_EXPORT_COMPRESSION"] = old
+
+    def test_blueprint_strategist_does_not_bypass_truth_gate(self):
+        old = os.environ.get("SOAPBOXX_STRICT_EXPORT")
+        try:
+            os.environ["SOAPBOXX_STRICT_EXPORT"] = "1"
+            r3 = {"episode_snapshot": {"title": "Thin"}, "evidence_mapping": [], "segments": []}
+            bp = {
+                "strategist_report": {
+                    "punchline_header": "Would ship if gate were ignored.",
+                    "snapshot": {"overall_score": 9, "signal_strength": "High", "diagnosis": "x"},
+                }
+            }
+            md = v3.render_unified_episode_export_markdown(
+                {"report_v3": r3, "blueprint_v1": bp, "workflow_report": {}, "meta": {}}
+            )
+            self.assertIn("insufficient signal", md.lower())
+            self.assertIn("Master Blueprint", md)
+        finally:
+            if old is None:
+                os.environ.pop("SOAPBOXX_STRICT_EXPORT", None)
+            else:
+                os.environ["SOAPBOXX_STRICT_EXPORT"] = old
+
+    def test_strategist_truth_gate_unified_counts_workflow_and_report_v3(self):
+        """Single gate: max(workflow, report_v3) for evidence rows and segments."""
+        old = os.environ.get("SOAPBOXX_STRICT_EXPORT")
+        try:
+            os.environ["SOAPBOXX_STRICT_EXPORT"] = "1"
+            thin = {"report_v3": {"evidence_mapping": [], "segments": []}, "workflow_report": {}}
+            ins, rs = v3.strategist_truth_gate_bundle(thin)
+            self.assertTrue(ins)
+            self.assertTrue(any("evidence rows 0" in x for x in rs))
+            row = {
+                "claim": "A long enough claim line here for the gate.",
+                "evidence": "A long enough evidence quote from the transcript here.",
+            }
+            ok_wf = {
+                "workflow_report": {
+                    "evidence_map": [row, dict(row)],
+                    "segments": [{"segment_id": "s1"}],
+                },
+                "report_v3": {"evidence_mapping": [], "segments": []},
+            }
+            self.assertFalse(v3.strategist_truth_gate_bundle(ok_wf)[0])
+        finally:
+            if old is None:
+                os.environ.pop("SOAPBOXX_STRICT_EXPORT", None)
+            else:
+                os.environ["SOAPBOXX_STRICT_EXPORT"] = old
+
     def test_detect_signal_mode_two_claims_high(self):
         brief = {
             "claims": [
@@ -147,10 +303,13 @@ class TestEpisodeReportV3(unittest.TestCase):
         v3.validate_v3_report_or_raise(r)
         self.assertIn("report_readiness", r)
         self.assertIn("band", r["report_readiness"])
+        self.assertIn("dual_lens", r)
+        self.assertIn(r["dual_lens"]["episode_lens_type"], ("NARRATIVE", "ANALYTICAL", "HYBRID"))
         md = v3.render_episode_report_v3_markdown(r)
         self.assertIn("## 0. Readiness & expectations", md)
         self.assertIn("## 1. Episode Diagnosis", md)
         self.assertIn("## 10. Bottom Line", md)
+        self.assertIn("## 11. Dual lens", md)
         self.assertEqual(r.get("signal_mode"), "LOW_SIGNAL")
         self.assertEqual(r.get("output_mode"), "diagnostic")
         self.assertEqual(r.get("report_readiness", {}).get("output_mode"), "diagnostic")
@@ -158,6 +317,29 @@ class TestEpisodeReportV3(unittest.TestCase):
         self.assertIn("narrative_reconstruction", r)
         self.assertTrue(r.get("takeaway"))
         self.assertIn("Diagnostic mode", r.get("takeaway", ""))
+        gt = r.get("_guest_decision_trace") or {}
+        self.assertIn("anchor_alignment_score", gt)
+        self.assertIn("guest_trigger_source", gt)
+        self.assertIn("guest_trigger_source_raw", gt)
+        self.assertIn("guest_generation_effective", gt)
+        self.assertIn("decision_primary_cause", gt)
+        self.assertIn("guest_generation_confidence", gt)
+        sp = gt.get("anchor_stability_profile") or {}
+        self.assertIn("min_jaccard", sp)
+        self.assertIn("mean_jaccard", sp)
+        self.assertIn("variance_jaccard", sp)
+        self.assertIsInstance(gt.get("decision_steps"), list)
+        self.assertGreater(len(gt["decision_steps"]), 3)
+        self.assertEqual(gt["decision_steps"][0], "EVAL_ISSUE_AXIS")
+        cq = r.get("_claim_quality") or {}
+        self.assertIn("score", cq)
+        self.assertIn("warning", cq)
+        self.assertEqual(r.get("_system_health_label"), "CLAIM_DEGRADED")
+        inv = r.get("_invariant_contract_check") or {}
+        self.assertIn("violations", inv)
+        self.assertFalse(inv.get("contract_satisfied"))
+        codes = {v.get("code") for v in (inv.get("violations") or [])}
+        self.assertIn("CLAIM_SET_EMPTY", codes)
 
     def test_narrative_reconstruction_skips_offline_tooling_bullets(self):
         brief = {
@@ -451,8 +633,16 @@ class TestEpisodeReportV3(unittest.TestCase):
         self.assertIn("## 1a.", md)
         self.assertIn("## 1c. Claim stakes", md)
         self.assertIn("For **Alex**", md)
-        unified = v3.render_unified_episode_export_markdown({"report_v3": r})
-        self.assertIn("For **Alex**", unified)
+        old_strict = os.environ.get("SOAPBOXX_STRICT_EXPORT")
+        try:
+            os.environ["SOAPBOXX_STRICT_EXPORT"] = "0"
+            unified = v3.render_unified_episode_export_markdown({"report_v3": r})
+        finally:
+            if old_strict is None:
+                os.environ.pop("SOAPBOXX_STRICT_EXPORT", None)
+            else:
+                os.environ["SOAPBOXX_STRICT_EXPORT"] = old_strict
+        self.assertIn("## Podcast Performance Insight", unified)
 
     def test_render_unified_export_no_legacy_v2_only_line(self):
         brief = {
@@ -479,11 +669,244 @@ class TestEpisodeReportV3(unittest.TestCase):
             "action_plan_7d": [],
         }
         r = v3.build_v3_report(brief, "[00:00:10] Systems outperform goals because routines persist.")
-        md = v3.render_unified_episode_export_markdown({"report_v3": r})
-        self.assertIn("SoapBoxx Episode Intelligence", md)
-        self.assertIn("network_episode_brief_v3.md", md)
+        old_strict = os.environ.get("SOAPBOXX_STRICT_EXPORT")
+        try:
+            os.environ["SOAPBOXX_STRICT_EXPORT"] = "0"
+            md = v3.render_unified_episode_export_markdown({"report_v3": r})
+        finally:
+            if old_strict is None:
+                os.environ.pop("SOAPBOXX_STRICT_EXPORT", None)
+            else:
+                os.environ["SOAPBOXX_STRICT_EXPORT"] = old_strict
+        self.assertIn("## Podcast performance & growth intelligence", md)
+        self.assertIn("## Snapshot", md)
         self.assertNotIn("only supported", md.lower())
-        self.assertIn("## 1. Key Highlights", md)
+        self.assertNotIn("Readiness & expectations", md)
+
+    def test_render_unified_includes_master_blueprint_v1_section(self):
+        brief = {
+            "episode_snapshot": {
+                "title": "Habits",
+                "creator": "Host",
+                "genre": "Talk",
+                "primary_topic": "habits",
+                "why_it_matters": "Listeners tune in for repeatable behavior change.",
+            },
+            "narrative": ["Systems beat willpower when life gets chaotic."],
+            "claims": [
+                {
+                    "id": "c1",
+                    "text": "Environmental design beats motivation for consistent habits.",
+                    "claim_type": "interpretation",
+                    "confidence": "high",
+                    "why_it_matters": "m",
+                }
+            ],
+            "evidence_gaps": {"supported": [], "weak_or_unsupported": [], "proof_needed": []},
+            "production_moves": {"segment_to_run": {"name": "s", "goal": "g"}, "host_questions": [], "clip_candidates": [], "risk_note": ""},
+            "guests": [],
+            "action_plan_7d": [],
+        }
+        r = v3.build_v3_report(
+            brief,
+            "Host argues that environmental design beats motivation for consistent habits when stress returns.",
+            metadata={},
+        )
+        # Truth gate applies to blueprint exports too (≥2 grounded evidence rows, ≥1 segment).
+        em = [e for e in (r.get("evidence_mapping") or []) if isinstance(e, dict)]
+        n_ok = sum(1 for e in em if v3.evidence_mapping_row_is_export_grounded(e))
+        if n_ok < 2:
+            r.setdefault("evidence_mapping", [])
+            r["evidence_mapping"] = list(r["evidence_mapping"]) + [
+                {
+                    "id": "gate_c2",
+                    "claim": "Environmental design beats motivation for consistent habits under stress.",
+                    "evidence": "Host argues that environmental design beats motivation for consistent habits when stress returns.",
+                    "timestamp": 30.0,
+                    "type": "spoken_claim",
+                }
+            ]
+        if len(r.get("segments") or []) < 1:
+            r["segments"] = [{"segment_title": "Opening beat", "trigger_clip": "c1"}]
+        bp = {
+            "product_positioning": "A podcast performance and growth intelligence layer",
+            "strategist_report": {
+                "punchline_header": "This episode underperforms due to weak positioning and lack of clear takeaway, but can be significantly improved with stronger framing, sharper questions, and more structured delivery.",
+                "snapshot": {"overall_score": 7, "signal_strength": "Moderate", "diagnosis": "Solid topic, weak tension framing."},
+                "core_breakdown": {
+                    "thesis": "This episode argues that environmental design beats motivation for consistent habits under stress.",
+                    "key_claims": ["Design beats motivation when stress returns."],
+                    "evidence_anchors": [
+                        {
+                            "claim": "Design beats motivation when stress returns.",
+                            "anchor": "Host argues that environmental design beats motivation when stress returns.",
+                        }
+                    ],
+                    "tension_position": {
+                        "implicit_argument": "This episode treats motivation as the main driver of consistency.",
+                        "stronger_position": "But the stronger position is that environment design drives consistency under stress.",
+                    },
+                },
+                "what_working": ["Strong lived examples.", "Clear host cadence.", "Good practical intent."],
+                "what_missing": ["Thesis arrives too late.", "Counterargument is underdeveloped.", "Closing takeaway is generic."],
+                "upgrade_plan": {
+                    "reposition_episode": "This episode should be about designing habit systems that survive stress.",
+                    "structure_fix": {
+                        "opening_hook": "Lead with a failed willpower moment.",
+                        "midpoint_tension": "Challenge the claim with an exception case.",
+                        "closing_takeaway": "Commit one environment tweak for seven days.",
+                    },
+                    "clip_opportunities": ["Design beats motivation when stress returns."],
+                },
+                "audience_engagement_intelligence": {
+                    "listener_takeaway_gap": "Listeners need one specific weekly behavior to test.",
+                    "behavior_change": "Pick one trigger-action pair and run it daily.",
+                    "weekly_improvement_insight": "Ship one thesis, one tension beat, one takeaway per episode.",
+                },
+                "question_upgrade": [
+                    "What breaks first when motivation drops: intention, environment, or accountability?",
+                    "Which behavior can you verify changed because of environment design alone?",
+                    "What tradeoff are listeners accepting when they rely on motivation over systems?",
+                ],
+                "guest_content_opportunities": [
+                    {
+                        "who_type": "Behavioral scientist",
+                        "why_they_matter": "Adds evidence beyond anecdotes.",
+                        "what_they_unlock": "More defensible claims and stronger clips.",
+                    }
+                ],
+                "strategic_value_for_network": {
+                    "what_improving_unlocks": "Repeatable growth framing and stronger retention.",
+                    "where_it_underperforms": "Clip moments are present but under-packaged.",
+                },
+                "network_level_insight": [
+                    "Weak positioning across shows",
+                    "Lack of shareable moments",
+                    "Structural engagement issues",
+                    "High-upside opportunities",
+                ],
+                "network_rollout_line": "If we applied this across your network, we would identify which shows are underperforming, which episodes are most shareable, and where audience growth is being lost.",
+                "one_line_fix": "If this episode were reframed around a clear argument and structured for tension, it would become significantly more engaging and shareable.",
+                "conviction_statement": "This episode underperforms because it refuses to take a hard side on systems versus motivation.",
+            },
+        }
+        old_comp = os.environ.get("SOAPBOXX_EXPORT_COMPRESSION")
+        try:
+            os.environ["SOAPBOXX_EXPORT_COMPRESSION"] = "0"
+            md = v3.render_unified_episode_export_markdown(
+                {"report_v3": r, "blueprint_v1": bp, "workflow_report": {}, "meta": {}}
+            )
+        finally:
+            if old_comp is None:
+                os.environ.pop("SOAPBOXX_EXPORT_COMPRESSION", None)
+            else:
+                os.environ["SOAPBOXX_EXPORT_COMPRESSION"] = old_comp
+        self.assertIn("## Podcast performance & growth intelligence", md)
+        self.assertIn("Podcast Performance Insight", md)
+        self.assertIn("A podcast performance and growth intelligence layer", md)
+        self.assertIn("Design beats motivation when stress returns.", md)
+        self.assertIn("Evidence Anchors", md)
+        self.assertIn("Tension Call", md)
+        self.assertIn("Conviction", md)
+        self.assertIn("1-Line Fix", md)
+
+    def test_unified_export_skips_broken_evidence_quote(self):
+        r3 = {
+            "episode_snapshot": {
+                "title": "T",
+                "creator": "",
+                "genre": "",
+                "primary_topic": "",
+            },
+            "report_readiness": {
+                "band": "weak",
+                "notes": [],
+                "suggested_actions": [],
+                "metrics": {},
+            },
+            "evidence_mapping": [
+                {
+                    "id": "c1",
+                    "claim": "A complete spoken claim here.",
+                    "evidence": "truncated mid clause at 2 in the.",
+                    "timestamp": 1.0,
+                    "type": "spoken_claim",
+                }
+            ],
+            "clean_insights": [],
+            "claims": [],
+        }
+        old_strict = os.environ.get("SOAPBOXX_STRICT_EXPORT")
+        try:
+            os.environ["SOAPBOXX_STRICT_EXPORT"] = "0"
+            md = v3.render_unified_episode_export_markdown(
+                {"report_v3": r3, "workflow_report": {}, "meta": {}}
+            )
+        finally:
+            if old_strict is None:
+                os.environ.pop("SOAPBOXX_STRICT_EXPORT", None)
+            else:
+                os.environ["SOAPBOXX_STRICT_EXPORT"] = old_strict
+        self.assertIn("## Podcast Performance Insight", md)
+        self.assertIn("## 1-Line Fix", md)
+
+
+class TestTranscriptNormalize(unittest.TestCase):
+    def test_normalize_drops_consecutive_duplicate_lines(self):
+        raw = "line a\nline a\nline b"
+        self.assertEqual(v3.normalize_transcript_for_v3(raw), "line a\nline b")
+
+    def test_normalize_keeps_duplicate_after_blank(self):
+        raw = "line a\n\nline a"
+        self.assertEqual(v3.normalize_transcript_for_v3(raw), "line a\n\nline a")
+
+    def test_normalize_collapses_many_blank_lines(self):
+        out = v3.normalize_transcript_for_v3("a\n\n\n\n\n\nb")
+        parts = out.split("\n")
+        self.assertEqual(parts[0], "a")
+        self.assertEqual(parts[-1], "b")
+        empties_between = sum(1 for p in parts[1:-1] if p == "")
+        self.assertLessEqual(empties_between, 2)
+
+    def test_transcript_pipeline_default_normalizes_duplicates(self):
+        old = os.environ.get("SOAPBOXX_TRANSCRIPT_NORMALIZE")
+        try:
+            os.environ.pop("SOAPBOXX_TRANSCRIPT_NORMALIZE", None)
+            self.assertEqual(v3.transcript_for_v3_pipeline("a\na"), "a")
+        finally:
+            if old is not None:
+                os.environ["SOAPBOXX_TRANSCRIPT_NORMALIZE"] = old
+
+    def test_transcript_pipeline_disabled_keeps_duplicates(self):
+        old = os.environ.get("SOAPBOXX_TRANSCRIPT_NORMALIZE")
+        try:
+            os.environ["SOAPBOXX_TRANSCRIPT_NORMALIZE"] = "0"
+            self.assertEqual(v3.transcript_for_v3_pipeline("a\na"), "a\na")
+        finally:
+            os.environ.pop("SOAPBOXX_TRANSCRIPT_NORMALIZE", None)
+            if old is not None:
+                os.environ["SOAPBOXX_TRANSCRIPT_NORMALIZE"] = old
+
+    def test_transcript_pipeline_env_explicit_on(self):
+        old = os.environ.get("SOAPBOXX_TRANSCRIPT_NORMALIZE")
+        try:
+            os.environ["SOAPBOXX_TRANSCRIPT_NORMALIZE"] = "1"
+            self.assertEqual(v3.transcript_for_v3_pipeline("a\na"), "a")
+        finally:
+            os.environ.pop("SOAPBOXX_TRANSCRIPT_NORMALIZE", None)
+            if old is not None:
+                os.environ["SOAPBOXX_TRANSCRIPT_NORMALIZE"] = old
+
+    def test_broken_evidence_quote_line_truncation(self):
+        self.assertTrue(v3._is_broken_evidence_quote_line("Lead text that ends at 2 in the."))
+
+    def test_generalize_sentence_strips_full_bracket_timestamp(self):
+        out = v3._generalize_sentence(
+            "[00:00:15] Let me start by asking what you think about AI in business today?"
+        )
+        self.assertNotIn("00:00:15]", out)
+        self.assertNotIn("[00:00:15]", out)
+        self.assertIn("Let me start", out)
 
 
 if __name__ == "__main__":

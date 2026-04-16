@@ -1,0 +1,55 @@
+{
+  "batch_size": 5,
+  "results_sorted": [
+    {
+      "id": "DfTU5LA_kw8",
+      "title": "Joe Rogan Experience #2138 - Tucker Carlson",
+      "score": null,
+      "mode": null,
+      "score_band": null,
+      "core_problem": "A more rigorous approach to fact-checking and evidence-based reasoning could strengthen the analysis, particularly in areas where universal assertions are made.",
+      "anchor_count": 0,
+      "used_word_count": 4500
+    },
+    {
+      "id": "SwQhKFMxmDY",
+      "title": "Rich Roll Podcast - Andrew Huberman",
+      "score": null,
+      "mode": null,
+      "score_band": null,
+      "core_problem": "A more rigorous approach to fact-checking and evidence-based reasoning would strengthen the analytical aspects of the podcast.",
+      "anchor_count": 0,
+      "used_word_count": 4500
+    },
+    {
+      "id": "PDiCcQyQVnI",
+      "title": "Club Shay Shay - Chris Tucker",
+      "score": null,
+      "mode": null,
+      "score_band": null,
+      "core_problem": "While the hosts' conversational style is engaging, it lacks primary sources to support strong factual assertions, leaving room for skepticism and further investigation.",
+      "anchor_count": 0,
+      "used_word_count": 4500
+    },
+    {
+      "id": "Bb-eLRjU7uQ",
+      "title": "Conan O'Brien Needs A Friend - Elizabeth Banks",
+      "score": null,
+      "mode": null,
+      "score_band": null,
+      "core_problem": "A more critical analysis of the claims made in the episode could provide additional insights into the reasoning quality and potential biases.",
+      "anchor_count": 0,
+      "used_word_count": 4500
+    },
+    {
+      "id": "5Szj5jJeUec",
+      "title": "Ricky Gervais & Russell Brand - God vs Atheism",
+      "score": null,
+      "mode": null,
+      "score_band": null,
+      "core_problem": "A more thorough fact-checking process would strengthen the claims made by the hosts, providing a clearer understanding of the subject matter and its implications.",
+      "anchor_count": 0,
+      "used_word_count": 4500
+    }
+  ]
+}

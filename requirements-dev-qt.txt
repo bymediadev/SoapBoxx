@@ -1,0 +1,6 @@
+# Optional: Qt / pytest-qt frontend tests (tests/qt_frontend_tests.py).
+# Install after requirements-dev.txt:
+#   pip install -r requirements-dev.txt
+#   pip install -r requirements-dev-qt.txt
+pytest-qt>=4.2.0
+PyQt6>=6.5.0

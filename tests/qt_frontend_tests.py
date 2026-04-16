@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
-Frontend Testing Suite for SoapBoxx
-Comprehensive UI testing using pytest-qt
+Frontend testing suite for SoapBoxx (pytest + pytest-qt + PyQt6).
+
+This file is named ``qt_frontend_tests.py`` so ``python -m unittest discover``
+does not import it (those runs skip Qt tests unless you install pytest).
+
+Run manually: ``python -m pytest tests/qt_frontend_tests.py -v``
 """
 
 import os

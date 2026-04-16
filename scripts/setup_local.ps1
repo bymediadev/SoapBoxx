@@ -27,6 +27,16 @@ Step "Moving to repo root"
 Set-Location $repoRoot
 Write-Host "Repo: $repoRoot"
 
+$envExample = Join-Path $repoRoot ".env.example"
+$envFile = Join-Path $repoRoot ".env"
+if (-not (Test-Path $envFile) -and (Test-Path $envExample)) {
+    Step "Creating .env from .env.example (edit .env for your machine)"
+    Copy-Item -LiteralPath $envExample -Destination $envFile
+}
+elseif (-not (Test-Path $envFile)) {
+    Write-Host "Note: no .env.example found; create .env manually if you use Ollama." -ForegroundColor Yellow
+}
+
 if ($RebuildVenv -and (Test-Path $venvDir)) {
     Step "Removing existing .venv (requested)"
     Remove-Item -Recurse -Force $venvDir
@@ -60,9 +70,12 @@ if (Test-Path "requirements-episode-intelligence.txt") {
 Step "Setting stable environment flags for this shell"
 $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
+if (-not $env:SOAPBOXX_BRIEF_MAX_CHARS) {
+    $env:SOAPBOXX_BRIEF_MAX_CHARS = "200000"
+}
 
 Step "Quick import sanity check"
-& $venvPython -c "import pydantic, tenacity, jsonschema, structlog; print('Imports OK')"
+& $venvPython -c "import sys, os; sys.path.insert(0, os.path.join(os.getcwd(), 'backend')); import pydantic, tenacity, jsonschema, structlog; import blueprint_v1.pipeline; print('Imports OK')"
 
 Step "Setup complete"
 Write-Host "Run next: .\scripts\smoke_test.ps1" -ForegroundColor Green

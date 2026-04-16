@@ -34,3 +34,11 @@ The exported markdown is built for **podcasters**: diagnose structure, extract i
 - `validate_references(report, valid_claim_ids=...)` — ensures every `cN` in the serialized report exists.
 
 Workflow version constant: `REPORT_V3_VERSION` in `episode_report_v3.py`.
+
+## Higher signal (practical defaults)
+
+- **Transcript in one LLM pass:** When `SOAPBOXX_BRIEF_MAX_CHARS` is unset, the brief pipeline defaults to **200000** characters for a single pass. Set `SOAPBOXX_BRIEF_MAX_CHARS` explicitly to match your Ollama context (lower if the model runs out of context).
+- **Metadata:** Accurate `title` / `creator` / `genre` in every entry point reduces wrong-template drift.
+- **Ollama:** Set `SOAPBOXX_OLLAMA_MODEL` and avoid `SOAPBOXX_OFFLINE=1` when you want a real brief.
+- **Workflow:** Keep `SOAPBOXX_WORKFLOW_USE_AI=1` (default) for fuller highlights and evidence; use `SOAPBOXX_WORKFLOW_SKIP_GATE=1` only when you trust the transcript and want to bypass the thin-source gate.
+- **Quality bar:** Default reality rules live in `backend/data/v3_reality_expected.json`; tighten with `SOAPBOXX_V3_REALITY_RULES` or `SOAPBOXX_V3_REALITY_STRICT=1` on `scripts/episode_brief.py --v3` for CI-style enforcement.

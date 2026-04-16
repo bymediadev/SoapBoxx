@@ -18,6 +18,31 @@ from episode_intelligence import (  # noqa: E402
 )
 
 
+class TestParseJsonLoose(unittest.TestCase):
+    def test_trailing_comma_and_markdown_fence(self):
+        raw = 'Here is the JSON:\n```json\n{"a": 1, "b": 2,}\n```\n'
+        d = ei._parse_json_loose(raw)
+        self.assertEqual(d.get("a"), 1)
+        self.assertEqual(d.get("b"), 2)
+
+    def test_extract_first_object_ignores_braces_in_strings(self):
+        # `{` inside a string must not end extraction early
+        raw = '{"k": "use { braces } literally", "x": 1}'
+        d = ei._parse_json_loose(raw)
+        self.assertEqual(d.get("x"), 1)
+        self.assertIn("{ braces }", d.get("k", ""))
+
+    @unittest.skipUnless(
+        getattr(ei, "_json_repair_loads", None) is not None,
+        "json_repair not installed",
+    )
+    def test_repairs_unescaped_quotes_in_values(self):
+        # Invalid JSON: quotes around "spy" are not escaped — std json.loads fails
+        broken = '{"text": "He said ' + '"' + 'spy' + '"' + ' inside"}'
+        d = ei._parse_json_loose(broken)
+        self.assertIn("spy", str(d.get("text", "")))
+
+
 class TestSanitizeEpisodeSnapshot(unittest.TestCase):
     def test_primary_topic_reset_when_crime_template_conflicts_gambling_title(self):
         snap = {
@@ -231,13 +256,13 @@ class TestEpisodeIntelligence(unittest.TestCase):
 
     @patch.dict(
         os.environ,
-        {"OPENAI_API_KEY": "", "SOAPBOXX_OLLAMA_MODEL": ""},
+        {"OPENAI_API_KEY": "", "SOAPBOXX_OLLAMA_MODEL": "", "SOAPBOXX_OFFLINE": "0"},
         clear=False,
     )
     def test_generate_without_ollama_returns_empty_brief_shell(self):
         with patch.dict(
             os.environ,
-            {"OPENAI_API_KEY": "", "SOAPBOXX_OLLAMA_MODEL": ""},
+            {"OPENAI_API_KEY": "", "SOAPBOXX_OLLAMA_MODEL": "", "SOAPBOXX_OFFLINE": "0"},
             clear=False,
         ):
             r = generate_episode_brief(
@@ -266,13 +291,14 @@ class TestEpisodeIntelligence(unittest.TestCase):
             os.environ,
             {
                 "OPENAI_API_KEY": "",
-                "SOAPBOXX_OLLAMA_MODEL": "llama3.1:latest",
+                "SOAPBOXX_OLLAMA_MODEL": "llama3.1:8b",
+                "SOAPBOXX_OFFLINE": "0",
             },
             clear=False,
         ):
             with patch.object(ei, "_openai_chat_with_retry", return_value=minimal_json):
                 r = generate_episode_brief("word " * 100, {"title": "Ep"})
-        self.assertEqual(r.get("model"), "ollama:llama3.1:latest")
+        self.assertEqual(r.get("model"), "ollama:llama3.1:8b")
         self.assertEqual(r["brief"]["episode_snapshot"]["primary_topic"], "Morning mindset")
 
     @patch.dict(os.environ, {"SOAPBOXX_OFFLINE": "1"})

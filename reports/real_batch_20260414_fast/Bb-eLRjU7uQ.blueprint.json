@@ -1,0 +1,98 @@
+{
+  "strategist_report": {
+    "punchline_header": "This episode underperforms due to weak positioning and lack of clear takeaway, but can be significantly improved with stronger framing, sharper questions, and more structured delivery.",
+    "core_problem": "Under-specified evidence for the strongest assertions.",
+    "snapshot": {
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "diagnosis": "Under-specified evidence for the strongest assertions.",
+      "scoring_basis": "8-10 clear thesis + strong clips + actionable takeaway; 5-7 decent story but weak clarity/payoff; 1-4 unclear point and low engagement value"
+    },
+    "core_breakdown": {
+      "thesis": "The hosts' reevaluation of past relationships in 'Conan O'Brien Needs A Friend - Elizabeth Banks' subtly shifts listeners' perceptions, but the lack of primary sources and verifiable facts raises questions about the reliability of these reinterpretations.",
+      "key_claims": [
+        "Hosts assert positions that deserve fact-checking when stated as universal."
+      ],
+      "evidence_anchors": [
+        {
+          "claim": "Hosts assert positions that deserve fact-checking when stated as universal.",
+          "anchor": "Kind: captions Language: en Hi, my name is Elizabeth Banks and I feel blessed."
+        }
+      ],
+      "tension_position": {
+        "implicit_argument": "This episode treats this as true: Hosts assert positions that deserve fact-checking when stated as universal.",
+        "stronger_position": "But the stronger position is this: The hosts' reevaluation of past relationships in 'Conan O'Brien Needs A Friend - Elizabeth Banks' subtly shifts listeners' perceptions, but the lack of primary sources and verifiable facts raises questions about the reliability of these reinterpretations."
+      }
+    },
+    "what_working": [
+      "Relatable voice and concrete moments listeners can recognize.",
+      "Opening framing",
+      "Personal reflection"
+    ],
+    "what_missing": [
+      "Independent documentation for strong factual assertions.",
+      "Under-specified evidence for the strongest assertions.",
+      "Story comfort can outrun what the transcript can actually support."
+    ],
+    "upgrade_plan": {
+      "reposition_episode": "This episode should be about The hosts' reevaluation of past relationships in 'Conan O'Brien Needs A Friend - Elizabeth Banks' subtly shifts listeners' perceptions, but the lack of primary sources and verifiable facts raises questions about the reliability of these reinterpretations.",
+      "structure_fix": {
+        "opening_hook": "State the central tension in one sentence and promise what the listener will learn.",
+        "midpoint_tension": "Challenge the strongest claim with a direct counter-case before defending it.",
+        "closing_takeaway": "End with one concrete behavior change the listener can apply this week."
+      },
+      "clip_opportunities": [
+        "Kind: captions Language: en Hi, my name is Elizabeth Banks and I feel blessed.",
+        "Anchor on the clearest self-contained line about: Conan O'Brien Needs A Friend - Elizabeth Banks.",
+        "Anchor on the clearest self-contained line about: Conan O'Brien Needs A Friend - Elizabeth Banks."
+      ],
+      "recommendations": [
+        "Open with one explicit argument in the first 60 seconds.",
+        "Force a midpoint challenge that tests the core claim under pressure.",
+        "End with one concrete listener behavior change and metric."
+      ]
+    },
+    "audience_engagement_intelligence": {
+      "listener_takeaway_gap": "The listener needs a clearer single takeaway tied to a concrete decision.",
+      "behavior_change": "Pick one weekly behavior tied directly to the episode thesis and measure it.",
+      "weekly_improvement_insight": "Design each episode around one defensible thesis, one tension beat, and one specific takeaway."
+    },
+    "question_upgrade": [
+      "A skeptic would demand harder evidence before changing behavior.",
+      "What is the strongest counterargument to your main claim, and why does it fail?",
+      "Which specific proof would make this thesis undeniable for a skeptic?"
+    ],
+    "guest_content_opportunities": [
+      {
+        "who_type": "Domain practitioner with direct operating experience",
+        "why_they_matter": "They convert abstract claims into concrete tradeoffs.",
+        "what_they_unlock": "Execution reality and credible counterexamples."
+      },
+      {
+        "who_type": "Researcher or analyst tied to primary data",
+        "why_they_matter": "They separate defensible evidence from narrative momentum.",
+        "what_they_unlock": "Higher-confidence claims and stronger validation moments."
+      },
+      {
+        "who_type": "Contrarian expert with a steel-manned opposing view",
+        "why_they_matter": "They force sharper framing and create productive tension.",
+        "what_they_unlock": "Shareable conflict and deeper listener engagement."
+      }
+    ],
+    "strategic_value_for_network": {
+      "what_improving_unlocks": "Stronger retention, cleaner clip packaging, and higher repeatability across episodes.",
+      "where_it_underperforms": "The current structure leaves growth on the table by delaying tension and under-defining the listener takeaway."
+    },
+    "network_level_insight": [
+      "Weak positioning across shows",
+      "Lack of shareable moments",
+      "Structural engagement issues",
+      "High-upside opportunities"
+    ],
+    "network_rollout_line": "If we applied this across your network, we would identify which shows are underperforming, which episodes are most shareable, and where audience growth is being lost.",
+    "one_line_fix": "If this episode were reframed around a clear argument and structured for tension, it would become significantly more engaging and shareable.",
+    "conviction_statement": "This episode avoids the hard argument, and that avoidance is the main reason it underperforms.",
+    "report_mode": "interpretive"
+  },
+  "product_positioning": "A podcast performance and growth intelligence layer"
+}

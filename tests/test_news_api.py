@@ -5,6 +5,7 @@ Test script for News API integration
 
 import os
 
+import pytest
 import requests
 from dotenv import load_dotenv
 
@@ -20,7 +21,7 @@ def test_news_api():
     news_api_key = os.getenv("NEWS_API_KEY")
     if not news_api_key:
         print("❌ News API key not configured")
-        return False
+        pytest.skip("NEWS_API_KEY not set")
 
     print("✅ News API key found: [HIDDEN]")
 
@@ -55,35 +56,45 @@ def test_news_api():
                     print(f"  {i}. {title}")
                     print(f"     📰 Source: {source}")
                 print("\n🎉 News API integration is working!")
-                return True
             else:
                 print("⚠️ No articles found")
-                return False
+                pytest.skip("News API returned no articles")
         else:
             print(f"❌ News API Error: {response.status_code}")
             if response.status_code == 401:
                 print("   - Invalid API key")
             elif response.status_code == 429:
                 print("   - Rate limit exceeded")
+                pytest.skip("News API rate limited")
             else:
                 try:
                     error_data = response.json()
                     print(f"   - {error_data.get('message', 'Unknown error')}")
-                except:
+                except Exception:
                     print(f"   - {response.text[:100]}")
-            return False
+            if response.status_code != 429:
+                pytest.fail(f"News API HTTP {response.status_code}")
 
     except requests.exceptions.Timeout:
         print("❌ News API request timed out")
-        return False
+        pytest.skip("News API timed out")
     except requests.exceptions.RequestException as e:
         print(f"❌ Request error: {str(e)}")
-        return False
+        pytest.fail(str(e))
     except Exception as e:
         print(f"❌ Unexpected error: {str(e)}")
-        return False
+        pytest.fail(str(e))
 
 
 if __name__ == "__main__":
-    success = test_news_api()
-    exit(0 if success else 1)
+    import sys
+
+    from _pytest.outcomes import Failed, Skipped
+
+    try:
+        test_news_api()
+    except Skipped:
+        sys.exit(0)
+    except Failed:
+        sys.exit(1)
+    sys.exit(0)

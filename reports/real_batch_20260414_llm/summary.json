@@ -1,0 +1,56 @@
+{
+  "batch_size": 5,
+  "skipped": [],
+  "results_sorted": [
+    {
+      "id": "DfTU5LA_kw8",
+      "title": "Joe Rogan Experience #2138 - Tucker Carlson",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "Under-specified evidence for the strongest assertions.",
+      "claims_count": 1,
+      "anchors_count": 1
+    },
+    {
+      "id": "SwQhKFMxmDY",
+      "title": "Rich Roll Podcast - Andrew Huberman",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "Under-specified evidence for the strongest assertions.",
+      "claims_count": 1,
+      "anchors_count": 1
+    },
+    {
+      "id": "PDiCcQyQVnI",
+      "title": "Club Shay Shay - Chris Tucker",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "A more critical approach could be taken by fact-checking the hosts' universal assertions and demanding harder evidence before accepting their claims.",
+      "claims_count": 1,
+      "anchors_count": 1
+    },
+    {
+      "id": "Bb-eLRjU7uQ",
+      "title": "Conan O'Brien Needs A Friend - Elizabeth Banks",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "A more analytical approach could strengthen the episode by incorporating independent documentation for strong factual assertions and providing harder evidence to support claims.",
+      "claims_count": 1,
+      "anchors_count": 1
+    },
+    {
+      "id": "wm3VMuTK2Z4",
+      "title": "Meet the Press Full Episode",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "Independent documentation is lacking for strong factual assertions, making it essential to verify names and timelines externally.",
+      "claims_count": 1,
+      "anchors_count": 1
+    }
+  ]
+}

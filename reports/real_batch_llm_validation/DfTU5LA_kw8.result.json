@@ -1,0 +1,14 @@
+{
+  "id": "DfTU5LA_kw8",
+  "title": "Joe Rogan Experience #2138 - Tucker Carlson",
+  "ollama_model": "llama3.2:3b",
+  "overall_score": 7,
+  "signal_strength": "Moderate",
+  "mode": "interpretive",
+  "core_problem": "The hosts' failure to escalate the debate around Project Aqua, despite presenting it as a significant issue, results in a lack of tension and clarity.",
+  "thesis_preview": "None",
+  "conviction_preview": "The hosts' failure to escalate the debate around Project Aqua is a the episode leaves the strongest claim unchallenged on-mic to engage listeners on a critical ",
+  "claims_count": 1,
+  "anchors_count": 1,
+  "llm_used": true
+}

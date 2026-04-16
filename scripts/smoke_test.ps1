@@ -52,7 +52,7 @@ Step "Python version"
 & $venvPython --version
 
 Step "Module import smoke check"
-& $venvPython -c "import backend.episode_report_v3, backend.soapboxx_v3_workflow, backend.episode_intelligence; print('Core module imports OK')"
+& $venvPython -c "import sys, os; sys.path.insert(0, os.path.join(os.getcwd(), 'backend')); import episode_report_v3, soapboxx_v3_workflow, episode_intelligence, blueprint_v1.pipeline; print('Core module imports OK')"
 
 Step "Run targeted v3 tests"
 & $venvPython -m unittest tests.test_episode_report_v3 tests.test_soapboxx_v3_workflow tests.test_episode_intelligence tests.test_doctor_validate_report

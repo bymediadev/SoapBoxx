@@ -8,6 +8,9 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+from _pytest.outcomes import Failed, Skipped
+
 # Add backend to path
 sys.path.insert(0, str(Path("backend")))
 
@@ -30,7 +33,7 @@ def test_google_apis():
             print(
                 "❌ Google API client not available. Please install with: pip install google-api-python-client"
             )
-            return False
+            pytest.skip("google-api-python-client not installed")
 
         # Check API status
         api_status = google_apis.get_api_status()
@@ -94,13 +97,24 @@ def test_google_apis():
             print(f"  {i}. {video['title'][:50]}...")
 
         print("\n🎉 All Google API tests completed!")
-        return True
 
+    except Skipped:
+        raise
+    except ModuleNotFoundError as e:
+        if "google_apis" in str(e):
+            pytest.skip("google_apis module not available")
+        print(f"❌ Test failed with error: {e}")
+        pytest.fail(str(e))
     except Exception as e:
         print(f"❌ Test failed with error: {e}")
-        return False
+        pytest.fail(str(e))
 
 
 if __name__ == "__main__":
-    success = test_google_apis()
-    sys.exit(0 if success else 1)
+    try:
+        test_google_apis()
+    except Skipped:
+        sys.exit(0)
+    except Failed:
+        sys.exit(1)
+    sys.exit(0)

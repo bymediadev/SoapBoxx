@@ -1,0 +1,7 @@
+{
+  "id": "DfTU5LA_kw8",
+  "title": "Joe Rogan Experience #2138 - Tucker Carlson",
+  "reason": "processing_error",
+  "error": "_fallback_clips() takes 1 positional argument but 3 were given",
+  "trace": "Traceback (most recent call last):\n  File \"<stdin>\", line 65, in <module>\nTypeError: _fallback_clips() takes 1 positional argument but 3 were given\n"
+}

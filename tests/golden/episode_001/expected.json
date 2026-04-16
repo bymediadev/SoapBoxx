@@ -1,0 +1,9 @@
+{
+  "type": "HYBRID",
+  "expected_thesis_contains": ["relationship", "competition", "memory"],
+  "min_clips": 3,
+  "has_tension": true,
+  "primary_topic_contains": "revisit",
+  "failure_mode": "misclassification",
+  "banned_substrings_in_thesis": ["interesting to hear", "they talk about their experiences"]
+}

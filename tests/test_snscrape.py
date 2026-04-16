@@ -8,6 +8,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 # Add backend to path
 sys.path.insert(0, str(Path("backend")))
 
@@ -25,7 +27,7 @@ def test_snscrape():
             print(
                 "❌ snscrape not available. Please install with: pip install snscrape"
             )
-            return False
+            pytest.skip("snscrape not available; pip install snscrape")
 
         print("✅ snscrape is available!")
 
@@ -69,11 +71,10 @@ def test_snscrape():
                 print(f"  Reddit: {len(trending['reddit'])} trends")
 
         print("\n🎉 All snscrape tests completed!")
-        return True
 
     except Exception as e:
         print(f"❌ Test failed with error: {e}")
-        return False
+        pytest.fail(str(e))
 
 
 if __name__ == "__main__":

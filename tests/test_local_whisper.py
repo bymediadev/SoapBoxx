@@ -7,6 +7,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 # Add backend to path
 sys.path.insert(0, str(Path("backend")))
 
@@ -79,24 +81,33 @@ def test_local_whisper():
                 else:
                     print(f"❌ Transcription failed: {result}")
 
-            return True
-
         else:
             print(
                 f"❌ Local Whisper not available: {model_info.get('error', 'Unknown error')}"
             )
-            return False
+            pytest.skip(
+                f"local Whisper not available: {model_info.get('error', 'unknown')}"
+            )
 
     except ImportError as e:
         print(f"❌ Import error: {e}")
         print("💡 Install Whisper with: pip install openai-whisper")
-        return False
+        pytest.skip(f"import error: {e}")
     except Exception as e:
         print(f"❌ Test failed: {e}")
-        return False
+        pytest.fail(str(e))
 
 
 if __name__ == "__main__":
-    success = test_local_whisper()
-    print(f"\n🎯 Test {'PASSED' if success else 'FAILED'}")
-    sys.exit(0 if success else 1)
+    from _pytest.outcomes import Failed, Skipped
+
+    try:
+        test_local_whisper()
+    except Skipped:
+        print("\n🎯 Test SKIPPED")
+        sys.exit(0)
+    except Failed as e:
+        print(f"\n🎯 Test FAILED: {e}")
+        sys.exit(1)
+    print("\n🎯 Test PASSED")
+    sys.exit(0)

@@ -1,0 +1,68 @@
+{
+  "batch_size": 7,
+  "results_sorted": [
+    {
+      "id": "5Szj5jJeUec",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "Under-specified evidence for the strongest assertions.",
+      "claims_count": 1,
+      "anchors_count": 1
+    },
+    {
+      "id": "Bb-eLRjU7uQ",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "Under-specified evidence for the strongest assertions.",
+      "claims_count": 1,
+      "anchors_count": 1
+    },
+    {
+      "id": "DfTU5LA_kw8",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "Under-specified evidence for the strongest assertions.",
+      "claims_count": 1,
+      "anchors_count": 1
+    },
+    {
+      "id": "MCAPRAEG9wk",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "Under-specified evidence for the strongest assertions.",
+      "claims_count": 1,
+      "anchors_count": 1
+    },
+    {
+      "id": "PDiCcQyQVnI",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "Under-specified evidence for the strongest assertions.",
+      "claims_count": 1,
+      "anchors_count": 1
+    },
+    {
+      "id": "SwQhKFMxmDY",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "Under-specified evidence for the strongest assertions.",
+      "claims_count": 1,
+      "anchors_count": 1
+    },
+    {
+      "id": "wm3VMuTK2Z4",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "Under-specified evidence for the strongest assertions.",
+      "claims_count": 1,
+      "anchors_count": 1
+    }
+  ]
+}

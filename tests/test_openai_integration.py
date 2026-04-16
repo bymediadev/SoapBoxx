@@ -7,6 +7,9 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+from _pytest.outcomes import Skipped
+
 # Add backend to path
 sys.path.insert(0, str(Path("backend")))
 
@@ -27,7 +30,7 @@ def test_openai_integration():
             print(f"   ✅ Environment variable loaded: {env_key[:8]}...")
         else:
             print("   ❌ Environment variable not found")
-            return False
+            pytest.skip("OPENAI_API_KEY not set")
 
         # Test 2: Config class integration
         print("\n2️⃣ Testing config class integration...")
@@ -38,7 +41,7 @@ def test_openai_integration():
             print(f"   ✅ Config class integration: {config_key[:8]}...")
         else:
             print("   ❌ Config class integration failed")
-            return False
+            pytest.fail("Config class integration failed")
 
         # Test 3: Transcriber component
         print("\n3️⃣ Testing Transcriber component...")
@@ -49,7 +52,7 @@ def test_openai_integration():
             print(f"   ✅ Transcriber component: [HIDDEN]")
         else:
             print("   ❌ Transcriber component failed")
-            return False
+            pytest.fail("Transcriber component failed")
 
         # Test 4: Feedback Engine component
         print("\n4️⃣ Testing Feedback Engine component...")
@@ -60,7 +63,7 @@ def test_openai_integration():
             print(f"   ✅ Feedback Engine component: [HIDDEN]")
         else:
             print("   ❌ Feedback Engine component failed")
-            return False
+            pytest.fail("Feedback Engine component failed")
 
         # Test 5: Guest Research component
         print("\n5️⃣ Testing Guest Research component...")
@@ -71,7 +74,7 @@ def test_openai_integration():
             print(f"   ✅ Guest Research component: [HIDDEN]")
         else:
             print("   ❌ Guest Research component failed")
-            return False
+            pytest.fail("Guest Research component failed")
 
         # Test 6: SoapBoxx Core integration
         print("\n6️⃣ Testing SoapBoxx Core integration...")
@@ -82,7 +85,7 @@ def test_openai_integration():
             print(f"   ✅ SoapBoxx Core integration: [HIDDEN]")
         else:
             print("   ❌ SoapBoxx Core integration failed")
-            return False
+            pytest.fail("SoapBoxx Core integration failed")
 
         print("\n🎉 All OpenAI API integration tests passed!")
         print("\n📊 Integration Summary:")
@@ -93,13 +96,20 @@ def test_openai_integration():
         print("   ✅ Guest Research component")
         print("   ✅ SoapBoxx Core integration")
 
-        return True
-
+    except Skipped:
+        raise
     except Exception as e:
         print(f"❌ Test failed with error: {e}")
-        return False
+        pytest.fail(str(e))
 
 
 if __name__ == "__main__":
-    success = test_openai_integration()
-    sys.exit(0 if success else 1)
+    from _pytest.outcomes import Failed, Skipped
+
+    try:
+        test_openai_integration()
+    except Skipped:
+        sys.exit(0)
+    except Failed:
+        sys.exit(1)
+    sys.exit(0)

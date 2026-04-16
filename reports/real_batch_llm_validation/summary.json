@@ -1,0 +1,78 @@
+{
+  "batch_size": 5,
+  "skipped": [],
+  "results_sorted": [
+    {
+      "id": "DfTU5LA_kw8",
+      "title": "Joe Rogan Experience #2138 - Tucker Carlson",
+      "ollama_model": "llama3.2:3b",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "The hosts' failure to escalate the debate around Project Aqua, despite presenting it as a significant issue, results in a lack of tension and clarity.",
+      "thesis_preview": "None",
+      "conviction_preview": "The hosts' failure to escalate the debate around Project Aqua is a the episode leaves the strongest claim unchallenged on-mic to engage listeners on a critical ",
+      "claims_count": 1,
+      "anchors_count": 1,
+      "llm_used": true
+    },
+    {
+      "id": "SwQhKFMxmDY",
+      "title": "Rich Roll Podcast - Andrew Huberman",
+      "ollama_model": "llama3.2:3b",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "The episode lacks clear tension and structure, resulting in a meandering conversation that fails to engage the audience.",
+      "thesis_preview": "The conversation meanders without a clear argument or structure, leading to a lack of engagement.",
+      "conviction_preview": "The stronger position is that our personal experiences shape our professional endeavors, and hosts should explore this connection in-depth to create more engagi",
+      "claims_count": 1,
+      "anchors_count": 1,
+      "llm_used": true
+    },
+    {
+      "id": "PDiCcQyQVnI",
+      "title": "Club Shay Shay - Chris Tucker",
+      "ollama_model": "llama3.2:3b",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "The host fails to escalate the argument and create tension, resulting in a lack of engagement and unclear thesis.",
+      "thesis_preview": "The host's assertion that 'camaraderie and rivalry can coexist' is not supported by concrete evidence.",
+      "conviction_preview": "The host's assertion that 'camaraderie and rivalry can coexist' is not supported by concrete evidence, and a more nuanced exploration of this topic could lead t",
+      "claims_count": 1,
+      "anchors_count": 1,
+      "llm_used": true
+    },
+    {
+      "id": "Bb-eLRjU7uQ",
+      "title": "Conan O'Brien Needs A Friend - Elizabeth Banks",
+      "ollama_model": "llama3.2:3b",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "The hosts' assertion that camaraderie and rivalry can coexist is not adequately supported by concrete evidence, leading to a lack of clear direction and tension in the episode.",
+      "thesis_preview": "The hosts assert that camaraderie and rivalry can coexist.",
+      "conviction_preview": "The hosts' assertion that camaraderie and rivalry can coexist is not supported by concrete evidence, and this the episode keeps resetting its point instead of d",
+      "claims_count": 1,
+      "anchors_count": 1,
+      "llm_used": true
+    },
+    {
+      "id": "wm3VMuTK2Z4",
+      "title": "Meet the Press Full Episode",
+      "ollama_model": "llama3.2:3b",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "The host fails to escalate the argument and create tension in the conversation about Cuba's future, leading to a lack of engagement with the audience.",
+      "thesis_preview": "The host does not take a clear stance on Cuba's future.",
+      "conviction_preview": "The US government's regime change doctrine is a threat to global stability, and Cuba's future should be determined by its people, not the whims of President Tru",
+      "claims_count": 1,
+      "anchors_count": 1,
+      "llm_used": true
+    }
+  ],
+  "model": "llama3.2:3b",
+  "http_timeout_sec": "360"
+}

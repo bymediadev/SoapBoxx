@@ -1,0 +1,14 @@
+{
+  "id": "PDiCcQyQVnI",
+  "title": "Club Shay Shay - Chris Tucker",
+  "ollama_model": "llama3.2:3b",
+  "overall_score": 7,
+  "signal_strength": "Moderate",
+  "mode": "interpretive",
+  "core_problem": "The host fails to escalate the argument and create tension, resulting in a lack of engagement and unclear thesis.",
+  "thesis_preview": "The host's assertion that 'camaraderie and rivalry can coexist' is not supported by concrete evidence.",
+  "conviction_preview": "The host's assertion that 'camaraderie and rivalry can coexist' is not supported by concrete evidence, and a more nuanced exploration of this topic could lead t",
+  "claims_count": 1,
+  "anchors_count": 1,
+  "llm_used": true
+}

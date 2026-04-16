@@ -1,3 +1,4 @@
+# Core dev tests (unittest discover + pytest when installed).
 pytest
 pytest-cov
 ruff

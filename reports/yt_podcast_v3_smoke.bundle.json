@@ -1,0 +1,362 @@
+{
+  "brief": {
+    "The Science Behind David Goggins' Unbreakable Mindset": [
+      0
+    ],
+    "episode_snapshot": {
+      "title": "Rich Roll Podcast (Huberman)",
+      "creator": "Rich Roll",
+      "genre": "Podcast",
+      "primary_topic": "Rich Roll Podcast (Huberman)"
+    },
+    "claims": [],
+    "narrative": [],
+    "guests": [],
+    "production_moves": {}
+  },
+  "report_v3": {
+    "workflow_version": "3",
+    "signal_mode": "LOW_SIGNAL",
+    "dual_lens": {
+      "episode_lens_type": "NARRATIVE",
+      "confidence": 90,
+      "weights": {
+        "narrative": 0.8,
+        "analytical": 0.2
+      },
+      "prompt_injection": "This episode has been classified as: NARRATIVE\n\nOptimization rules:\n\nIf ANALYTICAL:\n- Prioritize claims, arguments, and structured reasoning\n- Emphasize verification, counterarguments, and logic\n\nIf NARRATIVE:\n- Prioritize storytelling, interpersonal dynamics, and emotional context\n- Focus on memory, perception, and human tension\n- Avoid over-emphasizing claim verification or formal argumentation\n\nIf HYBRID:\n- Balance storytelling with analysis\n- Extract both narrative meaning and actionable insights\n\nCRITICAL:\n- Do not force analytical structure onto narrative content.\n- Do not ignore insights just because content is conversational.",
+      "normalized_input": {
+        "title": "Rich Roll Podcast (Huberman)",
+        "summary": "Rich Roll Podcast (Huberman)",
+        "transcript": "Kind: captions\nLanguage: en\nHey everybody, welcome to the podcast.\nMy guest today is Dr. Andrew Huberman.\nAndrew is a neuroscientist.\nHe's a Neurobiology Professor at Stanford Medical School\nand McKnight Foundation and Pew Foundation Fellow\nand the founder of Huberman Lab, where he's involved\nin all kinds of really amazing breakthrough research\non brain function, brain plasticity and brain regeneration.\nHis work has been published in top journals like Nature.\nHe's been featured in publications\nlike Time, Scientific America and the BBC.\nAnd he's here today to discuss the brain,\nto discuss growth mindset, how to focus,\nhow to navigate the stressful times and many other subjects.\nIt's an incredible conversation.\nI think you guys are gonna enjoy it.\nI appreciate you watching\nmake sure to hit that subscribe button\nand without further ado, this is me\nand Dr. Andrew Huberman.\nFirst of all, thanks for doing this.\nI appreciate you coming out.\nYeah, my pleasure.\nLong time coming.\nI'm glad we're doing it in person-\nLikewise.\nAnd not remotely.\nAnd I think what I wanna do is start with your origin story,\nbecause you're a very,\nit's your path is very unlikely,\nyour path to becoming a scientist.\nAnd I think it actually also kind of contextualizes\nsome of the things that I wanna talk about with you today.\nSo maybe start there.\nSure, so on the one hand, you know,\nmaybe I was faded to become a scientist.\nI guess the two things that are relevant there\nare I always loved animals\nand I've always been obsessed with animal behavior.\nLike just could watch Cousteau shows growing up, you know\nunderwater life or animals hunting, animals doing anything.\nIt's just so fascinating to me because I'm, I think even\nat a really young age, I've always just been intrigued\nin sort of what drives different animals to behave\nin the way they do and how body form matches to,\nI didn't know what it was,\nbut brains and how that all works.\nSo I've always been obsessed with animals.\nAnd then my dad's a scientist, so he's a physicist.\nIt was really early in chaos theory.\nAnd so growing up in our home, you know, we had scientists\nover for dinner and graduate students would come over\nfor barbecues and things like that.\nIs he a Stanford professor?\nYeah, he was at Stanford.\nHe was mostly at Xerox Park, which is kind of famous\nif you read the Steve Jobs book is for the, yeah.\nThe development of the gooey interface\nthe graphical user interface\nand sort of early days of the computer.\nSo he had a lab there and he had a lab in applied physics\nat Stanford and something called symbolic systems\nwhich is a Stanford degree\nin kind of ecology and computation, that kind of thing.\nSo I grew up in this family where science was very prominent\nand we had lots of discussions\nin our home that I would overhear\nand I didn't understand about physics and we'd spend summers\nat the Aspen Center for Physics, which was like-\nGood times.\nYeah, so, you know,\nand we were, and to be clear, you know,\nyou hear the word Aspen, you know,\nwe were a middle-class family\nbut they have this Aspen Center for Physics.\nSo the Feynman, you know, Richard Feynman was there,\nMurray Gell-mann,\nlike all these luminaries of physics, Peter Carruthers.\nAnd my dad was really good at telling me the stories\nabout these guys and then I'd always wanna meet them.\nAnd it was mostly guys back then,\nthere weren't many women in physics.\nSo I, you know, I was kind of immersed in science\nfrom a young age, but right about age 13,\nmy parents split up.\nAnd he moved overseas, he moved to Denmark\nand my mom was really struggling with the breakup\nand I wasn't in contact with him anymore.\nSo I had this really unusual childhood where, you know,\nwe didn't talk about sports, we talked about science,\nand I had this close relationship with science\nand the people around science\nbut then all of a sudden the structure around family\nlike instead of dinners together every night,\nit was just like me and my mom\nand I was an adolescent, I was hitting puberty.\nSo, you know, there was bound to be some shifts\nin my world landscape and internal landscape anyway.\nBut basically what happened was, I stopped\nreally paying attention to school.\nAnd I got really heavily into skateboarding\nand the kind of punk rock music.\nAnd I found my pack or my community\nthrough like packing community of kids\nthat also just were kind of parentless.\nSo this was like late 80s, early 90s.\nAnd so at a pretty young age, I started taking the,\nI grew up in Palo Alto.\nI was actually born at Stanford Hospital.\nI started taking the seven F bus up to San Francisco\nand hanging around in Embarcadero.\nFor the skateboarders out there, the Lizards,\nthis is the the now famous EMB crowd.\nSo this was the birth of a huge movement\nof skateboarders that became professionals.\nLike, so you'd see the young Danny Way\nwould come through town and you had Rob Dyrdek.\nI remember when he came through.\nSo all these names that eventually became popular\nduring the kind of X games era and the,\nbut at that time it was really underground.\nAnd so it was this pack of maybe a hundred guys\nand it was run like a little city and it was chaos.\nIt was like there was fights,\nand there was drinking and there was lawlessness,\nthere was also a lot of amazing skateboarding\nand there were a lot of amazing people.\nAnd there were some older guys,\nlike one in particular, a very famous skateboarder,\nis this kid, Mike Carroll,\nhis older brother was kind of like the older brother\nto everybody, kind of kept us all in check.\nSo it had its own unique organization.\nAnd it's actually interesting\n'cause the same thing was happening at that time\nin Washington Square Park in New York,\nand at Love Park in Philadelphia, there were all these\nlike communities of kids that were basically parentless.\nAnd so in that time I saw some interesting things.\nFirst of all, I learned what it was to be parentless.\nGrowing up in Palo Alto,\nit was like soccer games and AYSO and you know,\nswim club and all of a sudden I realized, you know,\nI don't have to be home at any particular time,\nor, you know, none of these kids are going to school.\nAnd so we all, it was kind of a big group of truants.\nAnd it was interesting because it gave me a perspective\nthat I had never had in Palo Alto.\nAnd I was drifting further and further away\nfrom any kind of academic rigor.\nI think I would go to school every once in a while.\nWhat's mom doing?\nDoes she have any idea\nthat you're going up to the city every day?\nSo she was totally checked out.\nYou know, I think she was just devastated\nby a bunch of things that were happening\nand she lapsed into a pretty serious depression.\nAnd then in that community, what was interesting is,\nI started seeing that, you know, some guys were clearly\nfaded to becoming professional skateboarders.\nThey were really good at it.\nI just wanna say for full disclosure,\nI was not particularly good.\nI kept getting injured.\nI just, I was not faded to be, you know, exceptional\nor very good at it, but I love the comradery\nand I love the community, but I also noticed that, you know,\nsome people were drinking all day and other people got\ninto hard drugs and people started to, you know,\nsome of the dysfunction really started to show up.\nYeah, the fracture.\nBegins.\nExactly, and so,\nand I started seeing that, lot, a lot more violence.\nYou know, people start getting their girlfriends pregnant.\nThey didn't have money to support those kids.\nYou know, it started becoming apparent to me\nthat there was a lot of dysfunction\nas well as a lot of incredible people in that community.\nAnd so about that time, I got a girlfriend,\nand the other thing was I got removed from high school.\nSo I went to kind of the famed/infamous high school\nin Palo Alto, Gunn High School.\nOh, you went to Gunn.\nI went to Gunn, which is famous because it's the,\none of the most academically rigorous schools\nin the country, maybe the planet,\npeople moved to the area just to send their kids there.\nBut it also has this very complicated reputations\nof the highest suicide rate of any school in the country.\nThe New York Times has written about this.\nSo, you know, I would come to school every once in a while\nbut I could tell you far more about the curbs\nin the front of the Gunn High School parking lot\nthan I could about anything that I learned at Gunn.\nSo when they say they, you were removed,\nI mean, you got, you were expelled.\nNo, I basically, they just said,\nyou need to either start coming to school or, you know-\nYou're done.\nOr you're done.\nSo I got shifted to another high school\nand that was same story.\nIt was just was, it was a mess, it just fell apart.\nAnd so at one point I was brought in, I have a kind\nof vague recollection of this, but I was brought in\nto have a discussion with a school counselor.\nAnd I don't think I've ever told this story before.\nAnd there was someone sitting in the corner,\nthis guy was sitting in the corner\nand he didn't introduce himself.\nAnd pretty soon I realized when I was like,\nI think they're gonna take me away.\nLike I started realized, 'cause they realized my mom\nwasn't really able to control me.\nWasn't really in a place to support me at that time.\nAnd that's what they did.\nThey took me away.\nThey took me into a place up the peninsula,\nwhich was not a jail and it wasn't a hospital.\nIt was just sort of a place where they put kids\nthat were-\nLike some kind of\nGV warehousing situation?\nYeah, a lot of psychologists,\nlot of locks on doors, lot of,\nlot of kids that, there were 12 of us in there\nat any one time, it was locked down.\nAnd the first night there,\nI remember I had a roommate who was like really\ninto cutting on himself, that kind of thing.\nAnd he told me, he was like, \"Look, if you just\ndo what they say here, you'll be outta here in like a month.\nAnd if you don't, you're gonna be here a very long time.\"\nAnd I remember being pretty frightened for the first time.\nAnd at that point I was like,\noh my goodness, like, this is bad.\nYou know, like, this is bad.\nI'm a long wa\n…[truncated]",
+        "entities": [],
+        "topics": [
+          "Rich Roll Podcast (Huberman)",
+          "Podcast"
+        ],
+        "tone_signals": [],
+        "structure_signals": [
+          "claim_count:0",
+          "narrative_bullet_count:0",
+          "transcript_word_count:15344"
+        ]
+      },
+      "narrative_lens": {
+        "lens": "narrative",
+        "core_story": "Rich Roll Podcast (Huberman) is a claim about who gets protected when incentives and rules collide — and the episode must pick a side. Listeners will hear policy, personal commentary, and rhetorical claims in parallel; that fragmentation makes clip and takeaway packaging unreliable until edited. Before you optimize for clips: separate factual reporting from opinion, flag what still needs verification, then choose one thread worth defending in public.",
+        "stakes": [],
+        "dynamics": [
+          "Theme 1: The show is treating this as actionable for the listener, not background noise.",
+          "Theme 2: The show is treating this as actionable for the listener, not background noise.",
+          "Theme 3: The show is treating this as actionable for the listener, not background noise."
+        ],
+        "memory_and_perception": [],
+        "open_loops": [
+          "If you had to cut half this episode and keep one idea, what stays - and what becomes its own episode: Rich Roll Podcast (Huberman)?",
+          "What metric would prove the opening worked - and what would you change if it didn't?",
+          "What would a skeptical listener say you assumed without saying?"
+        ],
+        "clip_hooks_narrative": []
+      },
+      "analytical_lens": {
+        "lens": "analytical",
+        "thesis_candidate": "Rich Roll Podcast (Huberman) is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+        "claims": [],
+        "incentives_and_stakes": [],
+        "logic_gaps": [],
+        "verification_moves": [],
+        "clip_hooks_analytical": []
+      },
+      "synthesis": {
+        "lens": "synthesis",
+        "episode_type_used": "NARRATIVE",
+        "weights_used": {
+          "narrative": 0.8,
+          "analytical": 0.2
+        },
+        "core_positioning": "Lead with story, stakes, and human tension (80% narrative weight); keep analytical pressure as guardrails (20%). Rich Roll Podcast (Huberman) is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+        "collision_notes": [
+          "Sparse brief hooks for both lenses — expand transcript grounding before packaging."
+        ],
+        "differentiation_line": "Rich Roll Podcast (Huberman) is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+        "execution_bias": {
+          "clips": "Weight clips toward human beats and tension.",
+          "actions": "Weight next actions toward deepening the story and follow-up interviews."
+        },
+        "risk_flags": []
+      },
+      "engine_prompts": {
+        "narrative": "You are the Narrative Lens for a podcast intelligence system.\n\nYou receive a single normalized input object (shared across all engines). Treat it as\nthe only source of truth; do not invent entities or topics not grounded there.\n\nShape (fields may be empty arrays when unknown):\n{{\n  \"title\": \"...\",\n  \"summary\": \"...\",\n  \"transcript\": \"...\",\n  \"entities\": [],\n  \"topics\": [],\n  \"tone_signals\": [],\n  \"structure_signals\": []\n}}\n\nYour job:\n- Surface story, dynamics, memory, stakes, and human tension.\n- Name who is involved and how relationships or roles shift (when inferable from input).\n- Call out beats: setup, turn, resolution or open loop — even if implicit.\n- Prefer concrete scene language over abstract labels.\n\nHard rules:\n- Do not fabricate events absent from transcript/summary; you may infer *dynamics* only\n  when strongly supported by repeated themes or explicit speaker intent.\n- Do not optimize for \"sounding smart\"; optimize for clarity of what happened emotionally\n  and interpersonally.\n- If the input is thin, say what is thin and what is still fair to infer (one short line).\n\nOutput (JSON only, no markdown fences):\n{\n  \"lens\": \"narrative\",\n  \"core_story\": \"2–4 sentences\",\n  \"stakes\": [\"max 4 bullets\"],\n  \"dynamics\": [\"max 5 bullets: relationships, power, vulnerability, conflict, alliance\"],\n  \"memory_and_perception\": [\"max 4 bullets: how speakers frame past, identity, blame, hope\"],\n  \"open_loops\": [\"max 3 unresolved tensions or unanswered questions grounded in input\"],\n  \"clip_hooks_narrative\": [\"max 3: moment types worth cutting for story — not raw timestamps unless given\"]\n}",
+        "analytical": "You are the Analytical Lens for a podcast intelligence system.\n\nYou receive a single normalized input object (shared across all engines). Treat it as\nthe only source of truth; do not invent entities or topics not grounded there.\n\nShape (fields may be empty arrays when unknown):\n{{\n  \"title\": \"...\",\n  \"summary\": \"...\",\n  \"transcript\": \"...\",\n  \"entities\": [],\n  \"topics\": [],\n  \"tone_signals\": [],\n  \"structure_signals\": []\n}}\n\nYour job:\n- Extract defensible claims, incentives, mechanisms, and what would falsify them.\n- Separate evidence-supported assertions from belief or interpretation (tag each).\n- Surface counterarguments, missing proof, and logical leaps.\n\nHard rules:\n- Every non-trivial claim must tie to something in transcript/summary (paraphrase is fine).\n- Prefer \"what we can say\" over \"nice sounding thesis\".\n- If evidence is anecdotal only, say so explicitly.\n\nOutput (JSON only, no markdown fences):\n{\n  \"lens\": \"analytical\",\n  \"thesis_candidate\": \"one sentence: the strongest arguable through-line (may be qualified)\",\n  \"claims\": [\n    {\n      \"text\": \"one sentence\",\n      \"kind\": \"fact|interpretation|belief\",\n      \"support\": \"brief: what in the input backs this (or 'thin / anecdotal only')\",\n      \"falsifier\": \"what would prove this wrong or incomplete\"\n    }\n  ],\n  \"incentives_and_stakes\": [\"max 4 bullets: who benefits, what is being sold, reputational risk\"],\n  \"logic_gaps\": [\"max 4: leaps, missing premises, correlation vs causation, etc.\"],\n  \"verification_moves\": [\"max 4 concrete checks: data, expert, document, counter-interview\"],\n  \"clip_hooks_analytical\": [\"max 3: contradiction, strong claim, or methodological tension worth cutting\"]\n}",
+        "synthesis": "You are the Synthesis Layer. You receive:\n1) The same normalized input object (source of truth)\n2) JSON output from the Narrative Lens\n3) JSON output from the Analytical Lens\n4) Episode classification: NARRATIVE | ANALYTICAL | HYBRID\n5) Weights: narrative_weight and analytical_weight (0–1, sum to 1)\n\nYou receive a single normalized input object (shared across all engines). Treat it as\nthe only source of truth; do not invent entities or topics not grounded there.\n\nShape (fields may be empty arrays when unknown):\n{{\n  \"title\": \"...\",\n  \"summary\": \"...\",\n  \"transcript\": \"...\",\n  \"entities\": [],\n  \"topics\": [],\n  \"tone_signals\": [],\n  \"structure_signals\": []\n}}\n\nYour job:\n- Do NOT duplicate long lists from the two lenses; reference them by theme.\n- Produce collisions: where story framing and evidence/logic agree or disagree.\n- State one clear \"so what\" for a creator or editor (what to do with this episode).\n\nWeighting:\n- Core positioning and execution guidance should reflect the dominant lens without\n  silencing the secondary lens.\n- If classification is NARRATIVE: lead with human/story implications; analytical as guardrails.\n- If ANALYTICAL: lead with argument integrity; narrative as context for why audiences care.\n- If HYBRID: explicit 50/50 balance in the synthesis paragraphs.\n\nHard rules:\n- If the analytical lens says evidence is thin, the synthesis must not pretend certainty.\n- If the narrative lens flags open loops, the synthesis should not \"close\" them without support.\n- No generic praise; every sentence should earn its place.\n\nOutput (JSON only, no markdown fences):\n{\n  \"lens\": \"synthesis\",\n  \"episode_type_used\": \"NARRATIVE|ANALYTICAL|HYBRID\",\n  \"weights_used\": { \"narrative\": 0.0, \"analytical\": 0.0 },\n  \"core_positioning\": \"2–3 sentences; dominant-lens voice\",\n  \"collision_notes\": [\n    \"max 4: each states agreement or tension between narrative and analytical reads\"\n  ],\n  \"differentiation_line\": \"one sentence: the sharpest honest positioning line for marketing or packaging\",\n  \"execution_bias\": {\n    \"clips\": \"one line: lean narrative-heavy vs analytical-heavy and why\",\n    \"actions\": \"one line: lean narrative-heavy vs analytical-heavy and why\"\n  },\n  \"risk_flags\": [\"max 3: misframing risks if grounding is weak\"]\n}"
+      }
+    },
+    "coach_report": {
+      "signal_mode": "LOW_SIGNAL",
+      "output_mode": "diagnostic",
+      "episode_diagnosis": {
+        "mode": "LOW_SIGNAL",
+        "body": [
+          "**Report output:** Diagnostic mode — spin-off, clip, and habit-action blocks below are review-first, not publish-ready packaging.",
+          "**Why diagnostic:** Episode classified LOW_SIGNAL (thin thesis or weak claims) — prescriptive packaging withheld.",
+          "**Thesis (one sentence):** Rich Roll Podcast (Huberman) is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+          "**Honest read:** The transcript reads exploratory or thin for one arc — or SoapBoxx could not extract a claim without inventing it.",
+          "**Competing threads:** His work has been published in top journals like Nature. | He's been featured in publications like Time, Scientific America and the BBC. | He's here today to discuss the brain, to discuss growth mindset, how to focus, how to navigate the stressful times and many other subjects.",
+          "**Retention:** One thesis → one repeatable idea for clips and shares."
+        ]
+      },
+      "thesis_quality": null,
+      "episode_thesis": "Rich Roll Podcast (Huberman) is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+      "personalized_intro": "*For **Rich Roll**'s show - **Podcast** format - tailored to this episode:*",
+      "contrarian_hook": {
+        "title": "The angle listeners might miss",
+        "body": "The edit points at: No single thesis line yet; competing ideas may split attention. — the hidden angle is often **who benefits** if listeners stay emotional but never name the rule, sponsor, or metric. Say that actor once, on mic."
+      },
+      "uncomfortable_insight": {
+        "title": "Where the argument breaks under pressure",
+        "body": "The tape has more *topics* than *proof* — listeners may agree in the room and still repeat nothing specific tomorrow. The pressure point is: No single thesis line yet; competing ideas may split attention. If your thesis is “Rich Roll Podcast (Huberman) is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.”, ask what would make you *wrong* on mic — not just what would make you sound fair. Someone scanning only the title may expect a harder verdict on “Rich Roll Podcast (Huberman)” than the conversation actually delivers."
+      },
+      "claim_stakes": [],
+      "themes": [
+        {
+          "label": "Theme 1",
+          "discussed": "Rich Roll Podcast (Huberman)",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        },
+        {
+          "label": "Theme 2",
+          "discussed": "His work has been published in top journals like Nature.",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        },
+        {
+          "label": "Theme 3",
+          "discussed": "He's been featured in publications like Time, Scientific America and the BBC.",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        },
+        {
+          "label": "Theme 4",
+          "discussed": "He's here today to discuss the brain, to discuss growth mindset, how to focus, how to navigate the stressful times and many other subjects.",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        }
+      ],
+      "what_worked": [
+        "Topic angles that could anchor a thesis once you pick one main line."
+      ],
+      "where_it_breaks": {
+        "issues": [
+          "No single thesis line yet; competing ideas may split attention.",
+          "Hard for listeners to know what to clip or share."
+        ],
+        "rule": "One episode = one decision: pick the tradeoff you are defending, then cut everything that does not serve it."
+      },
+      "opportunities": {
+        "spinoff_title": "Defer spin-off planning until one thesis thread survives an edit pass.",
+        "spinoff_structure": "Not assigned — the episode reads as multi-threaded or under-verified for a packaged spin-off brief.",
+        "clip_moments": [
+          "No high-signal auto clip picks. No timestamped evidence rows — skim the transcript for moments that pair one clear claim with one concrete detail.",
+          "Skip outros, transitions, and lyric fragments; favor one claim plus one checkable detail."
+        ],
+        "segment_idea": "Next recording: a **validation block** — state the strongest public-facing claim, what would change your mind, and what primary source you would accept."
+      },
+      "follow_up_questions": [
+        "If you had to cut half this episode and keep one idea, what stays - and what becomes its own episode: Rich Roll Podcast (Huberman)?",
+        "What metric would prove the opening worked - and what would you change if it didn't?",
+        "What would a skeptical listener say you assumed without saying?"
+      ],
+      "guest_strategy": {
+        "intro": "Diagnostic bookings: prioritize verification, sourcing, and steel-manned counterarguments — not generic motivation angles.",
+        "guests": [
+          {
+            "guest_type": "Reporter or records researcher",
+            "adds": "Primary documents and timelines — reduces reliance on rhetorical peaks alone."
+          },
+          {
+            "guest_type": "Friendly skeptic (peer)",
+            "adds": "Surfaces the strongest counter-case before you publish or clip."
+          }
+        ]
+      },
+      "segment_upgrade": "**Diagnostic close (90s):** Name the single sentence you'd defend if quoted; flag what still needs sourcing before you optimize for distribution.",
+      "immediate_fix_plan": [
+        "Tag assertions as reporting vs. inference vs. opinion before clipping.",
+        "Write down two primary sources you want before repeating the hottest claim in public.",
+        "Isolate segments that mix incompatible frames (news vs. rally vs. personal story)."
+      ],
+      "bottom_line": {
+        "good": "There is usable tension for an informed audience; the gap is defensibility and arc — not chemistry or effort.",
+        "must_change": "Stop expanding with growth packaging on a fragmented spine — verify or edit before you clip.",
+        "if_fixed": "Clips and repurposing work once one arc is legible and claims are labeled for the audience you want."
+      },
+      "meta": {
+        "title": "Rich Roll Podcast (Huberman)",
+        "transcript_words": 14708
+      }
+    },
+    "episode_snapshot": {
+      "title": "Rich Roll Podcast (Huberman)",
+      "creator": "Rich Roll",
+      "genre": "Podcast",
+      "primary_topic": "Rich Roll Podcast (Huberman)"
+    },
+    "narrative_reconstruction": {
+      "core_thesis": "Rich Roll Podcast (Huberman) is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+      "supporting_mechanism": "Listeners will hear policy, personal commentary, and rhetorical claims in parallel; that fragmentation makes clip and takeaway packaging unreliable until edited.",
+      "practical_translation": "Before you optimize for clips: separate factual reporting from opinion, flag what still needs verification, then choose one thread worth defending in public.",
+      "reconstructed": true,
+      "diagnostic": true
+    },
+    "clean_insights": [
+      "His work has been published in top journals like Nature.",
+      "He's been featured in publications like Time, Scientific America and the BBC.",
+      "He's here today to discuss the brain, to discuss growth mindset, how to focus, how to navigate the stressful times and many other subjects."
+    ],
+    "evidence_mapping": [
+      {
+        "id": "c1",
+        "claim": "You know, I think that I'm so grateful for those years.",
+        "evidence": "You know, I think that I'm so grateful for those years. I wouldn't wish them on any kid, because I think having a secure, loving environment at home is so key.",
+        "type": "rule_anchor",
+        "strength": 6,
+        "claim_strength": "moderate",
+        "primary": true
+      },
+      {
+        "id": "c2",
+        "claim": "I think that's like an 80s discussion or earlier.",
+        "evidence": "I think that's like an 80s discussion or earlier. And I think it would take us down the wrong track.",
+        "type": "rule_anchor",
+        "strength": 6,
+        "claim_strength": "moderate"
+      }
+    ],
+    "strategies": [
+      {
+        "insight": "His work has been published in top journals like Nature.",
+        "application": "Convert this into one weekly test: His work has been published in top journals like Nature.",
+        "content_angle": "Use this as a segment hook, then pressure-test it with one counterexample."
+      },
+      {
+        "insight": "He's been featured in publications like Time, Scientific America and the BBC.",
+        "application": "Convert this into one weekly test: He's been featured in publications like Time, Scientific America and the BBC.",
+        "content_angle": "Use this as a segment hook, then pressure-test it with one counterexample."
+      },
+      {
+        "insight": "He's here today to discuss the brain, to discuss growth mindset, how to focus, how to navigate the stressful times and many other subjects.",
+        "application": "Convert this into one weekly test: He's here today to discuss the brain, to discuss growth mindset, how to focus, how to navigate t…",
+        "content_angle": "Use this as a segment hook, then pressure-test it with one counterexample."
+      }
+    ],
+    "engagement_questions": {},
+    "guests": [
+      {
+        "guest": "Behavioral Psychologist",
+        "role": "Behavioral Psychologist",
+        "why_this_episode": "Validates or challenges the thesis: No dominant thesis line — the episode splits across competing threads rather tha…",
+        "target_claim": "No dominant thesis line — the episode splits across competing threads rather than one defensible arc.",
+        "angle": "science vs self-help framing"
+      },
+      {
+        "guest": "Operator / Founder",
+        "role": "Operator / Founder",
+        "why_this_episode": "Tests execution under real constraints and tradeoffs.",
+        "target_claim": "No dominant thesis line — the episode splits across competing threads rather than one defensible arc.",
+        "angle": "what actually works in production"
+      },
+      {
+        "guest": "Skeptical Domain Expert",
+        "role": "Skeptical Domain Expert",
+        "why_this_episode": "Challenges assumptions and surfaces failure cases the host may miss.",
+        "target_claim": "No dominant thesis line — the episode splits across competing threads rather than one defensible arc.",
+        "angle": "contrarian quality control"
+      },
+      {
+        "guest": "Implementation Coach",
+        "role": "Implementation Coach",
+        "why_this_episode": "Mechanism is implied but not explicit.",
+        "target_claim": "No dominant thesis line — the episode splits across competing threads rather than one defensible arc.",
+        "angle": "turn insight into a repeatable weekly action plan"
+      }
+    ],
+    "segments": [
+      {
+        "segment_title": "You know, I think that I'm so grateful for those years.",
+        "trigger_clip": null,
+        "host_angle": "",
+        "guest_angle": "",
+        "goal": "Develop this thread with explicit listener takeaway."
+      },
+      {
+        "segment_title": "I think that's like an 80s discussion or earlier.",
+        "trigger_clip": null,
+        "host_angle": "",
+        "guest_angle": "",
+        "goal": "Develop this thread with explicit listener takeaway."
+      }
+    ],
+    "takeaway": "Diagnostic mode: verify before you package — pick one thread, label fact vs. opinion, then decide what is safe to clip or repeat.",
+    "analytics_actionable": {
+      "what_worked": [
+        "Topic angles that could anchor a thesis once you pick one main line."
+      ],
+      "what_failed": [
+        "No single thesis line yet; competing ideas may split attention.",
+        "Hard for listeners to know what to clip or share."
+      ],
+      "next_move": [
+        "Pick one thesis before you hit record; queue other topics for later episodes.",
+        "Open with one story or number, not a topic list.",
+        "Close with one test: what you'll measure and what would change your mind."
+      ]
+    },
+    "claims": [],
+    "output_mode": "diagnostic",
+    "meta": {
+      "title": "Rich Roll Podcast (Huberman)",
+      "creator": "Rich Roll",
+      "genre": "Podcast",
+      "generated_at": "2026-04-16T00:00:01Z"
+    },
+    "report_readiness": {
+      "band": "minimal",
+      "notes": [
+        "No claims were extracted from the episode brief.",
+        "Brief is classified as LOW_SIGNAL (thin thesis or weak / few claims).",
+        "Quality gate: long transcript but very few claims — extraction may be under-firing."
+      ],
+      "suggested_actions": [
+        "Re-run with a richer brief pass or enable Ollama (SOAPBOXX_OLLAMA_MODEL).",
+        "Tighten one thesis line and add timestamped examples in the source."
+      ],
+      "metrics": {
+        "transcript_word_count": 14708,
+        "claim_count": 0,
+        "evidence_row_count": 0,
+        "signal_mode": "LOW_SIGNAL"
+      },
+      "quality_gates": {
+        "force_diagnostic": false,
+        "notes": [
+          "Quality gate: long transcript but very few claims — extraction may be under-firing."
+        ],
+        "title_topic_coherence": 1.0
+      },
+      "output_mode": "diagnostic",
+      "diagnostic_reasons": [
+        "Episode classified LOW_SIGNAL (thin thesis or weak claims) — prescriptive packaging withheld."
+      ]
+    }
+  },
+  "workflow_report": null,
+  "blueprint_v1": null,
+  "markdown_export": "# SoapBoxx Episode Report\n\n## Podcast Performance & Growth Intelligence\n\n**Title:** Rich Roll Podcast (Huberman)\n**Show / creator:** Rich Roll\n**Genre:** Podcast\n**Positioning:** A podcast performance and growth intelligence layer\n\n## Podcast Performance Insight\n> Strong topic, but the episode keeps shifting claims instead of defending one argument. Reframe around one claim and engagement rises.\n\n## Snapshot\n- Score: 6 / 10\n- Signal: Moderate\n- Diagnosis: Stop expanding with growth packaging on a fragmented spine — verify or edit before you clip.\n- Core problem: The episode lacks a clear argument, leading to fragmentation and decreased engagement.\n\n## Core Breakdown\n**Thesis:** Rich Roll Podcast (Huberman) is a claim about who gets protected when incentives and rules collide.\n\n### Claims\n\n## Tension Call\n- This episode treats this as true: Rich Roll Podcast (Huberman) is a claim about who gets protected when incentives and rules collide.\n- But the stronger position is this: Rich Roll Podcast (Huberman) is a claim about who gets protected when incentives and rules collide.\n\n## What's Working\n- His work has been published in top journals like Nature.\n- He's been featured in publications like Time, Scientific America, and the BBC.\n- He discusses topics such as growth mindset, focus, and navigating stressful times.\n\n## What's Missing\n- The episode lacks a clear argument, leading to fragmentation and decreased engagement.\n- Clips and repurposing work once one arc is legible and claims are labeled for the audience you want.\n- The close ends without one explicit listener action.\n\n## If You Had to Act Anyway\n- Rebuild the open so the listener gets this thesis in one beat: Rich Roll Podcast (Huberman) is a claim about who gets protected when incentives and rules collide.\n- Do not ship clip packaging until one cut clearly carries this claim: You know, I think that I'm so grateful for those years.\n- Fix this before publish: Stop expanding with growth packaging on a fragmented spine — verify or edit before you clip.\n\n## 1-Line Fix\nIf this episode were reframed around a clear argument and structured for tension, it would become significantly more engaging and shareable.",
+  "warnings": [
+    "primary_topic was empty — defaulted to title or first claim.",
+    "workflow_report attachment failed: strategist derivation blocked (insufficient signal): FAIL: evidence rows 0 < min_evidence_rows 2; FAIL: segments 0 < min_segments 1"
+  ],
+  "model": "ollama:llama3.1:8b",
+  "workflow_version": "3"
+}

@@ -1,0 +1,61 @@
+{
+  "batch_size": 5,
+  "skipped": [],
+  "results_sorted": [
+    {
+      "id": "DfTU5LA_kw8",
+      "title": "Joe Rogan Experience #2138 - Tucker Carlson",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "Under-specified evidence for the strongest assertions.",
+      "claims_count": 1,
+      "anchors_count": 1,
+      "llm_used": false
+    },
+    {
+      "id": "SwQhKFMxmDY",
+      "title": "Rich Roll Podcast - Andrew Huberman",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "Under-specified evidence for the strongest assertions.",
+      "claims_count": 1,
+      "anchors_count": 1,
+      "llm_used": false
+    },
+    {
+      "id": "PDiCcQyQVnI",
+      "title": "Club Shay Shay - Chris Tucker",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "Under-specified evidence for the strongest assertions.",
+      "claims_count": 1,
+      "anchors_count": 1,
+      "llm_used": false
+    },
+    {
+      "id": "Bb-eLRjU7uQ",
+      "title": "Conan O'Brien Needs A Friend - Elizabeth Banks",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "Under-specified evidence for the strongest assertions.",
+      "claims_count": 1,
+      "anchors_count": 1,
+      "llm_used": false
+    },
+    {
+      "id": "wm3VMuTK2Z4",
+      "title": "Meet the Press Full Episode",
+      "overall_score": 7,
+      "signal_strength": "Moderate",
+      "mode": "interpretive",
+      "core_problem": "Under-specified evidence for the strongest assertions.",
+      "claims_count": 1,
+      "anchors_count": 1,
+      "llm_used": false
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "Bb-eLRjU7uQ",
+  "title": "Conan O'Brien Needs A Friend - Elizabeth Banks",
+  "ollama_model": "llama3.2:3b",
+  "overall_score": 7,
+  "signal_strength": "Moderate",
+  "mode": "interpretive",
+  "core_problem": "The hosts' assertion that camaraderie and rivalry can coexist is not adequately supported by concrete evidence, leading to a lack of clear direction and tension in the episode.",
+  "thesis_preview": "The hosts assert that camaraderie and rivalry can coexist.",
+  "conviction_preview": "The hosts' assertion that camaraderie and rivalry can coexist is not supported by concrete evidence, and this the episode keeps resetting its point instead of d",
+  "claims_count": 1,
+  "anchors_count": 1,
+  "llm_used": true
+}

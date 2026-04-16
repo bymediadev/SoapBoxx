@@ -1,0 +1,32 @@
+{
+  "batch_size": 3,
+  "results_sorted": [
+    {
+      "id": "DfTU5LA_kw8",
+      "title": "Joe Rogan Experience #2138 - Tucker Carlson",
+      "score": null,
+      "score_label": null,
+      "mode": null,
+      "core_problem": "Under-specified evidence for the strongest assertions.",
+      "anchor_count": 0
+    },
+    {
+      "id": "SwQhKFMxmDY",
+      "title": "Rich Roll Podcast - Andrew Huberman",
+      "score": null,
+      "score_label": null,
+      "mode": null,
+      "core_problem": "Under-specified evidence for the strongest assertions.",
+      "anchor_count": 0
+    },
+    {
+      "id": "Bb-eLRjU7uQ",
+      "title": "Conan O'Brien Needs A Friend - Elizabeth Banks",
+      "score": null,
+      "score_label": null,
+      "mode": null,
+      "core_problem": "Under-specified evidence for the strongest assertions.",
+      "anchor_count": 0
+    }
+  ]
+}

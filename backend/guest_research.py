@@ -938,14 +938,19 @@ Information about {company_name}'s notable achievements or challenges is not cur
                     content_data = wiki_content_resp.json()
                     if "query" in content_data and "search" in content_data["query"]:
                         for item in content_data["query"]["search"][:3]:
+                            # External API fields can occasionally be non-string; coerce defensively
+                            # so prompt-building/search ranking never crashes the workflow.
+                            title_str = str(item.get("title", query) or "")
+                            snippet_str = str(item.get("snippet", "") or "")
                             results.append(
                                 {
-                                    "title": item.get("title", query),
-                                    "snippet": item.get("snippet", "")
-                                    .replace('<span class="searchmatch">', "")
+                                    "title": title_str,
+                                    "snippet": snippet_str.replace(
+                                        '<span class="searchmatch">', ""
+                                    )
                                     .replace("</span>", "")[:200]
                                     + "...",
-                                    "link": f"https://en.wikipedia.org/wiki/{item.get('title', '').replace(' ', '_')}",
+                                    "link": f"https://en.wikipedia.org/wiki/{title_str.replace(' ', '_')}",
                                     "displayLink": "wikipedia.org",
                                     "fallback": True,
                                     "source": "wikipedia_content",

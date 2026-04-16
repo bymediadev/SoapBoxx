@@ -7,6 +7,9 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+from _pytest.outcomes import Failed, Skipped
+
 # Add backend to path
 sys.path.insert(0, str(Path("backend")))
 
@@ -22,7 +25,7 @@ def test_podchaser():
 
         if not apis.podchaser_key:
             print("❌ Podchaser API key not configured")
-            return False
+            pytest.skip("Podchaser API key not configured")
 
         print("✅ Podchaser API key found!")
 
@@ -63,13 +66,19 @@ def test_podchaser():
                 print("   No search results found (this might be normal)")
 
         print("\n🎉 Podchaser API tests completed!")
-        return True
 
+    except Skipped:
+        raise
     except Exception as e:
         print(f"❌ Test failed with error: {e}")
-        return False
+        pytest.fail(str(e))
 
 
 if __name__ == "__main__":
-    success = test_podchaser()
-    sys.exit(0 if success else 1)
+    try:
+        test_podchaser()
+    except Skipped:
+        sys.exit(0)
+    except Failed:
+        sys.exit(1)
+    sys.exit(0)

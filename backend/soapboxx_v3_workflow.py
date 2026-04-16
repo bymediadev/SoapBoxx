@@ -15,11 +15,15 @@ guests, segments, and analytics (`metadata.workflow_mode` = ``local+ai``).
 - Each successful run adds ``markdown_export`` (unified numbered markdown) to the workflow JSON for scripts/CI — not wired to the PyQt main window.
 - Follow-up questions (when AI is on) use **claim + evidence + local transcript window + episode meta**, plus an optional second **batch sharpen** pass. Set ``SOAPBOXX_WORKFLOW_SHARPEN_FU=0`` to disable only the sharpen pass (saves one LLM call).
 - **Quality gate:** if the transcript is below ``SOAPBOXX_WORKFLOW_MIN_WORDS`` (default 200), or line-level uniqueness falls below ``SOAPBOXX_WORKFLOW_MIN_LINE_UNIQUENESS`` (default 0.22), multi-step enrichment is skipped in favor of **one** ``enrich_workflow_report_minimal`` call. Set ``SOAPBOXX_WORKFLOW_SKIP_GATE=1`` to always run full enrichment.
+- **Reality check (v3):** after ``report_v3`` is built, ``soapboxx_v3_workflow_local`` runs ``report_reality_checks.validate_reality_golden`` using ``backend/data/v3_reality_expected.json`` by default. Set ``SOAPBOXX_V3_REALITY_RULES`` to a JSON path to override; ``SOAPBOXX_V3_REALITY_CHECK=0`` to skip. Results are stored on ``metadata.v3_reality_check`` and echoed into ``metadata.source_warnings``.
 
 **Alternate:** ``use_cloud_llm=True`` — AI-only pipeline (`soapboxx_v3_workflow_cloud`), no v3 coach merge.
 
 **LLM:** ``SOAPBOXX_OLLAMA_MODEL`` + ``OLLAMA_HOST`` (default http://127.0.0.1:11434) — Ollama only.
-Ollama uses JSON mode for structured steps.
+Ollama uses JSON mode for structured steps. Optional: ``SOAPBOXX_OLLAMA_NUM_CTX`` / ``OLLAMA_NUM_CTX`` (context),
+``SOAPBOXX_OLLAMA_TOP_P``. **Editorial pass** on unified markdown: ``maybe_editorial_pass_unified_markdown`` — on by
+default when a model is set (disable with ``SOAPBOXX_EDITORIAL_PASS=0``). CLI applies it when writing JSON;
+``generate_network_brief_v3`` applies it to the final ``markdown_export`` and syncs ``workflow_report``.
 """
 
 from __future__ import annotations
@@ -27,9 +31,9 @@ from __future__ import annotations
 import json
 import os
 import re
-import urllib.error
-import urllib.request
+import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 try:
@@ -60,6 +64,14 @@ try:
 except ImportError:
     from episode_intelligence import _clean_claim_text
 
+try:
+    from .guest_generation_decision import gather_issue_blob_for_guests, should_generate_guests
+except ImportError:
+    from guest_generation_decision import (  # type: ignore
+        gather_issue_blob_for_guests,
+        should_generate_guests,
+    )
+
 REQUIRED_QUESTION_TYPES = frozenset({"counter", "validation", "application"})
 
 # Structured workflow JSON is v3; distinct from the v2 compact brief JSON in episode_intelligence.
@@ -73,6 +85,106 @@ def _apply_workflow_version_metadata(meta: Dict[str, Any]) -> None:
     """Stamp workflow outputs so integrations know this is the primary v3 workflow spec."""
     meta["workflow_spec_version"] = WORKFLOW_SPEC_VERSION
     meta["primary_episode_workflow"] = True
+
+
+def _derive_structure_state(evidence_rows: int, segments: int) -> str:
+    """Compatibility wrapper: delegated to snapshot evaluator helpers."""
+    try:
+        from .evaluation_pipeline import derive_structure_state
+    except ImportError:
+        from evaluation_pipeline import derive_structure_state  # type: ignore
+    return derive_structure_state(evidence_rows, segments)
+
+
+def _compute_structure_diagnostics(
+    workflow_report: Dict[str, Any], report_v3: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Compatibility wrapper: delegated to snapshot evaluator helpers."""
+    try:
+        from .evaluation_pipeline import build_evaluation_snapshot, evaluate_snapshot
+    except ImportError:
+        from evaluation_pipeline import build_evaluation_snapshot, evaluate_snapshot  # type: ignore
+    wf = workflow_report if isinstance(workflow_report, dict) else {}
+    r3 = report_v3 if isinstance(report_v3, dict) else {}
+    snap = build_evaluation_snapshot(wf, r3, {"strict_export_enabled": True})
+    ev = evaluate_snapshot(snap)
+    return dict(ev.get("structure_diagnostics") or {})
+
+
+def _attach_structure_diagnostics(
+    meta_out: Dict[str, Any], workflow_report: Dict[str, Any], report_v3: Dict[str, Any]
+) -> None:
+    """Attach observational structure telemetry to workflow metadata."""
+    diag = _compute_structure_diagnostics(workflow_report, report_v3)
+    meta_out["structure_state"] = str(diag.get("structure_state") or "FAIL")
+    meta_out["structure_diagnostics"] = diag
+
+
+def _v3_reality_check_enabled() -> bool:
+    raw = os.getenv("SOAPBOXX_V3_REALITY_CHECK")
+    if raw is None:
+        return True
+    return raw.strip().lower() not in ("0", "false", "no", "off")
+
+
+def _run_v3_reality_check_into_meta(
+    r3: Dict[str, Any],
+    transcript: str,
+    meta_out: Dict[str, Any],
+    source_warnings: List[str],
+) -> None:
+    """Load reality rules, validate ``report_v3``, attach ``metadata.v3_reality_check`` + warnings."""
+    if not _v3_reality_check_enabled():
+        return
+    try:
+        try:
+            from . import report_reality_checks as rrc
+        except ImportError:
+            import report_reality_checks as rrc  # type: ignore
+    except ImportError:
+        source_warnings.append("v3_reality: report_reality_checks module not available")
+        return
+
+    custom = (os.getenv("SOAPBOXX_V3_REALITY_RULES") or "").strip()
+    rules: Dict[str, Any]
+    rules_label: str
+    if custom:
+        if not os.path.isfile(custom):
+            source_warnings.append(f"v3_reality: SOAPBOXX_V3_REALITY_RULES file missing: {custom}")
+            return
+        try:
+            rules = rrc.load_reality_rules_from_path(Path(custom).expanduser())
+            rules_label = custom
+        except Exception as e:
+            source_warnings.append(f"v3_reality: failed to load rules from {custom}: {e}")
+            return
+    else:
+        rules = rrc.load_default_reality_rules()
+        rules_label = str(rrc.default_reality_rules_path())
+        if not rules:
+            source_warnings.append(f"v3_reality: default rules file missing: {rules_label}")
+            return
+
+    tx = transcript or ""
+    fails = rrc.validate_reality_golden(r3, tx, rules)
+    ship_ok, ship_fails = rrc.would_ship_v3(r3, tx)
+    meta_out["v3_reality_check"] = {
+        "passed": len(fails) == 0,
+        "failures": fails,
+        "would_ship": ship_ok,
+        "ship_blockers": ship_fails,
+        "rules_source": rules_label,
+    }
+    # One-line summaries in source_warnings — full detail lives in metadata.v3_reality_check.
+    if fails:
+        source_warnings.append(
+            f"v3_reality: {len(fails)} expectation(s) failed — see metadata.v3_reality_check.failures"
+        )
+    if not ship_ok and ship_fails:
+        source_warnings.append(
+            f"v3_reality: would-ship bar not met ({len(ship_fails)} item(s)) — "
+            "see metadata.v3_reality_check.ship_blockers"
+        )
 
 
 if BaseModel:
@@ -129,6 +241,7 @@ def _ollama_chat(
     temperature: float = 0.2,
     system: str = "",
     json_format: bool = False,
+    stage: str = "workflow.llm",
 ) -> str:
     host = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
     model = os.getenv("SOAPBOXX_OLLAMA_MODEL", "").strip()
@@ -138,43 +251,53 @@ def _ollama_chat(
     if (system or "").strip():
         messages.append({"role": "system", "content": system.strip()})
     messages.append({"role": "user", "content": prompt})
+    ollama_opts: Dict[str, Any] = {
+        "num_predict": max_tokens,
+        "temperature": temperature,
+    }
+    _ctx = os.getenv("SOAPBOXX_OLLAMA_NUM_CTX", os.getenv("OLLAMA_NUM_CTX", "")).strip()
+    if _ctx:
+        try:
+            ollama_opts["num_ctx"] = int(_ctx)
+        except ValueError:
+            pass
+    _tp = os.getenv("SOAPBOXX_OLLAMA_TOP_P", "").strip()
+    if _tp:
+        try:
+            ollama_opts["top_p"] = float(_tp)
+        except ValueError:
+            pass
     payload: Dict[str, Any] = {
         "model": model,
         "messages": messages,
         "stream": False,
-        "options": {
-            "num_predict": max_tokens,
-            "temperature": temperature,
-        },
+        "options": ollama_opts,
     }
     if json_format:
         payload["format"] = "json"
-    data_b = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        f"{host}/api/chat",
-        data=data_b,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    timeout_s = float(os.getenv("SOAPBOXX_OLLAMA_HTTP_TIMEOUT", "900") or "900")
     try:
-        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        body = ""
         try:
-            body = (e.read() or b"").decode("utf-8", errors="replace")[:2000]
-        except Exception:
-            pass
-        hint = (
-            f"Ollama returned HTTP {e.code} for POST {host}/api/chat. "
-            "Confirm: (1) `ollama serve` is running and OLLAMA_HOST matches the API base "
-            f"(default http://127.0.0.1:11434); (2) the model exists — run `ollama list` and "
-            f"`ollama pull {model}` if needed. "
+            from .ollama_chat_http import ollama_api_chat
+            from .ollama_heartbeat import ollama_blocking_heartbeat
+        except ImportError:
+            from ollama_chat_http import ollama_api_chat  # type: ignore
+            from ollama_heartbeat import ollama_blocking_heartbeat  # type: ignore
+
+        data = ollama_api_chat(
+            host,
+            payload,
+            stage=stage,
+            component="soapboxx_workflow",
+            heartbeat_cm=ollama_blocking_heartbeat,
         )
-        if body:
-            hint += f"Response body: {body}"
-        raise RuntimeError(hint) from e
+    except Exception as e:
+        try:
+            from .ollama_chat_http import OllamaTransportError
+        except ImportError:
+            from ollama_chat_http import OllamaTransportError  # type: ignore
+        if isinstance(e, OllamaTransportError):
+            raise RuntimeError(str(e)) from e
+        raise
     return (data.get("message") or {}).get("content") or ""
 
 
@@ -186,6 +309,7 @@ def call_llm(
     system: str = "You follow instructions exactly. When asked for JSON, respond with ONLY valid JSON — no markdown fences, no commentary.",
     client: Any = None,
     json_format: bool = False,
+    stage: str = "workflow.llm",
 ) -> str:
     """Local Ollama only. Set ``SOAPBOXX_OLLAMA_MODEL``; ``client`` is ignored (compat)."""
     if not os.getenv("SOAPBOXX_OLLAMA_MODEL", "").strip():
@@ -198,10 +322,10 @@ def call_llm(
         temperature=temperature,
         system=system,
         json_format=json_format,
+        stage=stage,
     )
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8), reraise=True)
 def call_llm_with_retry(
     prompt: str,
     *,
@@ -210,7 +334,9 @@ def call_llm_with_retry(
     system: str = "You follow instructions exactly. When asked for JSON, respond with ONLY valid JSON — no markdown fences, no commentary.",
     client: Any = None,
     json_format: bool = False,
+    stage: str = "workflow.llm",
 ) -> str:
+    """Retries are handled inside :func:`_ollama_chat` / ``ollama_api_chat`` (bounded exponential)."""
     return call_llm(
         prompt,
         max_tokens=max_tokens,
@@ -218,6 +344,7 @@ def call_llm_with_retry(
         system=system,
         client=client,
         json_format=json_format,
+        stage=stage,
     )
 
 
@@ -570,6 +697,81 @@ def _llm_available() -> bool:
     return bool(os.getenv("SOAPBOXX_OLLAMA_MODEL", "").strip())
 
 
+def _editorial_pass_enabled() -> bool:
+    """
+    Optional polish pass on unified markdown (Ollama).
+
+    - ``SOAPBOXX_EDITORIAL_PASS=0`` (or ``false`` / ``no`` / ``off``): off.
+    - ``SOAPBOXX_EDITORIAL_PASS=1`` (or ``true`` / ``yes`` / ``on``): on if a model is set.
+    - **Unset:** on when ``SOAPBOXX_OLLAMA_MODEL`` is set (one light pass for real episodes).
+    """
+    v = os.getenv("SOAPBOXX_EDITORIAL_PASS", "").strip().lower()
+    if v in ("0", "false", "no", "off"):
+        return False
+    if v in ("1", "true", "yes", "on"):
+        return _llm_available()
+    return _llm_available()
+
+
+def maybe_editorial_pass_unified_markdown(
+    markdown: str,
+    meta: Optional[Dict[str, Any]] = None,
+) -> Tuple[str, bool]:
+    """
+    One editorial pass: tighten wording, fix obvious ASR artifacts, dedupe redundant bullets.
+    Requires Ollama. Returns ``(markdown, applied)``; on failure returns original markdown.
+    """
+    if not _editorial_pass_enabled() or not (markdown or "").strip():
+        return markdown, False
+    m = meta or {}
+    title = str(m.get("title") or m.get("Title") or "").strip()
+    try:
+        cap = int(os.getenv("SOAPBOXX_EDITORIAL_MAX_INPUT_CHARS", "120000") or "120000")
+    except ValueError:
+        cap = 120000
+    cap = max(8000, min(cap, 500000))
+    md_in = markdown if len(markdown) <= cap else (
+        markdown[:cap] + "\n\n*[Editorial input truncated for context limit]*\n"
+    )
+    try:
+        mt = int(os.getenv("SOAPBOXX_EDITORIAL_MAX_TOKENS", "6000") or "6000")
+    except ValueError:
+        mt = 6000
+    mt = max(1500, min(mt, 32000))
+    prompt = f"""You are an experienced podcast editor. Polish this SoapBoxx episode report markdown for a working creator.
+
+Rules:
+- Preserve all major ## / ### headings and section order; keep tables if present.
+- Fix obvious ASR/transcription glitches (broken brackets, stutter repeats).
+- Tighten the working thesis or primary topic line to one clear sentence only where the text already implies it.
+- Do not invent facts, guests, numbers, or quotes not supported by the document.
+- Remove or merge bullets that repeat the same point verbatim.
+- Output ONLY the full revised markdown document — no preamble, no closing notes.
+
+Episode title (context): {title or "(untitled)"}
+
+---
+
+{md_in}
+"""
+    try:
+        out = call_llm(
+            prompt,
+            max_tokens=mt,
+            temperature=0.22,
+            system=(
+                "You output ONLY the revised markdown. No markdown fences around the whole document. "
+                "No commentary before or after."
+            ),
+            json_format=False,
+        ).strip()
+        if len(out) < min(400, len(markdown) // 4) and len(markdown) > 800:
+            return markdown, False
+        return out, True
+    except Exception:
+        return markdown, False
+
+
 def _workflow_ai_enrichment_enabled() -> bool:
     return os.getenv("SOAPBOXX_WORKFLOW_USE_AI", "1").strip().lower() not in (
         "0",
@@ -745,6 +947,10 @@ def validate_json(report: Dict[str, Any], *, strict: bool = True) -> Dict[str, A
     """
     Validate v3 JSON structure. With strict=False, only checks types and refs when evidence exists.
     """
+    md = report.get("metadata")
+    if isinstance(md, dict) and md.get("export_status") in ("insufficient_signal", "degraded"):
+        return report
+
     if WorkflowReportModel is not None:
         try:
             parsed = WorkflowReportModel.model_validate(report)
@@ -837,22 +1043,34 @@ def _attach_unified_markdown_export(
     """Add `markdown_export` for CLI/integrations; not used by the desktop main window."""
     try:
         from .episode_report_v3 import render_unified_episode_export_markdown
+        from .episode_progress import (
+            attach_export_telemetry_to_metadata,
+            persist_episode_progress_after_export,
+            prepare_bundle_for_export,
+        )
     except ImportError:
         from episode_report_v3 import render_unified_episode_export_markdown
+        from episode_progress import (  # type: ignore
+            attach_export_telemetry_to_metadata,
+            persist_episode_progress_after_export,
+            prepare_bundle_for_export,
+        )
 
     m = meta or {}
-    report["markdown_export"] = render_unified_episode_export_markdown(
-        {
-            "report_v3": report_v3 or {},
-            "workflow_report": report,
-            "meta": {
-                "generated_at": m.get("generated") or m.get("generated_at"),
-                "title": m.get("title"),
-                "creator": m.get("creator"),
-                "genre": m.get("genre"),
-            },
-        }
-    )
+    bundle = {
+        "report_v3": report_v3 or {},
+        "workflow_report": report,
+        "meta": {
+            "generated_at": m.get("generated") or m.get("generated_at"),
+            "title": m.get("title"),
+            "creator": m.get("creator"),
+            "genre": m.get("genre"),
+        },
+    }
+    prepare_bundle_for_export(bundle)
+    attach_export_telemetry_to_metadata(m, bundle)
+    report["markdown_export"] = render_unified_episode_export_markdown(bundle)
+    persist_episode_progress_after_export(bundle)
 
 
 def attach_summary_and_score(report: Dict[str, Any]) -> Dict[str, Any]:
@@ -860,6 +1078,21 @@ def attach_summary_and_score(report: Dict[str, Any]) -> Dict[str, Any]:
     Add `summary` (one-line string) and `score` (0–100) for UI, doctor checks, and CI validation.
     Score is heuristic from signal_mode and weak_claims count.
     """
+    md0 = report.get("metadata")
+    if isinstance(md0, dict) and md0.get("export_status") in ("insufficient_signal", "degraded"):
+        if md0.get("export_status") == "degraded":
+            report["summary"] = (
+                "Export degraded: Ollama transport failed after retries "
+                "(see metadata.export_blockers)."
+            )
+        else:
+            report["summary"] = (
+                "Export withheld: insufficient grounded signal for a network-grade report "
+                "(see metadata.export_blockers)."
+            )
+        report["score"] = 0
+        return report
+
     sm = str(report.get("signal_mode") or "").upper().strip()
     if sm == "HIGH_SIGNAL":
         base = 82
@@ -978,6 +1211,353 @@ def _detect_weak_claims_local(evidence_map: List[Dict[str, Any]]) -> List[Dict[s
                 }
             )
     return out[:10]
+
+
+def _guest_generation_required(r3: Dict[str, Any]) -> bool:
+    """Alias for workflow internals (same rule as :func:`should_generate_guests`)."""
+    return should_generate_guests(r3)
+
+
+# Order guest archetypes for sequencing: decision-first, then tension, bridge, credibility, packaging.
+_GUEST_ARCHETYPE_PRIORITY: Tuple[str, ...] = ("structure", "tension", "application", "evidence", "packaging")
+
+_SEQUENCE_HEADINGS: Tuple[str, ...] = (
+    "Primary guest (start here)",
+    "Secondary guest (next step)",
+    "Optional guest (if scaling)",
+)
+
+
+def _archetype_priority_index(kind: str) -> int:
+    k = str(kind or "").strip().lower()
+    try:
+        return _GUEST_ARCHETYPE_PRIORITY.index(k)
+    except ValueError:
+        return 99
+
+
+def _sort_archetypes_by_priority(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Stable sort: structure → tension → application → evidence → packaging."""
+    indexed = list(enumerate(rows))
+    indexed.sort(key=lambda ie: (_archetype_priority_index(str(ie[1].get("archetype_kind") or "")), ie[0]))
+    return [r for _, r in indexed]
+
+
+def _label_archetype_sequence(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    labels = ("primary", "secondary", "optional")
+    out: List[Dict[str, Any]] = []
+    for i, r in enumerate(rows):
+        heading = _SEQUENCE_HEADINGS[i] if i < len(_SEQUENCE_HEADINGS) else f"Step {i + 1}"
+        seq = labels[i] if i < len(labels) else "optional"
+        rr = dict(r)
+        rr["guest_sequence"] = seq
+        rr["sequence_label"] = heading
+        out.append(rr)
+    return out
+
+
+def _primary_commitment_line(primary: Dict[str, Any]) -> str:
+    """One decisive line so the creator knows what to book first (no extra archetypes)."""
+    nm = str(primary.get("name") or "this archetype").strip()
+    fix = str(primary.get("what_it_fixes") or "").strip().replace("**", "")
+    fix = " ".join(fix.split())
+    if len(fix) > 160:
+        fix = fix[:159].rstrip() + "…"
+    if fix:
+        return f"**Start with this:** {nm} — this immediately targets the biggest gap: {fix}"
+    return f"**Start with this:** {nm} — book this role first, then layer the next step."
+
+
+def _next_episode_move_for_kind(archetype_kind: str) -> str:
+    """One concrete execution step for the **primary** archetype only (no LLM)."""
+    k = str(archetype_kind or "").strip().lower()
+    moves = {
+        "structure": "Break the episode into 3 segments: setup → conflict → resolution.",
+        "tension": "Introduce a direct disagreement within the first 10 minutes.",
+        "application": "End each section with ‘what this means today’ in 1–2 sentences.",
+        "evidence": "Have the guest cite one primary source and explain it live.",
+        "packaging": "Pull 2–3 standalone statements during recording for clips.",
+    }
+    return moves.get(k, moves["structure"])
+
+
+def _archetype_row_from_parts(
+    *,
+    name: str,
+    role: str,
+    why: str,
+    look_for: str,
+    fixes: str,
+    claim_id: str,
+    relevance: int = 9,
+    archetype_kind: str = "structure",
+) -> Dict[str, Any]:
+    return {
+        "name": name,
+        "title": "Guest archetype",
+        "role": role,
+        "claim_id": claim_id,
+        "angle": why,
+        "topic_angle": look_for,
+        "what_it_fixes": fixes,
+        "relevance": relevance,
+        "guest_archetype": True,
+        "archetype_kind": archetype_kind,
+    }
+
+
+def generate_guest_archetypes_from_issues(
+    r3: Dict[str, Any],
+    claim_id: str,
+    *,
+    max_archetypes: int = 3,
+) -> List[Dict[str, Any]]:
+    """
+    Deterministic “who fixes your weakness” guest types — no real names, no scraping.
+
+    Uses coach/readiness/clean_insights text plus ``primary_topic`` / ``genre`` to pick 2–3
+    archetypes, each with **why**, **what to look for**, and **what it fixes** (stored in
+    standard workflow keys + ``what_it_fixes`` for rich Markdown). The **primary** row also
+    gets ``commitment_line``, ``next_episode_move`` (one concrete recording/next-episode step),
+    and sequence labels.
+    """
+    snap = r3.get("episode_snapshot") if isinstance(r3.get("episode_snapshot"), dict) else {}
+    topic = str(snap.get("primary_topic") or snap.get("title") or "this episode").strip()
+    topic_short = topic[:140] if topic else "this episode"
+    genre = str(snap.get("genre") or "").strip().lower()
+    blob = gather_issue_blob_for_guests(r3)
+
+    def _has(*needles: str) -> bool:
+        return any(n in blob for n in needles)
+
+    candidates: List[Dict[str, Any]] = []
+
+    if _has(
+        "structure",
+        "arc",
+        "segment",
+        "chapter",
+        "narrative",
+        "drift",
+        "unclear",
+        "through-line",
+        "throughline",
+        "outline",
+        "mixed theme",
+        "mixed themes",
+        "weak structure",
+    ):
+        candidates.append(
+            _archetype_row_from_parts(
+                name="Narrative structure specialist (arc & beats)",
+                role="Structure fix",
+                why=(
+                    f"Your episode has usable material around {topic_short}, but it needs a clearer "
+                    f"narrative spine so listeners feel progression—not drift."
+                ),
+                look_for=(
+                    "Storytellers who specialize in historical arcs; authors or editors who routinely "
+                    "break content into beginning → conflict → resolution."
+                ),
+                fixes=(
+                    "Turns long-form explanation into **compelling story progression** and easier clip cuts."
+                ),
+                claim_id=claim_id,
+                archetype_kind="structure",
+            )
+        )
+
+    if _has(
+        "tension",
+        "conflict",
+        "debate",
+        "opposing",
+        "contrarian",
+        "counter",
+        "disagree",
+        "both sides",
+        "pushback",
+    ):
+        candidates.append(
+            _archetype_row_from_parts(
+                name="Contrarian or steel-manned opposing voice",
+                role="Tension fix",
+                why=(
+                    "The episode reads flat if every claim lands in the same direction—listeners engage "
+                    "when a credible counter-case is on the table."
+                ),
+                look_for=(
+                    "Experts comfortable naming the strongest opposing view *fairly*; historians with "
+                    "debated interpretations relevant to your topic."
+                ),
+                fixes=(
+                    "Creates **clip-worthy conflict**, stronger discussion, and clearer stakes."
+                ),
+                claim_id=claim_id,
+                archetype_kind="tension",
+            )
+        )
+
+    if _has(
+        "philosophy",
+        "religion",
+        "theology",
+        "abstract",
+        "meaning",
+        "relevance",
+        "today",
+        "application",
+        "drift",
+        "mixed theme",
+        "mixed themes",
+    ):
+        candidates.append(
+            _archetype_row_from_parts(
+                name="Modern application thinker (story → meaning → action)",
+                role="Relevance fix",
+                why=(
+                    f"Some threads around {topic_short} risk floating in abstraction unless someone "
+                    f"repeatedly bridges back to decisions listeners make this week."
+                ),
+                look_for=(
+                    "Educators or practitioners who translate historical lessons into modern tradeoffs; "
+                    "hosts who end segments with a concrete ‘so what now?’"
+                ),
+                fixes=(
+                    "Bridges **story → meaning → action**, improving retention and shareable takeaways."
+                ),
+                claim_id=claim_id,
+                archetype_kind="application",
+            )
+        )
+
+    if _has("evidence", "ground", "verify", "quote", "claim", "fact", "source"):
+        candidates.append(
+            _archetype_row_from_parts(
+                name="Evidence / verification partner",
+                role="Credibility fix",
+                why="When claims outrun what the tape can support, a verification-minded guest tightens what you can say out loud.",
+                look_for=(
+                    "Researchers comfortable with primary sources; beat reporters used to "
+                    "‘confirmed vs alleged’ language."
+                ),
+                fixes="Reduces credibility risk and sharpens what belongs in marketing vs the episode.",
+                claim_id=claim_id,
+                relevance=8,
+                archetype_kind="evidence",
+            )
+        )
+
+    if _has("clip", "hook", "share", "moment", "quotable", "packaging"):
+        candidates.append(
+            _archetype_row_from_parts(
+                name="Clip-first editorial producer",
+                role="Packaging fix",
+                why="Strong ideas still fail if there aren’t clean standalone moments for short-form.",
+                look_for="Editors who design segments around one beat per clip; producers who script cold-opens from transcript peaks.",
+                fixes="Surfaces **obvious cut points** and titles that match what actually happens on the tape.",
+                claim_id=claim_id,
+                relevance=8,
+                archetype_kind="packaging",
+            )
+        )
+
+    # Genre nudges (non-exclusive; still issue-driven above)
+    if genre and "history" in genre and not any("Narrative structure" in str(c.get("name")) for c in candidates):
+        candidates.insert(
+            0,
+            _archetype_row_from_parts(
+                name="Historical narrative specialist (timeline + causality)",
+                role="Structure fix",
+                why=f"History episodes win when listeners can track causality—not only topics—around {topic_short}.",
+                look_for="Historians or storytellers who teach chronology as argument, not trivia.",
+                fixes="Makes the episode feel **intentionally shaped** rather than encyclopedic.",
+                claim_id=claim_id,
+                archetype_kind="structure",
+            ),
+        )
+
+    # Dedupe by name, then priority-sort (structure → … → packaging), then cap 2–3.
+    seen: set[str] = set()
+    uniq: List[Dict[str, Any]] = []
+    for c in candidates:
+        nm = str(c.get("name") or "")
+        if not nm or nm in seen:
+            continue
+        seen.add(nm)
+        uniq.append(c)
+
+    out = _sort_archetypes_by_priority(uniq)[:max_archetypes]
+
+    if not out:
+        out = [
+            _archetype_row_from_parts(
+                name="Narrative structure specialist (arc & beats)",
+                role="Structure fix",
+                why=f"Ground the episode in one defensible arc about {topic_short} before adding more themes.",
+                look_for="Guests who routinely impose story structure on complex material (story editors, narrative historians).",
+                fixes="Improves clarity, pacing, and clip discoverability.",
+                claim_id=claim_id,
+                archetype_kind="structure",
+            ),
+            _archetype_row_from_parts(
+                name="Contrarian or steel-manned opposing voice",
+                role="Tension fix",
+                why="Add a credible counter-case so the episode isn’t a monologue of agreement.",
+                look_for="Experts who disagree without strawmen; historians with contested interpretations.",
+                fixes="Creates tension segments listeners actually quote.",
+                claim_id=claim_id,
+                archetype_kind="tension",
+            ),
+            _archetype_row_from_parts(
+                name="Modern application thinker (story → meaning → action)",
+                role="Relevance fix",
+                why="Translate the episode’s ideas into a next move your audience can try.",
+                look_for="Practitioners who close loops: ‘here’s what changes in your week if this is true.’",
+                fixes="Improves follow-through and shareability of takeaways.",
+                claim_id=claim_id,
+                archetype_kind="application",
+            ),
+        ][:max_archetypes]
+    elif len(out) == 1 and max_archetypes >= 2:
+        fillers = [
+            _archetype_row_from_parts(
+                name="Contrarian or steel-manned opposing voice",
+                role="Tension fix",
+                why="Add a credible counter-case so the episode isn’t a monologue of agreement.",
+                look_for="Experts who disagree without strawmen; historians with contested interpretations.",
+                fixes="Creates tension segments listeners actually quote.",
+                claim_id=claim_id,
+                archetype_kind="tension",
+            ),
+            _archetype_row_from_parts(
+                name="Modern application thinker (story → meaning → action)",
+                role="Relevance fix",
+                why="Translate the episode’s ideas into a next move your audience can try.",
+                look_for="Practitioners who close loops: ‘here’s what changes in your week if this is true.’",
+                fixes="Improves follow-through and shareability of takeaways.",
+                claim_id=claim_id,
+                archetype_kind="application",
+            ),
+        ]
+        names = {str(r.get("name") or "") for r in out}
+        for f in _sort_archetypes_by_priority(fillers):
+            nm = str(f.get("name") or "")
+            if not nm or nm in names:
+                continue
+            names.add(nm)
+            out.append(f)
+            if len(out) >= max_archetypes:
+                break
+
+    out = _sort_archetypes_by_priority(out)[:max_archetypes]
+
+    out = _label_archetype_sequence(out)
+    if out:
+        out[0] = dict(out[0])
+        out[0]["commitment_line"] = _primary_commitment_line(out[0])
+        out[0]["next_episode_move"] = _next_episode_move_for_kind(str(out[0].get("archetype_kind") or ""))
+    return out
 
 
 def _topic_specific_guest_fallback(r3: Dict[str, Any], claim_id: str) -> List[Dict[str, Any]]:
@@ -1462,38 +2042,45 @@ def workflow_report_from_v3_report(r3: Dict[str, Any]) -> Dict[str, Any]:
         snap = r3.get("episode_snapshot") or {}
         topic = str(snap.get("primary_topic") or snap.get("title") or "this episode")[:120]
         cid = str(claims[0].get("id")) if claims else ""
-        guest_recommendations = [
-            {
-                "name": "Investigative journalist or legal analyst",
-                "title": "Expert",
-                "role": "Expert",
-                "claim_id": cid,
-                "angle": f"Verify primary sources and institutional claims about: {topic}.",
-                "topic_angle": "Source verification and counter-narrative",
-                "relevance": 8,
-            },
-            {
-                "name": "Subject-matter historian / researcher",
-                "title": "Research",
-                "role": "Research",
-                "claim_id": cid,
-                "angle": "Grounds hot-button segments in documented context and timelines.",
-                "topic_angle": "Context and chronology",
-                "relevance": 7,
-            },
-            {
-                "name": "Editorial producer",
-                "title": "Production",
-                "role": "Production",
-                "claim_id": cid,
-                "angle": "Tighten thesis and clip strategy so segments map to one defensible arc.",
-                "topic_angle": "Structure and defensibility",
-                "relevance": 6,
-            },
-        ]
+        if _guest_generation_required(r3):
+            guest_recommendations = generate_guest_archetypes_from_issues(r3, cid or "c1")
+        if not guest_recommendations:
+            guest_recommendations = [
+                {
+                    "name": "Investigative journalist or legal analyst",
+                    "title": "Expert",
+                    "role": "Expert",
+                    "claim_id": cid,
+                    "angle": f"Verify primary sources and institutional claims about: {topic}.",
+                    "topic_angle": "Source verification and counter-narrative",
+                    "relevance": 8,
+                },
+                {
+                    "name": "Subject-matter historian / researcher",
+                    "title": "Research",
+                    "role": "Research",
+                    "claim_id": cid,
+                    "angle": "Grounds hot-button segments in documented context and timelines.",
+                    "topic_angle": "Context and chronology",
+                    "relevance": 7,
+                },
+                {
+                    "name": "Editorial producer",
+                    "title": "Production",
+                    "role": "Production",
+                    "claim_id": cid,
+                    "angle": "Tighten thesis and clip strategy so segments map to one defensible arc.",
+                    "topic_angle": "Structure and defensibility",
+                    "relevance": 6,
+                },
+            ]
     cid_fallback = str(claims[0].get("id")) if claims else "c1"
     if _guest_rows_are_generic(guest_recommendations):
-        guest_recommendations = _topic_specific_guest_fallback(r3, cid_fallback)
+        if _guest_generation_required(r3):
+            arch = generate_guest_archetypes_from_issues(r3, cid_fallback)
+            guest_recommendations = arch if len(arch) >= 2 else _topic_specific_guest_fallback(r3, cid_fallback)
+        else:
+            guest_recommendations = _topic_specific_guest_fallback(r3, cid_fallback)
     excluded_names = _extract_in_episode_names(r3)
     guest_recommendations = _filter_already_featured_guests(guest_recommendations, excluded_names)
     if not guest_recommendations:
@@ -1502,12 +2089,17 @@ def workflow_report_from_v3_report(r3: Dict[str, Any]) -> Dict[str, Any]:
             excluded_names,
         )
     if len(guest_recommendations) < 4:
-        extras = _filter_already_featured_guests(
-            _topic_specific_guest_fallback(r3, cid_fallback),
-            excluded_names,
-        )
-        guest_recommendations = _dedupe_guest_rows(guest_recommendations + extras)
+        if not any(isinstance(g, dict) and g.get("guest_archetype") for g in guest_recommendations):
+            extras = _filter_already_featured_guests(
+                _topic_specific_guest_fallback(r3, cid_fallback),
+                excluded_names,
+            )
+            guest_recommendations = _dedupe_guest_rows(guest_recommendations + extras)
     guest_recommendations = guest_recommendations[:5]
+
+    if _guest_generation_required(r3) and not guest_recommendations:
+        guest_recommendations = generate_guest_archetypes_from_issues(r3, cid_fallback)
+        guest_recommendations = guest_recommendations[:5]
 
     segments: List[Dict[str, Any]] = []
     default_run = [
@@ -1557,11 +2149,23 @@ def workflow_report_from_v3_report(r3: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _workflow_fallback_evidence_enabled() -> bool:
+    """Synthetic scaffold claims (discouraged). Default off — use ``SOAPBOXX_WORKFLOW_FALLBACK_EVIDENCE=1`` to enable."""
+    return (os.getenv("SOAPBOXX_WORKFLOW_FALLBACK_EVIDENCE") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
 def _ensure_fallback_evidence(
     report: Dict[str, Any], transcript: str
 ) -> None:
-    """If offline produced no evidence rows, add one anchor so validation can pass."""
+    """If offline produced no evidence rows, optionally add one anchor (legacy; off by default)."""
     if report.get("evidence_map"):
+        return
+    if not _workflow_fallback_evidence_enabled():
         return
     try:
         from .episode_report_v3 import _dedupe_repeated_sentences, _truncate_words
@@ -1573,10 +2177,15 @@ def _ensure_fallback_evidence(
     if len(snippet) > 220:
         snippet = _truncate_words(snippet, max_words=45)
     snippet = _dedupe_repeated_sentences(snippet, max_words=80)
+    # Neutral claim when the v2 brief is empty/offline — avoid topic-mismatched boilerplate.
+    claim_line = (
+        "Primary tension (edit to fit): pick one argumentative through-line from the tape, "
+        "then align clips and follow-ups to that line — verify against the excerpt below."
+    )
     report["evidence_map"] = [
         {
             "id": "c1",
-            "claim": "Core tension from the episode: external achievement can mask loneliness, anxiety, or loss of meaning.",
+            "claim": claim_line,
             "evidence": snippet or "(empty transcript)",
             "timestamp": None,
             "type": "other",
@@ -1641,6 +2250,14 @@ def soapboxx_v3_workflow_local(
         source_warnings = list(out.get("warnings") or [])
     body = workflow_report_from_v3_report(r3)
     meta_out = dict(metadata)
+    trace_id = str(metadata.get("trace_id") or metadata.get("run_id") or uuid.uuid4())
+    meta_out["trace_id"] = trace_id
+    try:
+        from .ollama_chat_http import reset_transport_log, set_trace_id
+    except ImportError:
+        from ollama_chat_http import reset_transport_log, set_trace_id  # type: ignore
+    reset_transport_log()
+    set_trace_id(trace_id)
     meta_out.setdefault(
         "generated", datetime.now(timezone.utc).isoformat()
     )
@@ -1673,20 +2290,90 @@ def soapboxx_v3_workflow_local(
             mode = "local+ai"
         except Exception as e:
             source_warnings.append(f"AI workflow enrichment failed: {e}")
+            try:
+                from .ollama_chat_http import OllamaTransportError
+            except ImportError:
+                from ollama_chat_http import OllamaTransportError  # type: ignore
+
+            cur: Optional[BaseException] = e
+            while cur:
+                if isinstance(cur, OllamaTransportError):
+                    meta_out["ollama_transport_degraded"] = True
+                    break
+                cur = cur.__cause__
+
+    _run_v3_reality_check_into_meta(r3, transcript or "", meta_out, source_warnings)
 
     meta_out["workflow_mode"] = mode
     meta_out["workflow_enrichment_tier"] = enrich_tier
     meta_out["source_warnings"] = source_warnings
+    try:
+        from .ollama_chat_http import get_transport_log
+    except ImportError:
+        from ollama_chat_http import get_transport_log  # type: ignore
+    _ote = get_transport_log()
+    if _ote:
+        meta_out["ollama_transport_events"] = _ote
+        _last_bad = next((x for x in reversed(_ote) if not x.get("ok")), None)
+        if _last_bad and _last_bad.get("failure_code"):
+            meta_out["ollama_last_transport_failure_code"] = _last_bad["failure_code"]
     _apply_workflow_version_metadata(meta_out)
 
     report: Dict[str, Any] = {
         "metadata": meta_out,
         **body,
     }
-    _ensure_fallback_evidence(report, transcript or "")
+    try:
+        from .transcript_structure_extract import apply_rule_based_structure_bootstrap
+    except ImportError:
+        from transcript_structure_extract import apply_rule_based_structure_bootstrap  # type: ignore
+
+    apply_rule_based_structure_bootstrap(report, r3, transcript or "")
+    try:
+        from .evaluation_pipeline import (
+            build_evaluation_snapshot,
+            evaluate_snapshot,
+            finalize_evaluation,
+        )
+    except ImportError:
+        from evaluation_pipeline import (  # type: ignore
+            build_evaluation_snapshot,
+            evaluate_snapshot,
+            finalize_evaluation,
+        )
+
+    eval_meta = {
+        "run_id": "",
+        "trace_id": str(meta_out.get("trace_id") or ""),
+        "episode_id": str(metadata.get("episode_id") or metadata.get("title") or ""),
+        "title": str(metadata.get("title") or ""),
+        "creator": str(metadata.get("creator") or ""),
+        "genre": str(metadata.get("genre") or ""),
+    }
+    try:
+        from .episode_report_v3 import strict_export_enabled
+    except ImportError:
+        from episode_report_v3 import strict_export_enabled  # type: ignore
+    eval_meta["strict_export_enabled"] = strict_export_enabled()
+
+    snapshot = build_evaluation_snapshot(report, r3, eval_meta)
+    evaluation = evaluate_snapshot(snapshot)
+    finalize_evaluation(
+        meta_out,
+        snapshot,
+        evaluation,
+        profile_context={"report_v3": r3, "meta": meta_out},
+    )
+    report["metadata"] = meta_out
+
+    ins = meta_out.get("export_status") in ("insufficient_signal", "degraded")
+    if not ins:
+        _ensure_fallback_evidence(report, transcript or "")
 
     weak_claims: List[Dict[str, Any]] = []
-    if mode == "local+ai" and _llm_available():
+    if ins:
+        weak_claims = []
+    elif mode == "local+ai" and _llm_available():
         try:
             wc_client = llm_client
             weak_claims = detect_weak_claims(
@@ -2235,6 +2922,7 @@ __all__ = [
     "WORKFLOW_SPEC_VERSION",
     "call_llm",
     "call_llm_json",
+    "maybe_editorial_pass_unified_markdown",
     "validate_json",
     "attach_summary_and_score",
     "workflow_report_from_v3_report",
@@ -2248,6 +2936,8 @@ __all__ = [
     "generate_evidence_map",
     "generate_follow_up_questions",
     "generate_guest_recommendations",
+    "generate_guest_archetypes_from_issues",
+    "should_generate_guests",
     "generate_segments",
     "generate_analytics",
     "detect_weak_claims",
@@ -2300,6 +2990,15 @@ if __name__ == "__main__":
     out = soapboxx_v3_workflow(
         transcript_text, meta, use_cloud_llm=bool(args.cloud), validate=True
     )
+    md0, ed_ok = maybe_editorial_pass_unified_markdown(
+        str(out.get("markdown_export") or ""),
+        meta,
+    )
+    if ed_ok:
+        out["markdown_export"] = md0
+        om = out.get("metadata")
+        if isinstance(om, dict):
+            om["editorial_pass_applied"] = True
     payload = json.dumps(out, indent=2, ensure_ascii=False)
     if args.output:
         outp = os.path.abspath(args.output)

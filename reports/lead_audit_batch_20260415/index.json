@@ -1,0 +1,65 @@
+[
+  {
+    "key": "DfTU5LA_kw8",
+    "bundle_path": "reports/lead_audit_batch_20260415/DfTU5LA_kw8.bundle.json",
+    "markdown_path": "reports/lead_audit_batch_20260415/DfTU5LA_kw8.lead_audit.md",
+    "url": "https://www.youtube.com/watch?v=DfTU5LA_kw8",
+    "title": "Joe Rogan Experience #2138 - Tucker Carlson",
+    "show": "The Joe Rogan Experience",
+    "export_status": "full",
+    "warnings": [
+      "primary_topic was empty — defaulted to title or first claim.",
+      "workflow_report attachment failed: evidence_map must contain at least one item with id"
+    ]
+  },
+  {
+    "key": "Bb-eLRjU7uQ",
+    "bundle_path": "reports/validation_run/Bb-eLRjU7uQ.bundle.json",
+    "markdown_path": "reports/lead_audit_batch_20260415/Bb-eLRjU7uQ.lead_audit.md",
+    "url": "https://www.youtube.com/watch?v=Bb-eLRjU7uQ",
+    "title": "Conan O'Brien Needs A Friend - Elizabeth Banks",
+    "show": "Conan O'Brien Needs A Friend",
+    "export_status": "insufficient_signal",
+    "warnings": [
+      "SOAPBOXX_OLLAMA_MODEL is not set; no LLM brief was produced. Install Ollama, pull a model, and set SOAPBOXX_OLLAMA_MODEL for v2 brief extraction."
+    ]
+  },
+  {
+    "key": "jre_clip",
+    "bundle_path": "reports/validation_run/jre_clip.bundle.json",
+    "markdown_path": "reports/lead_audit_batch_20260415/jre_clip.lead_audit.md",
+    "url": "https://www.youtube.com/watch?v=DfTU5LA_kw8",
+    "title": "Joe Rogan Experience #2138 - Tucker Carlson (clip run)",
+    "show": "The Joe Rogan Experience",
+    "export_status": "full",
+    "warnings": [
+      "primary_topic was empty — defaulted to title or first claim.",
+      "workflow_report attachment failed: evidence_map must contain at least one item with id"
+    ]
+  },
+  {
+    "key": "conan_clip",
+    "bundle_path": "reports/validation_run/conan_clip.bundle.json",
+    "markdown_path": "reports/lead_audit_batch_20260415/conan_clip.lead_audit.md",
+    "url": "https://www.youtube.com/watch?v=Bb-eLRjU7uQ",
+    "title": "Conan O'Brien Needs A Friend - Elizabeth Banks (clip run)",
+    "show": "Conan O'Brien Needs A Friend",
+    "export_status": "insufficient_signal",
+    "warnings": [
+      "primary_topic was empty — defaulted to title or first claim."
+    ]
+  },
+  {
+    "key": "conan_clip_strict_off",
+    "bundle_path": "reports/validation_run/conan_clip.strict_off.bundle.json",
+    "markdown_path": "reports/lead_audit_batch_20260415/conan_clip_strict_off.lead_audit.md",
+    "url": "https://www.youtube.com/watch?v=Bb-eLRjU7uQ",
+    "title": "Conan O'Brien Needs A Friend - Elizabeth Banks (clip strict-off run)",
+    "show": "Conan O'Brien Needs A Friend",
+    "export_status": "full",
+    "warnings": [
+      "primary_topic was empty — defaulted to title or first claim.",
+      "workflow_report attachment failed: evidence_map must contain at least one item with id"
+    ]
+  }
+]

@@ -77,6 +77,17 @@ class TestDoctorValidateReport(unittest.TestCase):
         )
         self.assertEqual(errs, [])
 
+    def test_insufficient_signal_export_passes(self):
+        errs = validate_report(
+            {
+                "metadata": {"export_status": "insufficient_signal", "export_blockers": ["segments: 0"]},
+                "summary": "Export withheld: insufficient grounded signal for a network-grade report (see metadata.export_blockers).",
+                "score": 0,
+                "markdown_export": "# SoapBoxx — insufficient signal\n\nReason: test.\n",
+            }
+        )
+        self.assertEqual(errs, [])
+
 
 if __name__ == "__main__":
     unittest.main()

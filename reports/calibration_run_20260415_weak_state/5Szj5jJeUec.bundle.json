@@ -1,0 +1,567 @@
+{
+  "brief": {
+    "episode_snapshot": {
+      "title": "Ricky Gervais & Russell Brand - God vs Atheism",
+      "creator": "YouTube",
+      "genre": "",
+      "primary_topic": "Ricky Gervais & Russell Brand - God vs Atheism"
+    },
+    "claims": [],
+    "narrative": [],
+    "guests": [],
+    "production_moves": {}
+  },
+  "report_v3": {
+    "workflow_version": "3",
+    "signal_mode": "LOW_SIGNAL",
+    "dual_lens": {
+      "episode_lens_type": "NARRATIVE",
+      "confidence": 90,
+      "weights": {
+        "narrative": 0.8,
+        "analytical": 0.2
+      },
+      "prompt_injection": "This episode has been classified as: NARRATIVE\n\nOptimization rules:\n\nIf ANALYTICAL:\n- Prioritize claims, arguments, and structured reasoning\n- Emphasize verification, counterarguments, and logic\n\nIf NARRATIVE:\n- Prioritize storytelling, interpersonal dynamics, and emotional context\n- Focus on memory, perception, and human tension\n- Avoid over-emphasizing claim verification or formal argumentation\n\nIf HYBRID:\n- Balance storytelling with analysis\n- Extract both narrative meaning and actionable insights\n\nCRITICAL:\n- Do not force analytical structure onto narrative content.\n- Do not ignore insights just because content is conversational.",
+      "normalized_input": {
+        "title": "Ricky Gervais & Russell Brand - God vs Atheism",
+        "summary": "Ricky Gervais & Russell Brand - God vs Atheism",
+        "transcript": "Kind: captions Language: en Hello, I'm Russell Brand. This episode of Under the Skin from Luminary Media is free and it's fantastic. It's got Ricky Jves in it. Ricky Jves, one of the best comedy stars the world's ever known. I think it's safe to say he's up there with your Chaplain, your Cleleses, your Kugans. They're all British comedians whose names start with C. That's all I'm interested. Your cooks, your Hancocks. Ricky Devase, outspoken host of the Globes, creator of Extras, The Office Afterlife, season two of which is on Netflix now and is the it's because of him promoting that that he's even come on our podcast. This is for you for nothing. But if you want to sign up and get all of the episodes of Under the Skin, which let me tell you are worth it, as well as all the other fantastic content that's on that platform, podcast from Komo, from Queer Eye, no content from uh Lena Dun, get down then. No one's making you stay here. You're not a hostage. I'd say this is a fantastic episode of Under the Skin. I'm very proud of it. It's a brilliant conversation with Ricky Jabase. It's a joy to talk to him. He and me and him as we discuss see the world somewhat differently although we've got loads of things in common. We talk about God, atheism, animals, love, class, fantastic stuff. You'll really, really enjoy it. If you want to get Luminary, if this episode indicates to you that these are the kind of conversations you might be into, then you can get it for as little as $2.99 a month with the with the Luminary annual plan, and you can get a 7-day free trial, which I would recommend to all of you. Check out the brilliant podcasts I've done with well other podcasters like on the platform like Lena Dunham and Kuramo, but also David Eagleman, Neil Degrass, Tyson, Brian Cox, Janice Farafakis, I mean there's like brilliant intellectual conversations. Naomi Klene, I mean it's just like Dr. Shafari last week talking about I mean I really think they are valuable conversations but this one for nothing with Ricky is uh it's especially good as you would imagine from Ricky Jace and uh let me reiterate Afterlife which I've watched is on Netflix now and it's fantastic. Check it out. Hello. Hello mate. It's so lovely to see you. Look at you all grown up. I've become an adult. Well, I'm I'm relieved you're not sat there in a sheet. That was a deal breaker. I said I wanted to conform to Western ways just for one hour. I didn't even need to have that explicitly explained to me. I s intuited that it might not be wise to interview you in a sheet. And why is it 100 p.m.? I mean, that is bang on soup and snooze hour for me. I I have a I have a little lentil soup and then I have a little nap, right? So, now I've had to have my soup at half 12. Gobbled that down. It was very hot and the my nap is postponed till 2:00 p.m. So, this is just some of the hardship that I've been going through during the pandemic. It's a a grueling tale even to sit and listen to Ricky. that kind of suffering. It's uh like the Goolag archipilago listening to some of that stuff. You got a real mic and everything. Yeah, cuz I do like I've been doing a podcast for for ages. So, we put one in the garage like a little podcast studio. Do you I went from the only person with a podcast to the only person without one. So, I had to go the other way. You're an outlier, a pioneer, and an extremist. I'm a rebel. You know, I've always been a rebel. Like Tony Hancock, in fact, just like Tony Hancock's rebel. There's no There's no question you're in that lineage. No question. Do you should we do this little Should we do this little interview? Start it officially. I'll start it with like a compliment to put you at your ease. It's really lovely to interview you. I'm I am very nervous. I can see that your rat. It might be the soup. I drank too quickly. Yeah. Essophical burning and anxiety have similar symptoms. Um yeah, it's lovely to have a proper interview with you. We've had like met a few times. I've never been able to speak to you at depth, but like anyone, I admire you as a comedian very very much. And I still like watch like a lot of your stuff like, you know, maybe even just when you're doing Facebook lives, but also like I still watch The Office. I watch Afterlife, checking out the news series, which is what you're promoting at the moment, doing these like podcasts and that. And it's a real joy to talk to you, Ricky. Thank you. Same. Same. Pleasure. Thanks, mate. Um, I suppose like my compliment was a lot shorter than yours, wasn't it? I didn't give you much back. I felt I felt it wasn't the place cuz I feel like a guest. You are a guest. You are a guest. And in a sense, it's proportionate to our BAFTA backdrops. You've got endless masks. I've got a drape. Let me explain. I've made an effort. I've put a nice little jumper on. I've washed and all that. But this is this is my desk. I'm at my desk. The my my this is the smallest room in the house cuz I thought the echo would because the other rooms are vast and it would be good for So, okay, this isn't this isn't like cribs where I've hired them. I really did win them. I was watching I was watching I I remember I remember a good many of them then for I don't know what that bore is like there's a wild boar. I guess that's some sort of writing guild or is it simply an ornament? That's a Oh, I'm glad you brought that. That's a work of art that um I that was auctioned for charity and I gave so generously. That reminds me what a great person I am. It's good to have a momento of your own greatness next to those less abstract accolades. Good. I live pretty near where you're from, mate. Like I So I see sort of like you're from Reading and of course. And aren't you? Yeah. Yeah. It's obviously lovely around here. Do you live near here? Um well, we've got a little place quite near you. Um but uh my main I mean I mean I'm mostly in Leafy Hamstead. Yeah. Where people like you aren't allowed if I'm being honest. I was there briefly for a while. I lived on Gardenor Road at what I might call the height of my decadence. Yeah. Near Flask Walk and uh Oh, beautiful. Well, we used to visit this uh place, you know, before we lived here. We lived in the center ever since sort of college. And um uh uh to explaining to Americans what Hamstead is like, I I say it's it's sort of bohemian and eclectic and it's the sort of great great grandchildren of artists and poets and me new money. I I always feel that it was like the Beverly Hillbillies when I rolled into town. So, and I think I think I think we're from similar sort of backgrounds where we moved where we moved up to be able to live next door to to wealthy people. So, I still I still feel when I walk into the Ivy, there's a certain amount of disappointment on people's faces. Yeah. It's incredible actually. And like it's sort of a very um clear in your humor that you have that kind of background. I remember watching Martin Freeman on something once saying that you were the first person he'd met that had a sense of humor that made him laugh like people at school. And I remember when I used to when you used to do on stuff on 11:00 show and you talked about like I remember in particular one time when you talked about the apocryful often and then opening their eyes and having a cup of tea there and like I guess this was probably 20 years ago but I remember watching that and thinking oh that's funny man that's funny and I suppose and you've how how have you maintained and do you think you've maintained that kind of access to normality? and that kind of brittle spiky workingass humor now that you are in sconced on the hill. Well, I I think I think I have uh in in many ways. Um obviously all my family still live around reading wokenum fat and you know and they're what you call a working class. They're all manual workers or carers and and then there's a there's 50 I haven't counted them sort of great nieces and nephews that you know. Um, and so, uh, there there's there's that where you're always connected to your family. You always you always feel at home with your family, you know. Um, uh, so there's there's that. I I do it I sort of do it quite consciously try and remember my roots because as a comedian um, so professionally I I I I sort of do as well. I think because we're caught jesters. We have to be caught jesters. We have to have low status. We're in the mud with all the other peasants teasing the king. Not too much because we don't want to get killed, but we have to keep our low status somehow. I think I I feel I want to. And and I do that in two ways. And you do this as well. Um one, I invite them behind the curtain. I go, \"What? You think it's great being rich and famous? Well, this is what I said in front of the queen. This is the first time I got a private jet. They thought I was the cook.\" So I So I do that. I give them the horror stories where I was the putt. I was the wrong person. I shouldn't have been there. I tell them that. And I the other way I do it is I talk about things where they're better off than me. I talk about being fat and old and balding and do you know what I mean? Yeah. So I'm going to die soon. And so you you do have to particularly when people know what top comedians earn now. It it's like um I sort of embraced that as well. I teased them. I like I did, you know, like uh talking about house and wealth in an ironic way and they get that as well. And I I I'm sort of saying, listen, this is luck. I do you know what I mean? This isn't I don't think I deserve this. Um uh but uh I think people get it as long as you're honest. It would it would when if I see a millionaire comedian going either way uh either side of that like uh talking down to an audience that everything's is a is a battle story that they won or you know they've already they're already on stage they're already an expensive suit or whatever and and now they're telling the audience that they're wrong. Again I do tha\n…[truncated]",
+        "entities": [],
+        "topics": [
+          "Ricky Gervais & Russell Brand - God vs Atheism"
+        ],
+        "tone_signals": [],
+        "structure_signals": [
+          "claim_count:0",
+          "narrative_bullet_count:0",
+          "transcript_word_count:4783"
+        ]
+      },
+      "narrative_lens": {
+        "lens": "narrative",
+        "core_story": "Ricky Gervais & Russell Brand - God vs Atheism is a claim about who gets protected when incentives and rules collide — and the episode must pick a side. Listeners will hear policy, personal commentary, and rhetorical claims in parallel; that fragmentation makes clip and takeaway packaging unreliable until edited. Before you optimize for clips: separate factual reporting from opinion, flag what still needs verification, then choose one thread worth defending in public.",
+        "stakes": [],
+        "dynamics": [
+          "Theme 1: The show is treating this as actionable for the listener, not background noise.",
+          "Theme 2: The show is treating this as actionable for the listener, not background noise.",
+          "Theme 3: The show is treating this as actionable for the listener, not background noise."
+        ],
+        "memory_and_perception": [],
+        "open_loops": [
+          "If you had to cut half this episode and keep one idea, what stays - and what becomes its own episode: Ricky Gervais & Russell Brand - God vs Atheism?",
+          "What metric would prove the opening worked - and what would you change if it didn't?",
+          "What would a skeptical listener say you assumed without saying?"
+        ],
+        "clip_hooks_narrative": []
+      },
+      "analytical_lens": {
+        "lens": "analytical",
+        "thesis_candidate": "Ricky Gervais & Russell Brand - God vs Atheism is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+        "claims": [],
+        "incentives_and_stakes": [],
+        "logic_gaps": [],
+        "verification_moves": [],
+        "clip_hooks_analytical": []
+      },
+      "synthesis": {
+        "lens": "synthesis",
+        "episode_type_used": "NARRATIVE",
+        "weights_used": {
+          "narrative": 0.8,
+          "analytical": 0.2
+        },
+        "core_positioning": "Lead with story, stakes, and human tension (80% narrative weight); keep analytical pressure as guardrails (20%). Ricky Gervais & Russell Brand - God vs Atheism is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+        "collision_notes": [
+          "Sparse brief hooks for both lenses — expand transcript grounding before packaging."
+        ],
+        "differentiation_line": "Ricky Gervais & Russell Brand - God vs Atheism is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+        "execution_bias": {
+          "clips": "Weight clips toward human beats and tension.",
+          "actions": "Weight next actions toward deepening the story and follow-up interviews."
+        },
+        "risk_flags": []
+      },
+      "engine_prompts": {
+        "narrative": "You are the Narrative Lens for a podcast intelligence system.\n\nYou receive a single normalized input object (shared across all engines). Treat it as\nthe only source of truth; do not invent entities or topics not grounded there.\n\nShape (fields may be empty arrays when unknown):\n{{\n  \"title\": \"...\",\n  \"summary\": \"...\",\n  \"transcript\": \"...\",\n  \"entities\": [],\n  \"topics\": [],\n  \"tone_signals\": [],\n  \"structure_signals\": []\n}}\n\nYour job:\n- Surface story, dynamics, memory, stakes, and human tension.\n- Name who is involved and how relationships or roles shift (when inferable from input).\n- Call out beats: setup, turn, resolution or open loop — even if implicit.\n- Prefer concrete scene language over abstract labels.\n\nHard rules:\n- Do not fabricate events absent from transcript/summary; you may infer *dynamics* only\n  when strongly supported by repeated themes or explicit speaker intent.\n- Do not optimize for \"sounding smart\"; optimize for clarity of what happened emotionally\n  and interpersonally.\n- If the input is thin, say what is thin and what is still fair to infer (one short line).\n\nOutput (JSON only, no markdown fences):\n{\n  \"lens\": \"narrative\",\n  \"core_story\": \"2–4 sentences\",\n  \"stakes\": [\"max 4 bullets\"],\n  \"dynamics\": [\"max 5 bullets: relationships, power, vulnerability, conflict, alliance\"],\n  \"memory_and_perception\": [\"max 4 bullets: how speakers frame past, identity, blame, hope\"],\n  \"open_loops\": [\"max 3 unresolved tensions or unanswered questions grounded in input\"],\n  \"clip_hooks_narrative\": [\"max 3: moment types worth cutting for story — not raw timestamps unless given\"]\n}",
+        "analytical": "You are the Analytical Lens for a podcast intelligence system.\n\nYou receive a single normalized input object (shared across all engines). Treat it as\nthe only source of truth; do not invent entities or topics not grounded there.\n\nShape (fields may be empty arrays when unknown):\n{{\n  \"title\": \"...\",\n  \"summary\": \"...\",\n  \"transcript\": \"...\",\n  \"entities\": [],\n  \"topics\": [],\n  \"tone_signals\": [],\n  \"structure_signals\": []\n}}\n\nYour job:\n- Extract defensible claims, incentives, mechanisms, and what would falsify them.\n- Separate evidence-supported assertions from belief or interpretation (tag each).\n- Surface counterarguments, missing proof, and logical leaps.\n\nHard rules:\n- Every non-trivial claim must tie to something in transcript/summary (paraphrase is fine).\n- Prefer \"what we can say\" over \"nice sounding thesis\".\n- If evidence is anecdotal only, say so explicitly.\n\nOutput (JSON only, no markdown fences):\n{\n  \"lens\": \"analytical\",\n  \"thesis_candidate\": \"one sentence: the strongest arguable through-line (may be qualified)\",\n  \"claims\": [\n    {\n      \"text\": \"one sentence\",\n      \"kind\": \"fact|interpretation|belief\",\n      \"support\": \"brief: what in the input backs this (or 'thin / anecdotal only')\",\n      \"falsifier\": \"what would prove this wrong or incomplete\"\n    }\n  ],\n  \"incentives_and_stakes\": [\"max 4 bullets: who benefits, what is being sold, reputational risk\"],\n  \"logic_gaps\": [\"max 4: leaps, missing premises, correlation vs causation, etc.\"],\n  \"verification_moves\": [\"max 4 concrete checks: data, expert, document, counter-interview\"],\n  \"clip_hooks_analytical\": [\"max 3: contradiction, strong claim, or methodological tension worth cutting\"]\n}",
+        "synthesis": "You are the Synthesis Layer. You receive:\n1) The same normalized input object (source of truth)\n2) JSON output from the Narrative Lens\n3) JSON output from the Analytical Lens\n4) Episode classification: NARRATIVE | ANALYTICAL | HYBRID\n5) Weights: narrative_weight and analytical_weight (0–1, sum to 1)\n\nYou receive a single normalized input object (shared across all engines). Treat it as\nthe only source of truth; do not invent entities or topics not grounded there.\n\nShape (fields may be empty arrays when unknown):\n{{\n  \"title\": \"...\",\n  \"summary\": \"...\",\n  \"transcript\": \"...\",\n  \"entities\": [],\n  \"topics\": [],\n  \"tone_signals\": [],\n  \"structure_signals\": []\n}}\n\nYour job:\n- Do NOT duplicate long lists from the two lenses; reference them by theme.\n- Produce collisions: where story framing and evidence/logic agree or disagree.\n- State one clear \"so what\" for a creator or editor (what to do with this episode).\n\nWeighting:\n- Core positioning and execution guidance should reflect the dominant lens without\n  silencing the secondary lens.\n- If classification is NARRATIVE: lead with human/story implications; analytical as guardrails.\n- If ANALYTICAL: lead with argument integrity; narrative as context for why audiences care.\n- If HYBRID: explicit 50/50 balance in the synthesis paragraphs.\n\nHard rules:\n- If the analytical lens says evidence is thin, the synthesis must not pretend certainty.\n- If the narrative lens flags open loops, the synthesis should not \"close\" them without support.\n- No generic praise; every sentence should earn its place.\n\nOutput (JSON only, no markdown fences):\n{\n  \"lens\": \"synthesis\",\n  \"episode_type_used\": \"NARRATIVE|ANALYTICAL|HYBRID\",\n  \"weights_used\": { \"narrative\": 0.0, \"analytical\": 0.0 },\n  \"core_positioning\": \"2–3 sentences; dominant-lens voice\",\n  \"collision_notes\": [\n    \"max 4: each states agreement or tension between narrative and analytical reads\"\n  ],\n  \"differentiation_line\": \"one sentence: the sharpest honest positioning line for marketing or packaging\",\n  \"execution_bias\": {\n    \"clips\": \"one line: lean narrative-heavy vs analytical-heavy and why\",\n    \"actions\": \"one line: lean narrative-heavy vs analytical-heavy and why\"\n  },\n  \"risk_flags\": [\"max 3: misframing risks if grounding is weak\"]\n}"
+      }
+    },
+    "coach_report": {
+      "signal_mode": "LOW_SIGNAL",
+      "output_mode": "diagnostic",
+      "episode_diagnosis": {
+        "mode": "LOW_SIGNAL",
+        "body": [
+          "**Report output:** Diagnostic mode — spin-off, clip, and habit-action blocks below are review-first, not publish-ready packaging.",
+          "**Why diagnostic:** Episode classified LOW_SIGNAL (thin thesis or weak claims) — prescriptive packaging withheld.",
+          "**Thesis (one sentence):** Ricky Gervais & Russell Brand - God vs Atheism is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+          "**Honest read:** The transcript reads exploratory or thin for one arc — or SoapBoxx could not extract a claim without inventing it.",
+          "**Competing threads:** Ricky Jves, one of the best comedy stars the world's ever known. | I think it's safe to say he's up there with your Chaplain, your Cleleses, your Kugans. | They're all British comedians whose names start with C. | I'd say this is a fantastic episode of Under the Skin.",
+          "**Retention:** One thesis → one repeatable idea for clips and shares."
+        ]
+      },
+      "thesis_quality": null,
+      "episode_thesis": "Ricky Gervais & Russell Brand - God vs Atheism is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+      "personalized_intro": "*For **YouTube**'s show, tailored to this episode:*",
+      "contrarian_hook": {
+        "title": "The angle listeners might miss",
+        "body": "The edit points at: No single thesis line yet; competing ideas may split attention. — the hidden angle is often **who benefits** if listeners stay emotional but never name the rule, sponsor, or metric. Say that actor once, on mic."
+      },
+      "uncomfortable_insight": {
+        "title": "The uncomfortable read",
+        "body": "The tape has more *topics* than *proof* — listeners may agree in the room and still repeat nothing specific tomorrow. The pressure point is: No single thesis line yet; competing ideas may split attention. If your thesis is “Ricky Gervais & Russell Brand - God vs Atheism is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.”, ask what would make you *wrong* on mic — not just what would make you sound fair. Someone scanning only the title may expect a harder verdict on “Ricky Gervais & Russell Brand - God vs Atheism” than the conversation actually delivers."
+      },
+      "claim_stakes": [],
+      "themes": [
+        {
+          "label": "Theme 1",
+          "discussed": "Ricky Gervais & Russell Brand - God vs Atheism",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        },
+        {
+          "label": "Theme 2",
+          "discussed": "Ricky Jves, one of the best comedy stars the world's ever known.",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        },
+        {
+          "label": "Theme 3",
+          "discussed": "I think it's safe to say he's up there with your Chaplain, your Cleleses, your Kugans.",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        },
+        {
+          "label": "Theme 4",
+          "discussed": "They're all British comedians whose names start with C.",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        }
+      ],
+      "what_worked": [
+        "Topic angles that could anchor a thesis once you pick one main line."
+      ],
+      "where_it_breaks": {
+        "issues": [
+          "No single thesis line yet; competing ideas may split attention.",
+          "Hard for listeners to know what to clip or share."
+        ],
+        "rule": "One episode = one decision: pick the tradeoff you are defending, then cut everything that does not serve it."
+      },
+      "opportunities": {
+        "spinoff_title": "Defer spin-off planning until one thesis thread survives an edit pass.",
+        "spinoff_structure": "Not assigned — the episode reads as multi-threaded or under-verified for a packaged spin-off brief.",
+        "clip_moments": [
+          "No high-signal auto clip picks. No timestamped evidence rows — skim the transcript for moments that pair one clear claim with one concrete detail.",
+          "Skip outros, transitions, and lyric fragments; favor one claim plus one checkable detail."
+        ],
+        "segment_idea": "Next recording: a **validation block** — state the strongest public-facing claim, what would change your mind, and what primary source you would accept."
+      },
+      "follow_up_questions": [
+        "If you had to cut half this episode and keep one idea, what stays - and what becomes its own episode: Ricky Gervais & Russell Brand - God vs Atheism?",
+        "What metric would prove the opening worked - and what would you change if it didn't?",
+        "What would a skeptical listener say you assumed without saying?"
+      ],
+      "guest_strategy": {
+        "intro": "Diagnostic bookings: prioritize verification, sourcing, and steel-manned counterarguments — not generic motivation angles.",
+        "guests": [
+          {
+            "guest_type": "Reporter or records researcher",
+            "adds": "Primary documents and timelines — reduces reliance on rhetorical peaks alone."
+          },
+          {
+            "guest_type": "Friendly skeptic (peer)",
+            "adds": "Surfaces the strongest counter-case before you publish or clip."
+          }
+        ]
+      },
+      "segment_upgrade": "**Diagnostic close (90s):** Name the single sentence you'd defend if quoted; flag what still needs sourcing before you optimize for distribution.",
+      "immediate_fix_plan": [
+        "Tag assertions as reporting vs. inference vs. opinion before clipping.",
+        "Write down two primary sources you want before repeating the hottest claim in public.",
+        "Isolate segments that mix incompatible frames (news vs. rally vs. personal story)."
+      ],
+      "bottom_line": {
+        "good": "There is usable tension for an informed audience; the gap is defensibility and arc — not chemistry or effort.",
+        "must_change": "Stop expanding with growth packaging on a fragmented spine — verify or edit before you clip.",
+        "if_fixed": "Clips and repurposing work once one arc is legible and claims are labeled for the audience you want."
+      },
+      "meta": {
+        "title": "Ricky Gervais & Russell Brand - God vs Atheism",
+        "transcript_words": 4500
+      }
+    },
+    "episode_snapshot": {
+      "title": "Ricky Gervais & Russell Brand - God vs Atheism",
+      "creator": "YouTube",
+      "genre": "",
+      "primary_topic": "Ricky Gervais & Russell Brand - God vs Atheism"
+    },
+    "narrative_reconstruction": {
+      "core_thesis": "Ricky Gervais & Russell Brand - God vs Atheism is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+      "supporting_mechanism": "Listeners will hear policy, personal commentary, and rhetorical claims in parallel; that fragmentation makes clip and takeaway packaging unreliable until edited.",
+      "practical_translation": "Before you optimize for clips: separate factual reporting from opinion, flag what still needs verification, then choose one thread worth defending in public.",
+      "reconstructed": true,
+      "diagnostic": true
+    },
+    "clean_insights": [
+      "Ricky Jves, one of the best comedy stars the world's ever known.",
+      "I think it's safe to say he's up there with your Chaplain, your Cleleses, your Kugans.",
+      "They're all British comedians whose names start with C.",
+      "I'd say this is a fantastic episode of Under the Skin."
+    ],
+    "evidence_mapping": [],
+    "strategies": [
+      {
+        "insight": "Ricky Jves, one of the best comedy stars the world's ever known.",
+        "application": "Convert this into one weekly test: Ricky Jves, one of the best comedy stars the world's ever known.",
+        "content_angle": "Use this as a segment hook, then pressure-test it with one counterexample."
+      },
+      {
+        "insight": "I think it's safe to say he's up there with your Chaplain, your Cleleses, your Kugans.",
+        "application": "Convert this into one weekly test: I think it's safe to say he's up there with your Chaplain, your Cleleses, your Kugans.",
+        "content_angle": "Use this as a segment hook, then pressure-test it with one counterexample."
+      },
+      {
+        "insight": "They're all British comedians whose names start with C.",
+        "application": "Convert this into one weekly test: They're all British comedians whose names start with C.",
+        "content_angle": "Use this as a segment hook, then pressure-test it with one counterexample."
+      },
+      {
+        "insight": "I'd say this is a fantastic episode of Under the Skin.",
+        "application": "Convert this into one weekly test: I'd say this is a fantastic episode of Under the Skin.",
+        "content_angle": "Use this as a segment hook, then pressure-test it with one counterexample."
+      }
+    ],
+    "engagement_questions": {},
+    "guests": [
+      {
+        "guest": "Behavioral Psychologist",
+        "role": "Behavioral Psychologist",
+        "why_this_episode": "Validates or challenges the thesis: No dominant thesis line — the episode splits across competing threads rather tha…",
+        "target_claim": "No dominant thesis line — the episode splits across competing threads rather than one defensible arc.",
+        "angle": "science vs self-help framing"
+      },
+      {
+        "guest": "Operator / Founder",
+        "role": "Operator / Founder",
+        "why_this_episode": "Tests execution under real constraints and tradeoffs.",
+        "target_claim": "No dominant thesis line — the episode splits across competing threads rather than one defensible arc.",
+        "angle": "what actually works in production"
+      },
+      {
+        "guest": "Skeptical Domain Expert",
+        "role": "Skeptical Domain Expert",
+        "why_this_episode": "Challenges assumptions and surfaces failure cases the host may miss.",
+        "target_claim": "No dominant thesis line — the episode splits across competing threads rather than one defensible arc.",
+        "angle": "contrarian quality control"
+      },
+      {
+        "guest": "Implementation Coach",
+        "role": "Implementation Coach",
+        "why_this_episode": "Mechanism is implied but not explicit.",
+        "target_claim": "No dominant thesis line — the episode splits across competing threads rather than one defensible arc.",
+        "angle": "turn insight into a repeatable weekly action plan"
+      }
+    ],
+    "segments": [],
+    "takeaway": "Diagnostic mode: verify before you package — pick one thread, label fact vs. opinion, then decide what is safe to clip or repeat.",
+    "analytics_actionable": {
+      "what_worked": [
+        "Topic angles that could anchor a thesis once you pick one main line."
+      ],
+      "what_failed": [
+        "No single thesis line yet; competing ideas may split attention.",
+        "Hard for listeners to know what to clip or share."
+      ],
+      "next_move": [
+        "Pick one thesis before you hit record; queue other topics for later episodes.",
+        "Open with one story or number, not a topic list.",
+        "Close with one test: what you'll measure and what would change your mind."
+      ]
+    },
+    "claims": [],
+    "output_mode": "diagnostic",
+    "meta": {
+      "title": "Ricky Gervais & Russell Brand - God vs Atheism",
+      "creator": "YouTube",
+      "genre": "",
+      "generated_at": "2026-04-15T18:44:23Z"
+    },
+    "report_readiness": {
+      "band": "minimal",
+      "notes": [
+        "No claims were extracted from the episode brief.",
+        "Brief is classified as LOW_SIGNAL (thin thesis or weak / few claims)."
+      ],
+      "suggested_actions": [
+        "Re-run with a richer brief pass or enable Ollama (SOAPBOXX_OLLAMA_MODEL).",
+        "Tighten one thesis line and add timestamped examples in the source."
+      ],
+      "metrics": {
+        "transcript_word_count": 4500,
+        "claim_count": 0,
+        "evidence_row_count": 0,
+        "signal_mode": "LOW_SIGNAL"
+      },
+      "quality_gates": {
+        "force_diagnostic": false,
+        "notes": [],
+        "title_topic_coherence": 0.8333
+      },
+      "output_mode": "diagnostic",
+      "diagnostic_reasons": [
+        "Episode classified LOW_SIGNAL (thin thesis or weak claims) — prescriptive packaging withheld."
+      ]
+    }
+  },
+  "workflow_report": {
+    "metadata": {
+      "title": "Ricky Gervais & Russell Brand - God vs Atheism",
+      "creator": "YouTube",
+      "genre": "",
+      "generated": "2026-04-15T18:44:23.986488+00:00",
+      "v3_reality_check": {
+        "passed": false,
+        "failures": [
+          "FAIL: evidence rows 0 < min_evidence_rows 2",
+          "FAIL: segments 0 < min_segments 1"
+        ],
+        "would_ship": false,
+        "ship_blockers": [
+          "FAIL: output_mode is diagnostic — not shippable as a full brief."
+        ],
+        "rules_source": "C:\\Users\\yasuk\\SoapBoxx\\backend\\data\\v3_reality_expected.json"
+      },
+      "workflow_mode": "local+ai",
+      "workflow_enrichment_tier": "full",
+      "source_warnings": [
+        "primary_topic was empty — defaulted to title or first claim.",
+        "v3_reality: 2 expectation(s) failed — see metadata.v3_reality_check.failures",
+        "v3_reality: would-ship bar not met (1 item(s)) — see metadata.v3_reality_check.ship_blockers"
+      ],
+      "workflow_spec_version": "3",
+      "primary_episode_workflow": true,
+      "structure_state": "FAIL",
+      "structure_diagnostics": {
+        "evidence_rows": 0,
+        "segments": 0,
+        "structure_state": "FAIL"
+      },
+      "export_status": "insufficient_signal",
+      "export_blockers": [
+        "FAIL: evidence rows 0 < min_evidence_rows 2",
+        "FAIL: segments 0 < min_segments 1",
+        "grounded evidence rows 0 < 2 (workflow=0, report_v3=0)",
+        "segments 0 < 1 (workflow and report_v3)"
+      ]
+    },
+    "highlights": [
+      {
+        "id": "h1",
+        "insight": "Ricky Jves, one of the best comedy stars the world's ever known.",
+        "length_words": 12,
+        "priority": "high"
+      },
+      {
+        "id": "h2",
+        "insight": "I think it's safe to say he's up there with your Chaplain, your Cleleses, your Kugans.",
+        "length_words": 16,
+        "priority": "medium"
+      },
+      {
+        "id": "h3",
+        "insight": "They're all British comedians whose names start with C.",
+        "length_words": 9,
+        "priority": "medium"
+      },
+      {
+        "id": "h4",
+        "insight": "I'd say this is a fantastic episode of Under the Skin.",
+        "length_words": 11,
+        "priority": "medium"
+      }
+    ],
+    "evidence_map": [],
+    "follow_up_questions": [],
+    "guest_recommendations": [
+      {
+        "name": "Skeptical domain practitioner",
+        "title": "Practitioner interview",
+        "role": "Domain practice",
+        "claim_id": "c1",
+        "angle": "Pressure-tests the strongest on-mic claims about: Ricky Gervais & Russell Brand - God vs Atheism with field experience and failure modes.",
+        "topic_angle": "Execution reality vs. story",
+        "relevance": 8
+      },
+      {
+        "name": "Researcher or analyst (primary sources)",
+        "title": "Evidence",
+        "role": "Evidence",
+        "claim_id": "c1",
+        "angle": "Separates verified facts, contested interpretations, and missing data the episode should flag.",
+        "topic_angle": "Verification and uncertainty",
+        "relevance": 8
+      },
+      {
+        "name": "Contrarian voice (steel-manned)",
+        "title": "Debate segment",
+        "role": "Counter-case",
+        "claim_id": "c1",
+        "angle": "States the strongest opposing case without caricature — useful for a dedicated tension segment.",
+        "topic_angle": "Best counterargument on the table",
+        "relevance": 7
+      },
+      {
+        "name": "Editorial producer / story editor",
+        "title": "Structure",
+        "role": "Structure",
+        "claim_id": "c1",
+        "angle": "Tightens thesis, clip strategy, and segment order so listeners leave with one memorable through-line.",
+        "topic_angle": "Clarity and packaging",
+        "relevance": 6
+      }
+    ],
+    "segments": [],
+    "analytics": {
+      "storylines": [
+        "Ricky Gervais and Russell Brand discuss God vs Atheism",
+        "Ricky's background and class influence on his humor",
+        "Maintaining authenticity in comedy while being wealthy",
+        "Addressing mental health and despair through Afterlife"
+      ],
+      "topic_signals": [
+        "God vs Atheism",
+        "British comedians",
+        "Class and privilege",
+        "Authenticity in comedy",
+        "Mental health and despair",
+        "Afterlife series"
+      ],
+      "actionable_steps": [
+        "Explore the intersection of faith and humor through a podcast episode featuring Ricky Gervais and Russell Brand discussing God vs Atheism.",
+        "Create a storyline that delves into the complexities of class and privilege, using Ricky's background as an example.",
+        "Develop a narrative that highlights the importance of authenticity in comedy, even when creators have achieved wealth and success.",
+        "Produce a podcast episode or series that tackles mental health and despair, drawing from Ricky's personal experiences and the themes explored in Afterlife."
+      ]
+    },
+    "signal_mode": "LOW_SIGNAL",
+    "coach_report": {
+      "signal_mode": "LOW_SIGNAL",
+      "output_mode": "diagnostic",
+      "episode_diagnosis": {
+        "mode": "LOW_SIGNAL",
+        "body": [
+          "**Report output:** Diagnostic mode — spin-off, clip, and habit-action blocks below are review-first, not publish-ready packaging.",
+          "**Why diagnostic:** Episode classified LOW_SIGNAL (thin thesis or weak claims) — prescriptive packaging withheld.",
+          "**Thesis (one sentence):** Ricky Gervais & Russell Brand - God vs Atheism is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+          "**Honest read:** The transcript reads exploratory or thin for one arc — or SoapBoxx could not extract a claim without inventing it.",
+          "**Competing threads:** Ricky Jves, one of the best comedy stars the world's ever known. | I think it's safe to say he's up there with your Chaplain, your Cleleses, your Kugans. | They're all British comedians whose names start with C. | I'd say this is a fantastic episode of Under the Skin.",
+          "**Retention:** One thesis → one repeatable idea for clips and shares."
+        ]
+      },
+      "thesis_quality": null,
+      "episode_thesis": "Ricky Gervais & Russell Brand - God vs Atheism is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.",
+      "personalized_intro": "*For **YouTube**'s show, tailored to this episode:*",
+      "contrarian_hook": {
+        "title": "The angle listeners might miss",
+        "body": "The edit points at: No single thesis line yet; competing ideas may split attention. — the hidden angle is often **who benefits** if listeners stay emotional but never name the rule, sponsor, or metric. Say that actor once, on mic."
+      },
+      "uncomfortable_insight": {
+        "title": "The uncomfortable read",
+        "body": "The tape has more *topics* than *proof* — listeners may agree in the room and still repeat nothing specific tomorrow. The pressure point is: No single thesis line yet; competing ideas may split attention. If your thesis is “Ricky Gervais & Russell Brand - God vs Atheism is a claim about who gets protected when incentives and rules collide — and the episode must pick a side.”, ask what would make you *wrong* on mic — not just what would make you sound fair. Someone scanning only the title may expect a harder verdict on “Ricky Gervais & Russell Brand - God vs Atheism” than the conversation actually delivers."
+      },
+      "claim_stakes": [],
+      "themes": [
+        {
+          "label": "Theme 1",
+          "discussed": "Ricky Gervais & Russell Brand - God vs Atheism",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        },
+        {
+          "label": "Theme 2",
+          "discussed": "Ricky Jves, one of the best comedy stars the world's ever known.",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        },
+        {
+          "label": "Theme 3",
+          "discussed": "I think it's safe to say he's up there with your Chaplain, your Cleleses, your Kugans.",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        },
+        {
+          "label": "Theme 4",
+          "discussed": "They're all British comedians whose names start with C.",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        }
+      ],
+      "what_worked": [
+        "Topic angles that could anchor a thesis once you pick one main line."
+      ],
+      "where_it_breaks": {
+        "issues": [
+          "No single thesis line yet; competing ideas may split attention.",
+          "Hard for listeners to know what to clip or share."
+        ],
+        "rule": "One episode = one decision: pick the tradeoff you are defending, then cut everything that does not serve it."
+      },
+      "opportunities": {
+        "spinoff_title": "Defer spin-off planning until one thesis thread survives an edit pass.",
+        "spinoff_structure": "Not assigned — the episode reads as multi-threaded or under-verified for a packaged spin-off brief.",
+        "clip_moments": [
+          "No high-signal auto clip picks. No timestamped evidence rows — skim the transcript for moments that pair one clear claim with one concrete detail.",
+          "Skip outros, transitions, and lyric fragments; favor one claim plus one checkable detail."
+        ],
+        "segment_idea": "Next recording: a **validation block** — state the strongest public-facing claim, what would change your mind, and what primary source you would accept."
+      },
+      "follow_up_questions": [
+        "If you had to cut half this episode and keep one idea, what stays - and what becomes its own episode: Ricky Gervais & Russell Brand - God vs Atheism?",
+        "What metric would prove the opening worked - and what would you change if it didn't?",
+        "What would a skeptical listener say you assumed without saying?"
+      ],
+      "guest_strategy": {
+        "intro": "Diagnostic bookings: prioritize verification, sourcing, and steel-manned counterarguments — not generic motivation angles.",
+        "guests": [
+          {
+            "guest_type": "Reporter or records researcher",
+            "adds": "Primary documents and timelines — reduces reliance on rhetorical peaks alone."
+          },
+          {
+            "guest_type": "Friendly skeptic (peer)",
+            "adds": "Surfaces the strongest counter-case before you publish or clip."
+          }
+        ]
+      },
+      "segment_upgrade": "**Diagnostic close (90s):** Name the single sentence you'd defend if quoted; flag what still needs sourcing before you optimize for distribution.",
+      "immediate_fix_plan": [
+        "Tag assertions as reporting vs. inference vs. opinion before clipping.",
+        "Write down two primary sources you want before repeating the hottest claim in public.",
+        "Isolate segments that mix incompatible frames (news vs. rally vs. personal story)."
+      ],
+      "bottom_line": {
+        "good": "There is usable tension for an informed audience; the gap is defensibility and arc — not chemistry or effort.",
+        "must_change": "Stop expanding with growth packaging on a fragmented spine — verify or edit before you clip.",
+        "if_fixed": "Clips and repurposing work once one arc is legible and claims are labeled for the audience you want."
+      },
+      "meta": {
+        "title": "Ricky Gervais & Russell Brand - God vs Atheism",
+        "transcript_words": 4500
+      }
+    },
+    "weak_claims": [],
+    "summary": "Export withheld: insufficient grounded signal for a network-grade report (see metadata.export_blockers).",
+    "score": 0,
+    "markdown_export": "# SoapBoxx — insufficient signal for a full report\n\nThis run did not meet the minimum bar for a network-grade episode export. The pipeline stopped before synthesizing scores, clips, or growth packaging that could read as authoritative.\n\n**Episode:** Ricky Gervais & Russell Brand - God vs Atheism\n\n## Why export was withheld\n- FAIL: evidence rows 0 < min_evidence_rows 2\n- FAIL: segments 0 < min_segments 1\n- grounded evidence rows 0 < 2 (workflow=0, report_v3=0)\n- segments 0 < 1 (workflow and report_v3)\n\n## What usually fixes this\n- Longer or cleaner transcript (manual captions, ASR repair, or Whisper)\n- Enable Ollama and a capable local model (`SOAPBOXX_OLLAMA_MODEL`) for enrichment\n- Re-run when the episode has a clearer argumentative spine in the tape\n\n*No scores or strategic sections are shown because they would not be grounded in verified structure.*\n"
+  },
+  "blueprint_v1": null,
+  "markdown_export": "# SoapBoxx — insufficient signal for a full report\n\nThis run did not meet the minimum bar for a network-grade episode export. The pipeline stopped before synthesizing scores, clips, or growth packaging that could read as authoritative.\n\n**Episode:** Ricky Gervais & Russell Brand - God vs Atheism\n\n## Why export was withheld\n- FAIL: evidence rows 0 < min_evidence_rows 2\n- FAIL: segments 0 < min_segments 1\n- grounded evidence rows 0 < 2 (workflow=0, report_v3=0)\n- segments 0 < 1 (workflow and report_v3)\n\n## What usually fixes this\n- Longer or cleaner transcript (manual captions, ASR repair, or Whisper)\n- Enable Ollama and a capable local model (`SOAPBOXX_OLLAMA_MODEL`) for enrichment\n- Re-run when the episode has a clearer argumentative spine in the tape\n\n*No scores or strategic sections are shown because they would not be grounded in verified structure.*\n",
+  "warnings": [
+    "primary_topic was empty — defaulted to title or first claim."
+  ],
+  "model": "ollama:llama3.1:8b",
+  "workflow_version": "3"
+}

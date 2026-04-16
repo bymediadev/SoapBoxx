@@ -11,7 +11,8 @@ legacy one-page ``markdown`` export.
 **LLM inference (Ollama only):** set ``SOAPBOXX_OLLAMA_MODEL`` (and optional ``OLLAMA_HOST``)
 so ``generate_episode_brief`` calls a local Ollama server. For long transcripts, set
 ``SOAPBOXX_BRIEF_MAX_CHARS`` to match your model context (single full transcript pass before
-chunked fallback).
+chunked fallback). Optional ``SOAPBOXX_OLLAMA_NUM_CTX`` / ``OLLAMA_NUM_CTX`` and ``SOAPBOXX_OLLAMA_TOP_P``
+are forwarded to Ollama ``options``.
 """
 
 from __future__ import annotations
@@ -23,6 +24,11 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+
+try:
+    from json_repair import loads as _json_repair_loads
+except ImportError:  # pragma: no cover - optional until pip install
+    _json_repair_loads = None  # type: ignore
 
 try:
     from tenacity import retry, stop_after_attempt, wait_exponential
@@ -57,15 +63,19 @@ BANNED_SUBSTRINGS = (
     "moving forward",
 )
 
-# Default single-pass brief size (chars). Below this, one LLM call sees the full transcript.
-# Raise with SOAPBOXX_BRIEF_MAX_CHARS for long-context Ollama models (e.g. 100000).
-MAX_TRANSCRIPT_SINGLE_PASS = 32_000
+# Default single-pass brief size (chars) when ``SOAPBOXX_BRIEF_MAX_CHARS`` is unset.
+# One full pass before chunking improves claim/thesis quality on typical podcast transcripts.
+# Override with ``SOAPBOXX_BRIEF_MAX_CHARS`` if your model context is smaller.
+# ~200k fits long YouTube caption dumps in one pass on common local models (override with SOAPBOXX_BRIEF_MAX_CHARS).
+DEFAULT_TRANSCRIPT_SINGLE_PASS_CHARS = 200_000
+# Legacy name kept for comments / docs that referenced the old 32k default.
+MAX_TRANSCRIPT_SINGLE_PASS = DEFAULT_TRANSCRIPT_SINGLE_PASS_CHARS
 CHUNK_SIZE = 6_000
 CHUNK_OVERLAP = 400
 
 # If set (digits only), transcripts up to this many characters use one LLM pass with the full text
-# (good for local Ollama with large-context models, e.g. 100000 with llama3.1 / qwen2.5).
-# Example: SOAPBOXX_BRIEF_MAX_CHARS=100000
+# (good for local Ollama with large-context models, e.g. llama3.1:8b with SOAPBOXX_BRIEF_MAX_CHARS=200000).
+# Example: SOAPBOXX_BRIEF_MAX_CHARS=128000
 
 # Compact network-brief JSON / markdown format version (v2). Primary Episode Report is v3.
 REPORT_WORKFLOW_VERSION = "2"
@@ -138,12 +148,18 @@ Return ONLY valid JSON (no markdown fences) matching this shape:
   ]
 }
 Rules: No filler adjectives. Every claim must have next_action and counter_angle (use \"\" if not applicable). Max 5 claims.
+Inside every JSON string value, escape literal double-quote characters as \\\" (broken quotes make the JSON invalid).
 
 Claim text rules (strict):
 - One sentence paraphrase of what the show argues; readable standalone.
 - Never paste raw transcript dialogue, filler (\"you know\", \"man\"), or first-person host/guest lines.
 - No duplicated sentences or repeated phrases in the same claim.
 - maps_to_claim_id on guests must be exactly one of the claim ids you output (c1..c5), or \"\".
+
+Grounding (non-negotiable):
+- episode_snapshot.title, creator, and genre come from METADATA and name the real show — primary_topic MUST align with them (same people, show, or clearly stated subtopic of that episode).
+- Do NOT label the episode with spiritual, theological, doctrinal, or religious framing unless the title or genre explicitly signals faith content (e.g. church, sermon, theology podcast).
+- If the episode is pop culture, news, business, or lifestyle, primary_topic must use that vocabulary — never default to generic \"spiritual principles\" language.
 """
 
 
@@ -227,6 +243,16 @@ def _is_garbage_claim_text(s: str) -> bool:
         return True
     if low.startswith(("has ", "comes ", "victims ", "jobs ")) and len(t.split()) < 14:
         return True
+    # Common ASR confetti pasted as a "claim" (pop-culture / interview pods)
+    asr_confetti = (
+        "if you guys have heard",
+        "didn't think about it much",
+        "that day but yeah",
+        "on our hands and knees",
+        "playmate of the year is going to be here",
+    )
+    if any(f in low for f in asr_confetti) and len(t.split()) < 22:
+        return True
     return False
 
 
@@ -302,14 +328,14 @@ def _follow_up_question(claim: Dict[str, Any], index: int) -> str:
     if na == "follow_up_segment":
         return "What follow-up segment would pressure-test this responsibly?"
     if ct == "belief":
-        return "Which scripture or tradition best frames this claim?"
+        return "What lived experience, evidence, or counterexample would confirm or challenge this belief?"
     if ct == "fact":
         return "How could listeners evaluate this without rumor or hearsay?"
     if ct == "interpretation":
         return "What alternative reading fits the same facts?"
     pool = (
         "What is the strongest fair counterpoint to this?",
-        "Which scripture or tradition best frames this claim?",
+        "What evidence would change your mind about this claim?",
         "How could listeners evaluate this without rumor or hearsay?",
     )
     return pool[index % len(pool)]
@@ -493,9 +519,81 @@ def _strip_json_fence(raw: str) -> str:
     return s.strip()
 
 
+def _strip_trailing_commas_json(s: str) -> str:
+    """Remove JS-style trailing commas before } or ] (common in LLM output)."""
+    out = s
+    for _ in range(64):
+        s2 = re.sub(r",(\s*[}\]])", r"\1", out)
+        if s2 == out:
+            return out
+        out = s2
+    return out
+
+
+def _extract_first_json_object(raw: str) -> str:
+    """
+    If the model adds prose before/after JSON, take the first top-level `{...}` object.
+    Tracks string/escape state so `{`/`}` inside quoted strings do not affect depth.
+    """
+    s = raw.strip()
+    start = s.find("{")
+    if start < 0:
+        return raw
+    depth = 0
+    in_str = False
+    esc = False
+    for j in range(start, len(s)):
+        ch = s[j]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return s[start : j + 1]
+    return s[start:]
+
+
 def _parse_json_loose(raw: str) -> Dict[str, Any]:
-    s = _strip_json_fence(raw)
-    return json.loads(s)
+    """
+    Parse model JSON: strip fences, isolate first object, tolerate trailing commas.
+    Falls back to ``json-repair`` (unescaped quotes in strings, minor syntax glitches).
+    """
+    s = _strip_json_fence(raw).strip().lstrip("\ufeff")
+    if not s:
+        raise json.JSONDecodeError("empty", "", 0)
+    blob = _extract_first_json_object(s) if "{" in s else s
+    blob_tc = _strip_trailing_commas_json(blob)
+
+    last_err: Optional[Exception] = None
+    try:
+        data = json.loads(blob_tc)
+        if isinstance(data, dict):
+            return data
+    except (json.JSONDecodeError, TypeError, ValueError) as e:
+        last_err = e
+
+    if _json_repair_loads is not None:
+        try:
+            data = _json_repair_loads(blob)
+            if isinstance(data, dict):
+                return data
+        except (json.JSONDecodeError, TypeError, ValueError) as e:
+            last_err = e
+
+    if last_err is not None:
+        raise last_err
+    raise json.JSONDecodeError("could not parse brief JSON", blob, 0)
 
 
 def _has_banned_slop(text: str) -> bool:
@@ -520,7 +618,7 @@ def _max_transcript_single_pass_chars() -> int:
     raw = os.getenv("SOAPBOXX_BRIEF_MAX_CHARS", "").strip()
     if raw.isdigit():
         return min(max(int(raw), 1_000), 500_000)
-    return MAX_TRANSCRIPT_SINGLE_PASS
+    return DEFAULT_TRANSCRIPT_SINGLE_PASS_CHARS
 
 
 def _brief_backend_label() -> str:
@@ -534,43 +632,63 @@ def _ollama_chat(
     *,
     max_tokens: int = 4_096,
     temperature: float = 0.25,
+    stage: str = "episode_intelligence.brief",
 ) -> str:
     """Local Ollama HTTP API — no OpenAI API key. Requires SOAPBOXX_OLLAMA_MODEL and a running server."""
     host = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
     model = os.getenv("SOAPBOXX_OLLAMA_MODEL", "").strip()
     if not model:
         raise RuntimeError("SOAPBOXX_OLLAMA_MODEL is not set")
+    o_opts: Dict[str, Any] = {
+        "num_predict": max_tokens,
+        "temperature": temperature,
+    }
+    _ctx = os.getenv("SOAPBOXX_OLLAMA_NUM_CTX", os.getenv("OLLAMA_NUM_CTX", "")).strip()
+    if _ctx:
+        try:
+            o_opts["num_ctx"] = int(_ctx)
+        except ValueError:
+            pass
+    _tp = os.getenv("SOAPBOXX_OLLAMA_TOP_P", "").strip()
+    if _tp:
+        try:
+            o_opts["top_p"] = float(_tp)
+        except ValueError:
+            pass
     # Ollama JSON mode improves parse success for brief/claim extraction (esp. small local models).
-    payload = json.dumps(
-        {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            "stream": False,
-            "format": "json",
-            "options": {
-                "num_predict": max_tokens,
-                "temperature": temperature,
-            },
-        }
-    ).encode("utf-8")
-    req = urllib.request.Request(
-        f"{host}/api/chat",
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    timeout_s = float(os.getenv("SOAPBOXX_OLLAMA_HTTP_TIMEOUT", "900") or "900")
+    payload_obj: Dict[str, Any] = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "stream": False,
+        "format": "json",
+        "options": o_opts,
+    }
     try:
-        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace") if e.fp else ""
-        raise RuntimeError(f"Ollama HTTP {e.code}: {body[:500]}") from e
-    except urllib.error.URLError as e:
-        raise RuntimeError(f"Ollama unreachable at {host}: {e}") from e
+        try:
+            from .ollama_chat_http import ollama_api_chat
+            from .ollama_heartbeat import ollama_blocking_heartbeat
+        except ImportError:
+            from ollama_chat_http import ollama_api_chat  # type: ignore
+            from ollama_heartbeat import ollama_blocking_heartbeat  # type: ignore
+
+        data = ollama_api_chat(
+            host,
+            payload_obj,
+            stage=stage,
+            component="episode_intelligence",
+            heartbeat_cm=ollama_blocking_heartbeat,
+        )
+    except Exception as e:
+        try:
+            from .ollama_chat_http import OllamaTransportError
+        except ImportError:
+            from ollama_chat_http import OllamaTransportError  # type: ignore
+        if isinstance(e, OllamaTransportError):
+            raise RuntimeError(str(e)) from e
+        raise
     return (data.get("message") or {}).get("content") or ""
 
 
@@ -592,7 +710,6 @@ def _openai_chat(
     )
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8), reraise=True)
 def _openai_chat_with_retry(
     client: Any,
     use_new_api: bool,
@@ -601,6 +718,7 @@ def _openai_chat_with_retry(
     max_tokens: int = 4_096,
     temperature: float = 0.25,
 ) -> str:
+    """Retries are handled in ``ollama_api_chat`` (bounded exponential)."""
     return _openai_chat(
         client,
         use_new_api,
@@ -637,6 +755,7 @@ def _extract_claims_chunk(
     use_new_api: bool,
     chunk: str,
     chunk_idx: int,
+    metadata: Optional[Dict[str, str]] = None,
 ) -> List[Dict[str, Any]]:
     sys = (
         "You extract testable claims from podcast transcript chunks. "
@@ -645,7 +764,13 @@ def _extract_claims_chunk(
         "Each text must be ONE short paraphrase sentence (no dialogue, no filler words). "
         "Max 4 claims per chunk. Skip small talk."
     )
-    user = f"CHUNK {chunk_idx}:\n{chunk}\n\nReturn JSON only."
+    md = dict(metadata or {})
+    title = str(md.get("title") or "")[:120]
+    genre = str(md.get("genre") or "")[:80]
+    user = (
+        f"EPISODE_TITLE: {title or '(unknown)'}\nGENRE: {genre or '(unknown)'}\n"
+        f"CHUNK {chunk_idx}:\n{chunk}\n\nReturn JSON only."
+    )
     raw = _openai_chat_with_retry(
         client, use_new_api, sys, user, max_tokens=1_800, temperature=0.2
     )
@@ -670,11 +795,16 @@ def _synthesize_full_brief(
         "Be direct. No hype. No recap filler. "
         + BRIEF_JSON_SCHEMA_HINT
     )
+    grounding = (
+        "GROUNDING: Episode identity is in METADATA (title, creator, genre). primary_topic must align with that identity. "
+        "Never use spiritual/theological framing unless the metadata clearly indicates a faith or religion show.\n\n"
+    )
     user = (
-        f"METADATA (use as defaults; episode_snapshot may refine):\n{meta}\n\n"
-        f"CLAIMS (dedupe and align brief to these; max 5 in output):\n{claims_json}\n\n"
-        f"TRANSCRIPT EXCERPT (for voice and nuance; do not invent facts not supported here):\n"
-        f"{transcript_sample[:12000]}\n"
+        grounding
+        + f"METADATA (use as defaults; episode_snapshot may refine):\n{meta}\n\n"
+        + f"CLAIMS (dedupe and align brief to these; max 5 in output):\n{claims_json}\n\n"
+        + "TRANSCRIPT EXCERPT (for voice and nuance; do not invent facts not supported here):\n"
+        + f"{transcript_sample[:12000]}\n"
     )
     raw = _openai_chat_with_retry(
         client, use_new_api, sys, user, max_tokens=4_096, temperature=0.25
@@ -694,9 +824,16 @@ def _single_pass_brief(
         "Separate fact vs interpretation vs belief. "
         + BRIEF_JSON_SCHEMA_HINT
     )
+    meta = dict(metadata or {})
+    grounding = (
+        "GROUNDING: Use metadata title, creator, and genre as the source of truth for what this episode is about. "
+        "primary_topic must visibly overlap those fields (names, domain, format). "
+        "Do not output religious/spiritual framing unless the show is explicitly faith-oriented.\n\n"
+    )
     user = (
-        f"METADATA:\n{json.dumps(metadata, ensure_ascii=False)}\n\n"
-        f"TRANSCRIPT:\n{transcript}\n"
+        grounding
+        + f"METADATA:\n{json.dumps(meta, ensure_ascii=False)}\n\n"
+        + f"TRANSCRIPT:\n{transcript}\n"
     )
     raw = _openai_chat_with_retry(
         client, use_new_api, sys, user, max_tokens=4_096, temperature=0.25
@@ -750,8 +887,30 @@ def _normalize_brief(data: Dict[str, Any], metadata: Dict[str, str]) -> Dict[str
         ca = _clean_claim_text(str(c.get("counter_angle") or ""))
         c["counter_angle"] = ca
     data["claims"] = claims
+    qwarn: List[str] = []
+    try:
+        from .episode_quality_gates import apply_brief_quality_pass
+    except ImportError:
+        from episode_quality_gates import apply_brief_quality_pass  # type: ignore
+
+    qwarn = apply_brief_quality_pass(data, metadata)
+    data["_quality_warnings"] = qwarn
+    claims = data["claims"]
     _sanitize_episode_snapshot(snap, claims)
     data["narrative"] = _filter_narrative_bullets(data.get("narrative") or [], claims)
+    try:
+        from .episode_quality_gates import clamp_narrative_bullets_to_identity
+    except ImportError:
+        from episode_quality_gates import clamp_narrative_bullets_to_identity  # type: ignore
+
+    narr_clamped, narr_warn = clamp_narrative_bullets_to_identity(snap, data.get("narrative") or [])
+    if narr_warn:
+        qw = data.get("_quality_warnings") or []
+        if not isinstance(qw, list):
+            qw = []
+        qw.extend(narr_warn)
+        data["_quality_warnings"] = qw
+    data["narrative"] = narr_clamped
     valid = _valid_claim_ids(claims)
     guests = [g for g in (data.get("guests") or []) if isinstance(g, dict)]
     if not guests and claims:
@@ -977,11 +1136,14 @@ def generate_episode_brief(
             )
             claim_lists: List[List[Dict[str, Any]]] = []
             for idx, ch in chunk_transcript(t):
-                claim_lists.append(_extract_claims_chunk(client, use_new_api, ch, idx))
+                claim_lists.append(
+                    _extract_claims_chunk(client, use_new_api, ch, idx, meta)
+                )
             merged = _merge_claim_chunks(claim_lists)
             data = _synthesize_full_brief(client, use_new_api, t, merged, meta)
         print("[episode_intelligence] Brief generation completed.")
         data = _normalize_brief(data, meta)
+        warnings.extend(data.pop("_quality_warnings", []) or [])
         md = render_markdown(data, meta.get("generated_at"))
         if _has_banned_slop(md):
             md = _scrub_slop(md)

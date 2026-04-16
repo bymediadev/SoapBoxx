@@ -2,7 +2,8 @@
 """
 **Primary** SoapBoxx episode workflow (v3): coach-style Episode Report (10 sections), signal mode
 (HIGH_SIGNAL / LOW_SIGNAL), structured evidence, engagement triads, guests, segments,
-actionable analytics, reference validation, semantic deduplication.
+actionable analytics, reference validation, semantic deduplication, and ``dual_lens`` (parallel
+narrative/analytical assembly + weights — see ``lens_engine_prompts.assemble_dual_lens_package``).
 
 Builds on normalized **v2** brief JSON from episode_intelligence.generate_episode_brief.
 The coach always surfaces a single-sentence thesis line (argument-shaped); low-signal runs pair it with an honest-read note.
@@ -39,9 +40,101 @@ except ImportError:
         render_markdown,
     )
 
+try:
+    from .lens_engine_prompts import assemble_dual_lens_package  # type: ignore
+except ImportError:
+    from lens_engine_prompts import assemble_dual_lens_package  # type: ignore
+
+try:
+    from .episode_quality_gates import evaluate_v3_quality_gates  # type: ignore
+except ImportError:
+    from episode_quality_gates import evaluate_v3_quality_gates  # type: ignore
+
+try:
+    from .episode_quality_gates import build_identity_anchor, jaccard_tokens  # type: ignore
+except ImportError:
+    from episode_quality_gates import build_identity_anchor, jaccard_tokens  # type: ignore
+
+try:
+    from .guest_generation_decision import build_guest_decision_trace  # type: ignore
+except ImportError:
+    from guest_generation_decision import build_guest_decision_trace  # type: ignore
+
+try:
+    from .semantic_grounding_validator import apply_semantic_grounding_validator  # type: ignore
+except ImportError:
+    from semantic_grounding_validator import apply_semantic_grounding_validator  # type: ignore
+
+try:
+    from .claim_quality_gate import apply_claim_quality_gate  # type: ignore
+except ImportError:
+    from claim_quality_gate import apply_claim_quality_gate  # type: ignore
+
+try:
+    from .system_health import apply_system_health_label  # type: ignore
+except ImportError:
+    from system_health import apply_system_health_label  # type: ignore
+
+try:
+    from .report_invariants import validate_v3_invariants  # type: ignore
+except ImportError:
+    from report_invariants import validate_v3_invariants  # type: ignore
+
 REPORT_V3_VERSION = "3"
 SEMANTIC_DUP_THRESHOLD = 0.8
 MIN_EVIDENCE_CONFIDENCE = 0.2
+
+
+def _transcript_normalize_enabled() -> bool:
+    """
+    Default **on** (dedupe lines, collapse blank runs) for real-episode transcripts.
+    Set ``SOAPBOXX_TRANSCRIPT_NORMALIZE=0`` (or ``false`` / ``no`` / ``off``) to disable.
+    """
+    v = os.getenv("SOAPBOXX_TRANSCRIPT_NORMALIZE", "").strip().lower()
+    if v in ("0", "false", "no", "off"):
+        return False
+    if v in ("1", "true", "yes", "on"):
+        return True
+    return True
+
+
+def normalize_transcript_for_v3(text: str) -> str:
+    """
+    Deterministic transcript cleanup before v2 brief / v3 report (no LLM).
+
+    - Normalizes ``\\r\\n`` / ``\\r`` to ``\\n``.
+    - Trims trailing whitespace per line.
+    - Collapses runs of **3+** blank lines to **2** blank lines.
+    - Drops **consecutive duplicate** non-blank lines (exact match after ``rstrip``).
+      A blank line between two identical lines breaks deduplication so repeated
+      paragraphs separated by whitespace are kept.
+    """
+    text = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+    lines = text.split("\n")
+    out: List[str] = []
+    prev_content: Optional[str] = None
+    blank_run_out = 0
+    for line in lines:
+        s = line.rstrip()
+        if not s:
+            if blank_run_out < 2:
+                out.append("")
+                blank_run_out += 1
+            prev_content = None
+            continue
+        blank_run_out = 0
+        if prev_content is not None and s == prev_content:
+            continue
+        prev_content = s
+        out.append(s)
+    return "\n".join(out).strip()
+
+
+def transcript_for_v3_pipeline(text: str) -> str:
+    """Return ``normalize_transcript_for_v3`` unless normalization is disabled (see ``_transcript_normalize_enabled``)."""
+    if not _transcript_normalize_enabled():
+        return text or ""
+    return normalize_transcript_for_v3(text or "")
 
 INSIGHT_TRANSFORM_RULES = """
 You are NOT allowed to output raw transcript fragments.
@@ -883,20 +976,9 @@ def _is_low_signal_fragment(text: str) -> bool:
     return False
 
 
-def _is_broken_evidence_claim_line(text: str) -> bool:
-    """
-    True when a *claim* line is an ASR splice / truncation — not when it is short but complete.
-    (Do not use ``_is_low_signal_fragment`` here: that rejects short valid claims.)
-    """
-    t = (text or "").strip()
-    if not t:
-        return True
-    low = t.lower()
-    if _is_meta_topic_line(t) or _is_narrative_meta_noise(t):
-        return True
+def _asr_truncation_markers(low: str, t: str) -> bool:
+    """Shared ASR splice / ellipsis / stutter heuristics for claim and evidence strings."""
     if t.endswith(("...", "…")):
-        return True
-    if t[-1] not in ".!?" and len(t.split()) > 12:
         return True
     if low.endswith((" to.", " by.", " for.", " and.", " the.")) and len(t.split()) < 18:
         return True
@@ -911,10 +993,57 @@ def _is_broken_evidence_claim_line(text: str) -> bool:
     return False
 
 
+def _is_broken_evidence_claim_line(text: str) -> bool:
+    """
+    True when a *claim* line is an ASR splice / truncation — not when it is short but complete.
+    (Do not use ``_is_low_signal_fragment`` here: that rejects short valid claims.)
+    """
+    t = (text or "").strip()
+    if not t:
+        return True
+    low = t.lower()
+    if _is_meta_topic_line(t) or _is_narrative_meta_noise(t):
+        return True
+    if _asr_truncation_markers(low, t):
+        return True
+    if t[-1] not in ".!?" and len(t.split()) > 12:
+        return True
+    # Mid-dialogue splice pasted as a "claim" (quoted speech + tail fragment)
+    if t.count('"') >= 2 and len(t.split()) < 22 and t[-1] not in ".!?":
+        return True
+    if re.search(r'"\s*[A-Za-z].*\.\"\s+[A-Za-z]', t) and len(t.split()) < 24:
+        return True
+    return False
+
+
+def _is_broken_evidence_quote_line(text: str) -> bool:
+    """
+    True when an *evidence* pull-quote looks truncated or stutter-corrupted.
+    Slightly more lenient than claim lines (longer quotes allowed before flagging missing terminal punct).
+    """
+    t = (text or "").strip()
+    if not t:
+        return True
+    low = t.lower()
+    if _is_meta_topic_line(t) or _is_narrative_meta_noise(t):
+        return True
+    if _asr_truncation_markers(low, t):
+        return True
+    if t[-1] not in ".!?" and len(t.split()) > 28:
+        return True
+    return False
+
+
 def _generalize_sentence(text: str) -> str:
     s = _clean_claim_text(text).strip()
     if not s:
         return s
+    # Strip bracket timestamps before leading \W+ trim — otherwise `[00:00:15]` becomes `00:00:15]`.
+    s = re.sub(
+        r"^\[[0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?\]\s*",
+        "",
+        s,
+    )
     s = re.sub(r"^\W+", "", s)
     s = re.sub(r"\s+", " ", s)
     if s and s[0].islower():
@@ -1107,6 +1236,8 @@ def build_evidence_mapping(
             continue
         if _is_broken_evidence_claim_line(claim_txt):
             continue
+        if _is_broken_evidence_quote_line(ev):
+            continue
         fn = _classify_claim_function(claim_txt, ev)
         usage = _derive_usage(claim_txt, fn)
         row = EvidenceClaim(
@@ -1121,7 +1252,12 @@ def build_evidence_mapping(
         built["confidence"] = round(max(0.0, min(conf, 1.0)), 3)
         built["source_type"] = source_type
         ctype = str(c.get("claim_type") or "interpretation").lower()
-        built["type"] = "doctrinal" if ctype == "belief" else "critique"
+        if ctype == "fact":
+            built["type"] = "factual"
+        elif ctype == "belief":
+            built["type"] = "opinion_host"
+        else:
+            built["type"] = "interpretive"
         out.append(built)
     return out
 
@@ -1330,7 +1466,9 @@ def detect_signal_mode(brief: Dict[str, Any]) -> str:
     avg_strength = sum(strengths) / len(strengths) if strengths else 0.0
     uniqueness_ratio = (len(unique_fps) / len(claims)) if claims else 0.0
 
-    if len(claims) >= 2 and avg_strength >= 0.68 and uniqueness_ratio >= 0.65:
+    # Slightly lenient vs older 0.68 / 0.65 so borderline substantive two-claim episodes still
+    # earn HIGH_SIGNAL when wording is tight but lacks a literal "because".
+    if len(claims) >= 2 and avg_strength >= 0.62 and uniqueness_ratio >= 0.55:
         return "HIGH_SIGNAL"
     if len(claims) == 1:
         conf = str(claims[0].get("confidence") or "").lower()
@@ -2291,6 +2429,249 @@ def validate_references(
     return len(bad) == 0, errors
 
 
+# Cross-layer narrative alignment: single compile-time transform (see ``build_v3_report``).
+# Jaccard tiers (short-text–aware): soft warning → repair → collapse — not one binary gate.
+_CONSISTENCY_SOFT_WARN = 0.10
+_CONSISTENCY_REPAIR = 0.07
+_CONSISTENCY_COLLAPSE = 0.05
+
+
+def _jaccard_tier(j: float) -> str:
+    if j >= _CONSISTENCY_SOFT_WARN:
+        return "ok"
+    if j >= _CONSISTENCY_REPAIR:
+        return "soft"
+    if j >= _CONSISTENCY_COLLAPSE:
+        return "repair"
+    return "collapse"
+
+
+def apply_identity_consistency_to_report_v3(report: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    **Single enforcement point** for v3: run from ``build_v3_report`` only.
+
+    - **Spine:** ``narrative_reconstruction`` fields use tiered Jaccard vs identity anchor.
+    - **Coach:** ``episode_thesis`` is **not** blindly copied when both layers are plausibly
+      on-identity: it mirrors the narrative spine only when the narrative layer was repaired,
+      or when the coach line is severely off-anchor. Otherwise coach wording can diverge from
+      reconstruction (interpretive layer preserved).
+    - **Observability:** ``_consistency_tier_histogram``, ``_consistency_jaccard_samples``,
+      ``_consistency_soft_suggestions`` (pressure for future edits / batch analytics — not silent).
+
+    Sets ``_consistency_drift_notes`` when soft drift is detected; ``_consistency_fix_applied``
+    when any replacement runs. Does not change claims, evidence rows, or scores.
+    """
+    meta = report.get("meta") if isinstance(report.get("meta"), dict) else {}
+    snap = report.get("episode_snapshot") if isinstance(report.get("episode_snapshot"), dict) else {}
+    anchor = build_identity_anchor(meta, snap)
+    if len(anchor) < 8:
+        return report
+
+    pt = str(snap.get("primary_topic") or "").strip()
+    title = str(snap.get("title") or "").strip()
+    fallback_thesis = pt or title or anchor[:280]
+
+    drift_notes: List[str] = []
+    soft_suggestions: List[str] = []
+    tier_hist: Dict[str, int] = {"ok": 0, "soft": 0, "repair": 0, "collapse": 0}
+    jaccard_samples: List[Dict[str, Any]] = []
+
+    def _bump_tier(tier: str) -> None:
+        if tier in tier_hist:
+            tier_hist[tier] += 1
+
+    fix = False
+    narrative_layer_mutated = False
+    nr = report.get("narrative_reconstruction")
+    if not isinstance(nr, dict):
+        nr = {}
+        report["narrative_reconstruction"] = nr
+
+    cr = report.get("coach_report") if isinstance(report.get("coach_report"), dict) else None
+
+    def _align_nr_field(key: str) -> None:
+        nonlocal fix, narrative_layer_mutated
+        val = str(nr.get(key) or "").strip()
+        if not val:
+            return
+        j = jaccard_tokens(val, anchor)
+        tier = _jaccard_tier(j)
+        _bump_tier(tier)
+        jaccard_samples.append({"field": f"narrative_reconstruction.{key}", "jaccard": round(j, 4), "tier": tier})
+        if tier == "ok":
+            return
+        if tier == "soft":
+            drift_notes.append(f"{key}: soft_drift_vs_identity (jaccard={j:.3f})")
+            soft_suggestions.append(
+                f"Tighten {key} toward title/topic identity (jaccard={j:.3f}); "
+                f"revisit before the next export if drift persists across episodes."
+            )
+            return
+        if tier in ("repair", "collapse"):
+            nr[key] = fallback_thesis
+            fix = True
+            narrative_layer_mutated = True
+            drift_notes.append(f"{key}: realigned_to_identity (tier={tier}, jaccard={j:.3f})")
+
+    # Primary spine first, then supporting fields (same tier rules).
+    for key in ("core_thesis", "supporting_mechanism", "practical_translation"):
+        _align_nr_field(key)
+
+    insights = [str(x).strip() for x in (report.get("clean_insights") or [])[:5] if str(x).strip()]
+    combined = " ".join(
+        [
+            str(nr.get("core_thesis") or ""),
+            " ".join(insights[:3]),
+        ]
+    ).strip()
+    if combined:
+        jc = jaccard_tokens(combined, anchor)
+        ct = _jaccard_tier(jc)
+        _bump_tier(ct)
+        jaccard_samples.append(
+            {"field": "combined(core_thesis+clean_insights)", "jaccard": round(jc, 4), "tier": ct}
+        )
+        if jc < _CONSISTENCY_COLLAPSE:
+            nr["core_thesis"] = fallback_thesis
+            drift_notes.append("combined_insights_gate: collapse_to_identity_anchor")
+            fix = True
+            narrative_layer_mutated = True
+
+    spine = str(nr.get("core_thesis") or fallback_thesis).strip()
+
+    # Coach thesis: mirror repaired narrative, or fix standalone coach drift — else preserve coach.
+    if cr is not None and spine:
+        old_et = str(cr.get("episode_thesis") or "").strip()
+        j_et = jaccard_tokens(old_et, anchor) if old_et else 1.0
+        t_et = _jaccard_tier(j_et)
+        if old_et:
+            _bump_tier(t_et)
+            jaccard_samples.append({"field": "coach_report.episode_thesis", "jaccard": round(j_et, 4), "tier": t_et})
+        if narrative_layer_mutated:
+            if old_et != spine:
+                cr["episode_thesis"] = spine
+                fix = True
+                drift_notes.append("episode_thesis: mirrored_to_repaired_narrative_spine")
+        elif old_et and t_et in ("repair", "collapse"):
+            cr["episode_thesis"] = spine
+            fix = True
+            drift_notes.append("episode_thesis: realigned (off_anchor; narrative layer unchanged)")
+        elif old_et and t_et == "soft":
+            drift_notes.append(f"episode_thesis: soft_drift_vs_identity (jaccard={j_et:.3f})")
+            soft_suggestions.append(
+                f"Coach thesis wording drifts from identity (jaccard={j_et:.3f}); "
+                f"optional manual contrast vs narrative reconstruction."
+            )
+
+    # Clip hooks: only rewrite on severe drift (collapse tier) — thesis vs packaging can differ.
+    if cr is not None:
+        opp = cr.get("opportunities") if isinstance(cr.get("opportunities"), dict) else {}
+        cms_raw = opp.get("clip_moments") or []
+        if isinstance(cms_raw, list) and cms_raw:
+            new_cms: List[str] = []
+            changed_cm = False
+            for i, cm in enumerate(cms_raw):
+                s = str(cm).strip()
+                if not s:
+                    continue
+                j = jaccard_tokens(s, anchor)
+                ct = _jaccard_tier(j)
+                _bump_tier(ct)
+                jaccard_samples.append(
+                    {"field": f"coach_report.opportunities.clip_moments[{i}]", "jaccard": round(j, 4), "tier": ct}
+                )
+                if ct == "collapse":
+                    new_cms.append(f"Anchor clips to the episode thesis: {spine[:120]}")
+                    changed_cm = True
+                else:
+                    new_cms.append(s)
+            if changed_cm:
+                opp["clip_moments"] = new_cms[:8]
+                cr["opportunities"] = opp
+                fix = True
+
+    report["_consistency_tier_histogram"] = tier_hist
+    report["_consistency_jaccard_samples"] = jaccard_samples
+    if soft_suggestions:
+        report["_consistency_soft_suggestions"] = soft_suggestions
+    if drift_notes:
+        report["_consistency_drift_notes"] = drift_notes
+    if fix:
+        report["_consistency_fix_applied"] = True
+    return report
+
+
+def _distinctive_token_set(text: str) -> Set[str]:
+    """Content tokens for cross-layer overlap (not stopwords / generic transcript filler)."""
+    return {
+        w
+        for w in _tokens(text)
+        if len(w) > 2 and w not in _STOPWORDS and w not in _GENERIC_EVIDENCE_WORDS
+    }
+
+
+def _union_identity_distinctive_bag(report: Dict[str, Any]) -> Set[str]:
+    meta = report.get("meta") if isinstance(report.get("meta"), dict) else {}
+    snap = report.get("episode_snapshot") if isinstance(report.get("episode_snapshot"), dict) else {}
+    anchor = build_identity_anchor(meta, snap)
+    bag = _distinctive_token_set(anchor)
+    for c in report.get("claims") or []:
+        if isinstance(c, dict):
+            bag |= _distinctive_token_set(str(c.get("text") or ""))
+    return bag
+
+
+def _filter_clean_insights_identity_coherence(report: Dict[str, Any]) -> bool:
+    """
+    Drop clean_insight lines that share no distinctive vocabulary with the identity anchor + claims.
+    Conservative: no-op when the bag is too small or every line would be removed.
+    """
+    ins = report.get("clean_insights")
+    if not isinstance(ins, list) or not ins:
+        return False
+    bag = _union_identity_distinctive_bag(report)
+    if len(bag) < 2:
+        return False
+    new: List[str] = []
+    for line in ins:
+        s = str(line).strip()
+        if not s:
+            continue
+        if _distinctive_token_set(s) & bag:
+            new.append(s)
+    if not new or len(new) >= len(ins):
+        return False
+    report["_clean_insights_coherence_filtered"] = len(ins) - len(new)
+    report["clean_insights"] = new
+    return True
+
+
+def _refresh_dual_lens_and_takeaway(
+    report: Dict[str, Any],
+    brief: Dict[str, Any],
+    cleaned: str,
+    meta: Dict[str, str],
+) -> None:
+    """
+    Recompute dual_lens + takeaway after identity / claim / SGV passes mutate narrative and coach text.
+    Initial assembly happens earlier with pre-pass state; without this, exports can show a stale core story.
+    """
+    sm = str(report.get("signal_mode") or "")
+    report["dual_lens"] = assemble_dual_lens_package(
+        brief,
+        cleaned,
+        meta,
+        signal_mode=sm,
+        narrative_reconstruction=report.get("narrative_reconstruction") or {},
+        coach_report=report.get("coach_report") or {},
+        claims=list(report.get("claims") or []),
+    )
+    report["takeaway"] = generate_takeaway(
+        report.get("narrative_reconstruction") or {},
+        output_mode=str(report.get("output_mode") or "full"),
+    )
+
+
 def build_v3_report(
     brief: Dict[str, Any],
     transcript: str,
@@ -2338,12 +2719,27 @@ def build_v3_report(
         claim_count=len(claims),
         evidence_row_count=len(evidence_mapping),
     )
+    v3_gates = evaluate_v3_quality_gates(brief, cleaned)
+    report_readiness["quality_gates"] = v3_gates
+    rnotes = report_readiness.get("notes")
+    if not isinstance(rnotes, list):
+        rnotes = []
+        report_readiness["notes"] = rnotes
+    for n in v3_gates.get("notes") or []:
+        if n not in rnotes:
+            rnotes.append(n)
+
     output_mode, diagnostic_reasons = classify_output_mode(
         brief,
         signal_mode=signal_mode,
         clean_insights=clean_insights,
         report_readiness=report_readiness,
     )
+    if v3_gates.get("force_diagnostic") and output_mode != "diagnostic":
+        output_mode = "diagnostic"
+        diagnostic_reasons = list(diagnostic_reasons or []) + [
+            "Automated quality gates flagged title/topic mismatch or weak claim structure — prescriptive packaging withheld.",
+        ]
     report_readiness["output_mode"] = output_mode
     report_readiness["diagnostic_reasons"] = diagnostic_reasons
 
@@ -2390,11 +2786,22 @@ def build_v3_report(
     if _et and str(_et).strip():
         narrative["core_thesis"] = str(_et).strip()
 
+    dual_lens = assemble_dual_lens_package(
+        brief,
+        cleaned,
+        meta,
+        signal_mode=signal_mode,
+        narrative_reconstruction=narrative,
+        coach_report=coach_report,
+        claims=claims,
+    )
+
     snap = dict(brief.get("episode_snapshot") or {})
     _sanitize_episode_snapshot(snap, claims)
     report: Dict[str, Any] = {
         "workflow_version": REPORT_V3_VERSION,
         "signal_mode": signal_mode,
+        "dual_lens": dual_lens,
         "coach_report": coach_report,
         "episode_snapshot": snap,
         "narrative_reconstruction": narrative,
@@ -2416,7 +2823,16 @@ def build_v3_report(
         },
         "report_readiness": report_readiness,
     }
-    return report
+    r3 = apply_identity_consistency_to_report_v3(report)
+    r3 = apply_claim_quality_gate(r3)
+    r3 = apply_semantic_grounding_validator(r3)
+    if _filter_clean_insights_identity_coherence(r3):
+        r3["strategies"] = inject_strategy_layer(r3.get("clean_insights") or [])
+    _refresh_dual_lens_and_takeaway(r3, brief, cleaned, meta)
+    r3["_guest_decision_trace"] = build_guest_decision_trace(r3)
+    apply_system_health_label(r3)
+    r3["_invariant_contract_check"] = validate_v3_invariants(r3)
+    return r3
 
 
 def validate_v3_report_or_raise(report: Dict[str, Any]) -> None:
@@ -2706,6 +3122,36 @@ def render_episode_report_v3_markdown(
     else:
         lines.append("*Coach report unavailable - run `build_v3_report` with full pipeline.*")
 
+    dl = report.get("dual_lens")
+    if isinstance(dl, dict) and dl.get("episode_lens_type"):
+        w = dl.get("weights") or {}
+        lines.extend(
+            [
+                "",
+                "## 11. Dual lens (parallel read + weights)",
+                f"**Episode lens:** {dl.get('episode_lens_type')} "
+                f"(heuristic confidence {dl.get('confidence', '—')}) · "
+                f"**Weights:** narrative {w.get('narrative')} / analytical {w.get('analytical')}",
+            ]
+        )
+        syn = dl.get("synthesis") if isinstance(dl.get("synthesis"), dict) else {}
+        cp = str(syn.get("core_positioning") or "").strip()
+        if cp:
+            lines.extend(["", "### Core positioning (weighted)", cp])
+        cn = syn.get("collision_notes") or []
+        if cn:
+            lines.extend(["", "### Synthesis (collisions)"])
+            for c in cn:
+                lines.append(f"- {c}")
+        eb = syn.get("execution_bias") if isinstance(syn.get("execution_bias"), dict) else {}
+        if eb:
+            lines.extend(["", "### Execution bias"])
+            lines.append(f"- **Clips:** {eb.get('clips', '')}")
+            lines.append(f"- **Actions:** {eb.get('actions', '')}")
+        inj = str(dl.get("prompt_injection") or "").strip()
+        if inj:
+            lines.extend(["", "### Prompt injection (downstream LLM)", "```text", inj, "```"])
+
     lines.extend(
         [
             "",
@@ -2813,14 +3259,1114 @@ def _episode_signal_badge(report_readiness: Dict[str, Any], r3: Dict[str, Any]) 
     return "moderate"
 
 
+def _format_master_blueprint_v1_section(bundle: Dict[str, Any]) -> List[str]:
+    """Markdown block when ``bundle`` includes ``blueprint_v1`` from Master Blueprint v1."""
+    bp = bundle.get("blueprint_v1")
+    if not isinstance(bp, dict):
+        return []
+    sr = bp.get("strategist_report") if isinstance(bp.get("strategist_report"), dict) else None
+    if sr:
+        snap = sr.get("snapshot") if isinstance(sr.get("snapshot"), dict) else {}
+        core = sr.get("core_breakdown") if isinstance(sr.get("core_breakdown"), dict) else {}
+        up = sr.get("upgrade_plan") if isinstance(sr.get("upgrade_plan"), dict) else {}
+        sf = up.get("structure_fix") if isinstance(up.get("structure_fix"), dict) else {}
+        aud = (
+            sr.get("audience_engagement_intelligence")
+            if isinstance(sr.get("audience_engagement_intelligence"), dict)
+            else {}
+        )
+        sv = (
+            sr.get("strategic_value_for_network")
+            if isinstance(sr.get("strategic_value_for_network"), dict)
+            else {}
+        )
+        lines: List[str] = [
+            "## Podcast performance & growth intelligence",
+            "",
+            f"**Positioning:** {str(bp.get('product_positioning') or 'A podcast performance and growth intelligence layer').strip()}",
+            "",
+        ]
+        punchline = str(sr.get("punchline_header") or "").strip()
+        if not punchline:
+            punchline = "This episode underperforms due to weak positioning and lack of clear takeaway, but can be significantly improved with stronger framing, sharper questions, and more structured delivery."
+        lines.append("**Podcast Performance Insight**")
+        lines.append(f"> {punchline}")
+        lines.append("")
+        score = snap.get("overall_score")
+        signal = str(snap.get("signal_strength") or "").strip()
+        diagnosis = str(snap.get("diagnosis") or "").strip()
+        scoring_basis = str(snap.get("scoring_basis") or "").strip()
+        if score or signal or diagnosis:
+            lines.append("**Snapshot**")
+            lines.append(f"- Overall score: {score if score not in (None, '') else '—'} / 10")
+            if signal:
+                lines.append(f"- Signal strength: {signal}")
+            if diagnosis:
+                lines.append(f"- Diagnosis: {diagnosis}")
+            if scoring_basis:
+                lines.append(f"- Scoring basis: {scoring_basis}")
+            lines.append("")
+        thesis = str(core.get("thesis") or "").strip()
+        if thesis:
+            lines.append(f"**Thesis:** {thesis}")
+            lines.append("")
+        key_claims = [str(x).strip() for x in (core.get("key_claims") or []) if str(x).strip()]
+        evidence_anchors = [x for x in (core.get("evidence_anchors") or []) if isinstance(x, dict)]
+        tension_position = core.get("tension_position") if isinstance(core.get("tension_position"), dict) else {}
+        if key_claims:
+            lines.append("**Key claims**")
+            for c in key_claims[:3]:
+                lines.append(f"- {c}")
+            lines.append("")
+        if evidence_anchors:
+            lines.append("**Evidence anchors**")
+            for row in evidence_anchors[:3]:
+                cl = str(row.get("claim") or "").strip()
+                an = str(row.get("anchor") or "").strip()
+                if cl and an:
+                    lines.append(f"- {cl} -> {an}")
+            lines.append("")
+        implicit_argument = str(tension_position.get("implicit_argument") or "").strip()
+        stronger_position = str(tension_position.get("stronger_position") or "").strip()
+        if implicit_argument or stronger_position:
+            lines.append("**Tension call**")
+            if implicit_argument:
+                lines.append(f"- {implicit_argument}")
+            if stronger_position:
+                lines.append(f"- {stronger_position}")
+            lines.append("")
+        working = [str(x).strip() for x in (sr.get("what_working") or []) if str(x).strip()]
+        missing = [str(x).strip() for x in (sr.get("what_missing") or []) if str(x).strip()]
+        if working:
+            lines.append("**What's working**")
+            for w in working[:5]:
+                lines.append(f"- {w}")
+            lines.append("")
+        if missing:
+            lines.append("**What's missing / weak**")
+            for m in missing[:5]:
+                lines.append(f"- {m}")
+            lines.append("")
+        repo = str(up.get("reposition_episode") or "").strip()
+        if repo:
+            lines.append(f"**Repositioning:** {repo}")
+        if sf:
+            lines.append("**Structure fix**")
+            for k, label in (
+                ("opening_hook", "Opening hook"),
+                ("midpoint_tension", "Midpoint tension"),
+                ("closing_takeaway", "Closing takeaway"),
+            ):
+                v = str(sf.get(k) or "").strip()
+                if v:
+                    lines.append(f"- {label}: {v}")
+        clips = [str(x).strip() for x in (up.get("clip_opportunities") or []) if str(x).strip()]
+        if clips:
+            lines.append("**Clip opportunities**")
+            for c in clips[:4]:
+                lines.append(f"- {c}")
+        if repo or sf or clips:
+            lines.append("")
+        if aud:
+            lines.append("**Audience & engagement intelligence**")
+            for k, label in (
+                ("listener_takeaway_gap", "Listener takeaway gap"),
+                ("behavior_change", "Behavior change"),
+                ("weekly_improvement_insight", "Weekly improvement insight"),
+            ):
+                v = str(aud.get(k) or "").strip()
+                if v:
+                    lines.append(f"- {label}: {v}")
+            lines.append("")
+        qs = [str(x).strip() for x in (sr.get("question_upgrade") or []) if str(x).strip()]
+        if qs:
+            lines.append("**Question upgrade**")
+            for q in qs[:3]:
+                lines.append(f"- {q}")
+            lines.append("")
+        guests = [g for g in (sr.get("guest_content_opportunities") or []) if isinstance(g, dict)]
+        if guests:
+            lines.append("**Guest & content opportunities**")
+            for g in guests[:4]:
+                who = str(g.get("who_type") or "").strip()
+                why = str(g.get("why_they_matter") or "").strip()
+                unlock = str(g.get("what_they_unlock") or "").strip()
+                if who:
+                    tail = " ".join([x for x in (why, unlock) if x]).strip()
+                    lines.append(f"- **{who}:** {tail}".rstrip())
+            lines.append("")
+        if sv:
+            lines.append("**Strategic value (network)**")
+            wu = str(sv.get("what_improving_unlocks") or "").strip()
+            upf = str(sv.get("where_it_underperforms") or "").strip()
+            if wu:
+                lines.append(f"- What improving unlocks: {wu}")
+            if upf:
+                lines.append(f"- Where it underperforms: {upf}")
+            lines.append("")
+        nli = [str(x).strip() for x in (sr.get("network_level_insight") or []) if str(x).strip()]
+        if nli:
+            lines.append("**Network-level insight**")
+            for x in nli[:4]:
+                lines.append(f"- {x}")
+            lines.append("")
+        rollout = str(sr.get("network_rollout_line") or "").strip()
+        if rollout:
+            lines.append(f"> {rollout}")
+            lines.append("")
+        one_line_fix = str(sr.get("one_line_fix") or "").strip()
+        if not one_line_fix:
+            one_line_fix = "If this episode were reframed around a clear argument and structured for tension, it would become significantly more engaging and shareable."
+        conviction = str(sr.get("conviction_statement") or "").strip()
+        if conviction:
+            lines.append(f"**Conviction:** {conviction}")
+            lines.append("")
+        lines.append(f"**1-Line Fix:** {one_line_fix}")
+        return lines
+    th = str(bp.get("thesis") or "").strip()
+    if not th:
+        return []
+    lines: List[str] = [
+        "## Master blueprint (v1)",
+        "",
+    ]
+    cl = bp.get("classification") or {}
+    if isinstance(cl, dict) and (cl.get("type") or str(cl.get("reasoning") or "").strip()):
+        ct = str(cl.get("type") or "—")
+        cf = cl.get("confidence")
+        rs = str(cl.get("reasoning") or "").strip()
+        tail = f" — {rs}" if rs else ""
+        lines.append(f"**Classification:** {ct} (confidence {cf}){tail}".rstrip())
+        lines.append("")
+    lines.append(f"**Thesis:** {th}")
+    lines.append("")
+    syn = bp.get("synthesis") or {}
+    if isinstance(syn, dict) and any(str(syn.get(k) or "").strip() for k in syn):
+        lines.append("**Synthesis**")
+        labels = (
+            ("key_insight", "Key insight"),
+            ("friction_point", "Friction"),
+            ("strength", "Gets right"),
+            ("gap", "Gap"),
+        )
+        for key, lab in labels:
+            v = str(syn.get(key) or "").strip()
+            if v:
+                lines.append(f"- **{lab}:** {v}")
+        lines.append("")
+    clips = bp.get("clips") or []
+    if isinstance(clips, list) and clips:
+        lines.append("**Clip candidates**")
+        for c in clips[:5]:
+            if not isinstance(c, dict):
+                continue
+            txt = str(c.get("text") or "").strip()
+            if not txt:
+                continue
+            reason = str(c.get("reason") or "").strip()
+            lines.append(f"- {txt}" + (f" — *{reason}*" if reason else ""))
+        lines.append("")
+    acts = bp.get("actions") or []
+    if isinstance(acts, list) and acts:
+        lines.append("**Suggested actions**")
+        for a in acts:
+            s = str(a).strip()
+            if s:
+                lines.append(f"- {s}")
+    return lines
+
+
+def _derive_strategist_report_from_bundle(bundle: Dict[str, Any]) -> Dict[str, Any]:
+    abort, rs = strategist_truth_gate_bundle(bundle)
+    if abort:
+        raise ValueError(
+            "strategist derivation blocked (insufficient signal): " + "; ".join(rs)
+        )
+    bp = bundle.get("blueprint_v1")
+    if isinstance(bp, dict) and isinstance(bp.get("strategist_report"), dict):
+        return dict(bp.get("strategist_report") or {})
+    r3 = bundle.get("report_v3") if isinstance(bundle.get("report_v3"), dict) else {}
+    wf = bundle.get("workflow_report") if isinstance(bundle.get("workflow_report"), dict) else {}
+    snap = dict(r3.get("episode_snapshot") or {})
+    claims = [c for c in (r3.get("claims") or []) if isinstance(c, dict)]
+    thesis = str(((r3.get("coach_report") or {}).get("episode_thesis") or snap.get("primary_topic") or "").strip())
+    if not thesis:
+        thesis = "The episode needs one clear argument with explicit tension and a concrete listener takeaway."
+    key_claims = [str(c.get("text") or "").strip() for c in claims if str(c.get("text") or "").strip()][:3]
+    if not key_claims:
+        key_claims = [str(e.get("claim") or "").strip() for e in (wf.get("evidence_map") or []) if isinstance(e, dict) and str(e.get("claim") or "").strip()][:3]
+    evidence_anchors: List[Dict[str, str]] = []
+    for i, cl in enumerate(key_claims[:3]):
+        anchor = ""
+        if i < len(wf.get("evidence_map") or []):
+            row = (wf.get("evidence_map") or [])[i]
+            if isinstance(row, dict):
+                anchor = str(row.get("evidence") or "").strip()
+        if not anchor and i < len(r3.get("evidence_mapping") or []):
+            row2 = (r3.get("evidence_mapping") or [])[i]
+            if isinstance(row2, dict):
+                anchor = str(row2.get("evidence") or "").strip()
+        if not anchor:
+            anchor = "In a central scene, the host revisits the same argument without raising the stakes."
+        evidence_anchors.append({"claim": cl, "anchor": anchor})
+    highlights = [str(h.get("insight") or "").strip() for h in (wf.get("highlights") or []) if isinstance(h, dict) and str(h.get("insight") or "").strip()][:3]
+    if len(highlights) < 3:
+        highlights.extend([str(x).strip() for x in (r3.get("clean_insights") or []) if str(x).strip() and str(x).strip() not in highlights][: 3 - len(highlights)])
+    rr = r3.get("report_readiness") if isinstance(r3.get("report_readiness"), dict) else {}
+    metrics = rr.get("metrics") if isinstance(rr.get("metrics"), dict) else {}
+    word_count = int(metrics.get("transcript_word_count") or 0)
+    claim_count = int(metrics.get("claim_count") or len(key_claims or []))
+    evidence_row_count = int(metrics.get("evidence_row_count") or len(evidence_anchors or []))
+    mode = "evidence" if (word_count >= 120 and claim_count >= 1 and evidence_row_count >= 1) else "interpretive"
+    weaknesses: List[str] = []
+    bl = (r3.get("coach_report") or {}).get("bottom_line") or {}
+    for k in ("must_change", "if_fixed"):
+        v = str(bl.get(k) or "").strip()
+        if not v:
+            continue
+        lv = v.lower()
+        if any(
+            bad in lv
+            for bad in (
+                "no claims were extracted",
+                "low_signal",
+                "diagnostic mode",
+                "enable ollama",
+                "reality check",
+            )
+        ):
+            continue
+        weaknesses.append(v)
+        if len(weaknesses) >= 3:
+            break
+    if mode == "interpretive":
+        while len(weaknesses) < 3:
+            fill = [
+                "The episode resets topics before one claim is defended.",
+                "No speaker pressure-tests the central claim once it appears.",
+                "The close ends without one explicit listener action.",
+            ][len(weaknesses)]
+            weaknesses.append(fill)
+    else:
+        while len(weaknesses) < 3:
+            fill = [
+                "The strongest claim appears, but no one challenges it with a hard counterexample.",
+                "Evidence is present, but the argument does not escalate after the midpoint.",
+                "The close does not convert the argument into one concrete listener action.",
+            ][len(weaknesses)]
+            weaknesses.append(fill)
+    clips = [str(e.get("claim") or "").strip() for e in (wf.get("evidence_map") or []) if isinstance(e, dict) and str(e.get("claim") or "").strip()][:3]
+    if len(clips) < 2:
+        clips.extend([str(x).strip() for x in key_claims if str(x).strip() not in clips][: 2 - len(clips)])
+    behavior_change = "Apply one explicit listener behavior change tied to the core argument this week."
+    recommendations = [
+        "Open with one explicit argument in the first 60 seconds.",
+        "Force a midpoint counterargument that challenges the core claim.",
+        "Close with one concrete listener action and proof of progress.",
+    ]
+    return {
+        "punchline_header": "Strong topic, but the episode keeps shifting claims instead of defending one argument. Reframe around one claim and engagement rises.",
+        "core_problem": weaknesses[0],
+        "snapshot": {
+            # Heuristic defaults when deriving a strategist-shaped view without a real blueprint.
+            # Suppressed when strict export emits an insufficient-signal card instead (see
+            # ``workflow_export_should_abort_insufficient`` / ``render_insufficient_signal_export_markdown``).
+            "overall_score": 6,
+            "signal_strength": "Moderate",
+            "diagnosis": weaknesses[0],
+            "scoring_basis": "8-10 clear thesis + strong clips + actionable takeaway; 5-7 decent story but weak clarity/payoff; 1-4 unclear point and low engagement value",
+        },
+        "core_breakdown": {
+            "thesis": thesis,
+            "key_claims": key_claims[:3],
+            "evidence_anchors": evidence_anchors[:3],
+            "tension_position": {
+                "implicit_argument": f"This episode treats this as true: {(key_claims[:1] or [thesis])[0]}",
+                "stronger_position": f"But the stronger position is this: {thesis}",
+            },
+        },
+        "what_working": highlights[:3],
+        "what_missing": weaknesses[:3],
+        "upgrade_plan": {
+            "reposition_episode": f"This episode should be about {thesis}",
+            "structure_fix": {
+                "opening_hook": "State the argument immediately.",
+                "midpoint_tension": "Test the argument against the strongest opposing view.",
+                "closing_takeaway": "Commit one specific listener action.",
+            },
+            "clip_opportunities": clips[:3],
+            "recommendations": recommendations,
+        },
+        "audience_engagement_intelligence": {
+            "listener_takeaway_gap": "The listener needs one unmistakable point and one action.",
+            "behavior_change": behavior_change,
+            "weekly_improvement_insight": "Ship each episode around one argument, one tension beat, and one behavior change.",
+        },
+        "question_upgrade": [
+            "What is the strongest counterargument to your main claim?",
+            "Which specific proof would validate or falsify your claim?",
+            "What should the listener do differently this week?",
+        ],
+        "guest_content_opportunities": [
+            {"who_type": "Domain practitioner", "why_they_matter": "Grounds claims in execution reality.", "what_they_unlock": "Concrete tradeoffs."},
+            {"who_type": "Skeptical expert", "why_they_matter": "Introduces productive tension.", "what_they_unlock": "Shareable conflict."},
+            {"who_type": "Research analyst", "why_they_matter": "Separates claims from assumptions.", "what_they_unlock": "Defensible evidence."},
+        ],
+        "strategic_value_for_network": {
+            "what_improving_unlocks": "Higher retention, stronger clip yield, and clearer show positioning.",
+            "where_it_underperforms": "Argument clarity and tension are not carrying the episode.",
+        },
+        "network_level_insight": [
+            "Weak positioning across shows",
+            "Lack of shareable moments",
+            "Structural engagement issues",
+            "High-upside opportunities",
+        ],
+        "network_rollout_line": "If we applied this across your network, we would identify which shows are underperforming, which episodes are most shareable, and where audience growth is being lost.",
+        "one_line_fix": "If this episode were reframed around a clear argument and structured for tension, it would become significantly more engaging and shareable.",
+        "conviction_statement": "This episode is underperforming because it avoids taking a hard position on its core debate.",
+        "report_mode": mode,
+        "product_positioning": "A podcast performance and growth intelligence layer",
+        "title": str(snap.get("title") or ""),
+        "creator": str(snap.get("creator") or ""),
+        "genre": str(snap.get("genre") or ""),
+    }
+
+
+# --- Strict export: no “full report” shell when grounding is missing (network-grade failure card) ---
+
+_EXPORT_PLACEHOLDER_MARKERS = (
+    "primary tension (edit to fit)",
+    "verify against the excerpt below",
+    "pick one argumentative through-line from the tape",
+)
+
+
+def strict_export_enabled() -> bool:
+    """When True (default), strategist markdown is withheld if gates fail (see workflow export helpers)."""
+    v = (os.getenv("SOAPBOXX_STRICT_EXPORT") or "1").strip().lower()
+    return v not in ("0", "false", "no", "off")
+
+
+def evidence_row_is_export_grounded(row: Any) -> bool:
+    """True if an evidence_map row looks like real claim+quote, not offline scaffold or placeholders."""
+    if not isinstance(row, dict):
+        return False
+    c = str(row.get("claim") or "").strip()
+    ev = str(row.get("evidence") or "").strip()
+    if len(c) < 12 or len(ev) < 20:
+        return False
+    low = c.lower()
+    for p in _EXPORT_PLACEHOLDER_MARKERS:
+        if p in low:
+            return False
+    if _is_broken_evidence_claim_line(c) or _is_broken_evidence_quote_line(ev):
+        return False
+    return True
+
+
+def evidence_mapping_row_is_export_grounded(row: Any) -> bool:
+    """Same bar as workflow ``evidence_map`` rows, for ``report_v3.evidence_mapping`` dicts."""
+    return evidence_row_is_export_grounded(row)
+
+
+def bundle_grounded_evidence_counts(
+    bundle: Dict[str, Any],
+) -> Tuple[int, int, int]:
+    """
+    Grounded evidence rows: ``(max(workflow, r3), n_workflow, n_report_v3)``.
+    Shared by the truth gate and structural tier (compression under uncertainty).
+    """
+    wf = bundle.get("workflow_report") if isinstance(bundle.get("workflow_report"), dict) else {}
+    r3 = bundle.get("report_v3") if isinstance(bundle.get("report_v3"), dict) else {}
+    n_wf = sum(1 for e in (wf.get("evidence_map") or []) if evidence_row_is_export_grounded(e))
+    n_r3 = sum(
+        1
+        for e in (r3.get("evidence_mapping") or [])
+        if evidence_mapping_row_is_export_grounded(e)
+    )
+    return (max(n_wf, n_r3), n_wf, n_r3)
+
+
+def export_compression_enabled() -> bool:
+    """When True (default), omit optional packaging sections when signal density is borderline."""
+    v = (os.getenv("SOAPBOXX_EXPORT_COMPRESSION") or "1").strip().lower()
+    return v not in ("0", "false", "no", "off")
+
+
+def export_structural_tier(bundle: Dict[str, Any]) -> str:
+    """
+    ``full`` — emit full strategist sections (upgrade, guests, network, etc.).
+
+    ``compressed`` — after core spine (through *What's Missing*), omit inflated packaging sections,
+    then add :func:`compressed_action_bullets` (max three imperative lines from existing signal only),
+    then optional 1-Line Fix. No fake upgrade/guest/network blocks.
+
+    Tier uses ``report_v3.signal_mode``, transcript word count, and grounded evidence counts.
+    """
+    if not export_compression_enabled():
+        return "full"
+    r3 = bundle.get("report_v3") if isinstance(bundle.get("report_v3"), dict) else {}
+    sm = str(r3.get("signal_mode") or "").upper().strip()
+    rr = r3.get("report_readiness") if isinstance(r3.get("report_readiness"), dict) else {}
+    metrics = rr.get("metrics") if isinstance(rr.get("metrics"), dict) else {}
+    try:
+        wc = int(metrics.get("transcript_word_count") or 0)
+    except (TypeError, ValueError):
+        wc = 0
+    n_ev, _, _ = bundle_grounded_evidence_counts(bundle)
+
+    if sm == "LOW_SIGNAL":
+        return "compressed"
+    if n_ev <= 2:
+        return "compressed"
+    if wc > 0 and wc < 400:
+        return "compressed"
+    if sm == "MEDIUM_SIGNAL" and (wc < 600 or n_ev < 3):
+        return "compressed"
+    return "full"
+
+
+def _clip_action_text(s: str, max_chars: int) -> str:
+    t = (s or "").strip()
+    if len(t) <= max_chars:
+        return t
+    return t[: max_chars - 1].rstrip() + "…"
+
+
+def _action_texts_too_similar(a: str, b: str, *, threshold: float = 0.78) -> bool:
+    """Block two bullets that restate the same move (e.g. thesis vs near-duplicate claim)."""
+    x = (a or "").strip().lower()
+    y = (b or "").strip().lower()
+    if not x or not y:
+        return False
+    if x in y or y in x:
+        return len(min(x, y, key=len)) >= 24
+    return SequenceMatcher(None, x, y).ratio() >= threshold
+
+
+_COMPRESSED_ACTION_FALLBACK = (
+    "No actionable steps could be derived from the available signal. "
+    "Record a clearer primary claim and at least one supporting example in the next episode."
+)
+
+
+def _action_coarse_intent_bucket(text: str) -> str:
+    """
+    Bucket rendered bullet text so near-duplicate *actions* (different wording) collapse.
+    """
+    low = (text or "").lower()
+    if any(
+        k in low
+        for k in (
+            "rebuild the open",
+            "thesis in one beat",
+            "listener gets this thesis",
+        )
+    ):
+        return "thesis_open"
+    if any(
+        k in low
+        for k in (
+            "do not ship clip",
+            "cut around the tape",
+            "trace to this anchor",
+            "clearly carries this claim",
+        )
+    ):
+        return "claim_clip"
+    if any(k in low for k in ("pressures this tension", "exchange that pressures")):
+        return "tension"
+    if "fix this before publish" in low:
+        return "must_change"
+    # Fallback: normalized stem (avoids splitting synonymous bullets poorly)
+    stem = re.sub(r"[^a-z0-9]+", " ", low)[:56].strip()
+    return stem or "misc"
+
+
+def _dedupe_action_bullets_by_intent(bullets: List[str]) -> List[str]:
+    seen: Set[str] = set()
+    out: List[str] = []
+    for b in bullets:
+        if not (b or "").strip():
+            continue
+        bucket = _action_coarse_intent_bucket(b)
+        if bucket in seen:
+            continue
+        seen.add(bucket)
+        out.append(b.strip())
+    return out[:3]
+
+
+def compressed_action_bullets(bundle: Dict[str, Any], sr: Dict[str, Any]) -> List[str]:
+    """
+    Up to **three** imperative lines for compressed exports only.
+
+    Uses **only** strings already present in ``sr`` and ``bundle["report_v3"]``. One bullet per
+    *source lane* where possible: thesis → primary claim line → ``must_change`` or tension, with
+    similarity checks so lanes do not restate the same move. If nothing can be built, returns a
+    single honest **fallback** line (still no LLM inference).
+
+    Near-duplicate bullets are dropped using coarse intent buckets (not just string prefixes).
+    """
+    r3 = bundle.get("report_v3") if isinstance(bundle.get("report_v3"), dict) else {}
+    core = sr.get("core_breakdown") if isinstance(sr.get("core_breakdown"), dict) else {}
+    thesis = str(core.get("thesis") or "").strip()
+    if not thesis:
+        thesis = str((r3.get("coach_report") or {}).get("episode_thesis") or "").strip()
+    if not thesis:
+        thesis = str((r3.get("episode_snapshot") or {}).get("primary_topic") or "").strip()
+
+    kc = [str(x).strip() for x in (core.get("key_claims") or []) if str(x).strip()][:2]
+    tp = sr.get("tension_position") if isinstance(sr.get("tension_position"), dict) else {}
+    ia = str(tp.get("implicit_argument") or "").strip()
+    sp = str(tp.get("stronger_position") or "").strip()
+    tension_line = sp or ia
+
+    anchors = [x for x in (core.get("evidence_anchors") or []) if isinstance(x, dict)]
+    em = [e for e in (r3.get("evidence_mapping") or []) if isinstance(e, dict)]
+
+    claim_line = ""
+    if kc:
+        claim_line = kc[0]
+    elif em:
+        claim_line = str(em[0].get("claim") or "").strip()
+    elif anchors:
+        claim_line = str(anchors[0].get("claim") or "").strip()
+
+    bl = (r3.get("coach_report") or {}).get("bottom_line") if isinstance(r3.get("coach_report"), dict) else {}
+    must_change = str(bl.get("must_change") or "").strip() if isinstance(bl, dict) else ""
+
+    ordered: List[str] = []
+
+    if thesis:
+        ordered.append(
+            f"Rebuild the open so the listener gets this thesis in one beat: {_clip_action_text(thesis, 180)}"
+        )
+
+    if claim_line and not _action_texts_too_similar(claim_line, thesis):
+        ordered.append(
+            f"Do not ship clip packaging until one cut clearly carries this claim: {_clip_action_text(claim_line, 160)}"
+        )
+
+    third: Optional[str] = None
+    if must_change and not _action_texts_too_similar(must_change, thesis) and not _action_texts_too_similar(
+        must_change, claim_line
+    ):
+        third = f"Fix this before publish: {_clip_action_text(must_change, 200)}"
+    elif tension_line and not _action_texts_too_similar(tension_line, thesis) and not _action_texts_too_similar(
+        tension_line, claim_line
+    ):
+        third = f"Keep or add one exchange that pressures this tension: {_clip_action_text(tension_line, 160)}"
+
+    if third:
+        ordered.append(third)
+
+    out = _dedupe_action_bullets_by_intent([x for x in ordered if x])
+    if not out:
+        return [_COMPRESSED_ACTION_FALLBACK]
+    return out[:3]
+
+
+def strategist_truth_gate_bundle(bundle: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    """
+    Single epistemic gate for strategist markdown **and** :func:`_derive_strategist_report_from_bundle`.
+
+    When :func:`strict_export_enabled`, a full strategist export (scores, packaging, derived shell)
+    is allowed only if:
+
+    - ``workflow_report.metadata.v3_reality_check`` did not record a failure (when present).
+    - At least **two** grounded evidence rows across workflow + v3 (``max`` of both layers).
+    - At least **one** segment across workflow + v3 (``max`` of both layers).
+
+    Using ``max`` avoids dual-reality: if either layer has real structure, we do not invent a
+    contradictory shell from the other empty layer.
+
+    **Blueprint:** ``blueprint_v1.strategist_report`` does **not** bypass this gate. The blueprint
+    supplies structure only after the same evidence / segment / reality checks pass — otherwise
+    a bad model payload cannot be treated as canonical over thin transcript signal.
+    """
+    if not strict_export_enabled():
+        return False, []
+    wf = bundle.get("workflow_report") if isinstance(bundle.get("workflow_report"), dict) else {}
+    r3 = bundle.get("report_v3") if isinstance(bundle.get("report_v3"), dict) else {}
+    md = wf.get("metadata") if isinstance(wf.get("metadata"), dict) else {}
+    reasons: List[str] = []
+
+    rc = md.get("v3_reality_check")
+    if isinstance(rc, dict) and rc.get("passed") is False:
+        fails = rc.get("failures") or []
+        if isinstance(fails, list) and fails:
+            reasons.extend(str(x) for x in fails if str(x).strip())
+        else:
+            reasons.append("v3 reality check did not pass (no failure strings recorded).")
+
+    n_ev, n_wf, n_r3 = bundle_grounded_evidence_counts(bundle)
+
+    n_seg = max(
+        len(wf.get("segments") or []),
+        len(r3.get("segments") or []),
+    )
+
+    if n_ev < 2:
+        reasons.append(
+            f"grounded evidence rows {n_ev} < 2 (workflow={n_wf}, report_v3={n_r3})"
+        )
+    if n_seg < 1:
+        reasons.append(f"segments {n_seg} < 1 (workflow and report_v3)")
+
+    return (len(reasons) > 0, reasons)
+
+
+def workflow_export_should_abort_insufficient(
+    workflow_report: Dict[str, Any],
+    report_v3: Dict[str, Any],
+    metadata: Dict[str, Any],
+) -> Tuple[bool, List[str]]:
+    """
+    Deprecated: use :func:`strategist_truth_gate_bundle` with
+    ``{"workflow_report": ..., "report_v3": ...}`` (metadata lives under ``workflow_report``).
+    """
+    wf = dict(workflow_report or {})
+    md = metadata or {}
+    if md:
+        wf["metadata"] = md
+    return strategist_truth_gate_bundle({"workflow_report": wf, "report_v3": report_v3 or {}})
+
+
+def _humanize_export_blocker(raw: str) -> str:
+    """Turn internal blocker strings into short, user-facing explanations."""
+    s = str(raw).strip()
+    if not s:
+        return s
+    low = s.lower()
+    if "grounded evidence rows" in low and "< 2" in s:
+        return (
+            "Not enough on-tape evidence rows to anchor claims and clips "
+            "(need at least two grounded quotes)."
+        )
+    if "segments" in low and "< 1" in s:
+        return "No clear segment or chapter structure detected (need at least one segment)."
+    if "ollama transport" in low or "transport exhausted" in low:
+        return (
+            "Local enrichment transport hit limits; some structure may be missing even when "
+            "the tape has more in it."
+        )
+    if "reality check" in low or ("v3 reality" in low and "fail" in low):
+        return "Consistency / reality checks did not pass for this run."
+    if "output_mode" in low and "diagnostic" in low:
+        return "The pipeline ran in diagnostic mode, which is not shippable as a full brief."
+    return s
+
+
+def _resolve_limited_reason_label(
+    bundle: Dict[str, Any],
+    blockers: List[str],
+    wmeta: Dict[str, Any],
+    export_status: str,
+    transcript_word_count: int,
+    readiness_band: str,
+) -> str:
+    """Prefer finalized ``limited_reason``; otherwise match :func:`evaluation_pipeline.compute_limited_reason`."""
+    lr0 = str(wmeta.get("limited_reason") or "").strip().lower()
+    if lr0 in ("content", "input", "system"):
+        return lr0
+    try:
+        from evaluation_pipeline import compute_input_quality_score, compute_limited_reason
+    except ImportError:
+        return "content"
+
+    wf = bundle.get("workflow_report") if isinstance(bundle.get("workflow_report"), dict) else {}
+    r3 = bundle.get("report_v3") if isinstance(bundle.get("report_v3"), dict) else {}
+    n_ev, _, _ = bundle_grounded_evidence_counts({"workflow_report": wf, "report_v3": r3})
+    rr = r3.get("report_readiness") if isinstance(r3.get("report_readiness"), dict) else {}
+    metrics = rr.get("metrics") if isinstance(rr.get("metrics"), dict) else {}
+    cc = int(metrics.get("claim_count") or 0)
+    if cc <= 0:
+        cl = r3.get("claims")
+        if isinstance(cl, list):
+            cc = len([x for x in cl if isinstance(x, dict)])
+    iqs = compute_input_quality_score(int(transcript_word_count), cc, int(n_ev))
+
+    eb = wmeta.get("export_blockers")
+    if not isinstance(eb, list) or not eb:
+        eb = list(blockers or [])
+    bbs = wmeta.get("export_blockers_by_source")
+    if not isinstance(bbs, dict):
+        bbs = {}
+    snap = {
+        "transcript_word_count": int(transcript_word_count),
+        "readiness_band": str(readiness_band or "").strip().lower(),
+        "claim_count": cc,
+        "canonical_evidence_count": int(n_ev),
+    }
+    out = compute_limited_reason(
+        user_export_mode="limited",
+        export_status=str(export_status or ""),
+        snapshot=snap,
+        export_blockers=[str(x) for x in eb if str(x).strip()],
+        blockers_by_source=bbs,
+        input_quality_score=iqs,
+    )
+    return str(out or "content")
+
+
+def render_limited_signal_export_markdown(
+    bundle: Dict[str, Any], blockers: List[str]
+) -> str:
+    """
+    **Limited Signal** user-facing export: directional guidance + confidence, not silence.
+
+    Internal diagnostics stay in ``export_blockers``; this layer interprets them as actionable signal.
+    """
+    r3 = bundle.get("report_v3") if isinstance(bundle.get("report_v3"), dict) else {}
+    wf = bundle.get("workflow_report") if isinstance(bundle.get("workflow_report"), dict) else {}
+    wmeta = wf.get("metadata") if isinstance(wf.get("metadata"), dict) else {}
+    snap = dict(r3.get("episode_snapshot") or {})
+    m = bundle.get("meta") if isinstance(bundle.get("meta"), dict) else {}
+    title = str(snap.get("title") or "").strip() or str(m.get("title") or "").strip() or "—"
+    creator = str(snap.get("creator") or "").strip() or str(m.get("creator") or "").strip()
+    genre = str(snap.get("genre") or "").strip()
+    primary_topic = str(snap.get("primary_topic") or "").strip()
+    cr = r3.get("coach_report") if isinstance(r3.get("coach_report"), dict) else {}
+    thesis = str(cr.get("episode_thesis") or "").strip()
+    rr = r3.get("report_readiness") if isinstance(r3.get("report_readiness"), dict) else {}
+    metrics = rr.get("metrics") if isinstance(rr.get("metrics"), dict) else {}
+    word_count = int(metrics.get("transcript_word_count") or 0)
+    readiness_band = str(rr.get("band") or "").strip().lower()
+    signal_mode = str(metrics.get("signal_mode") or r3.get("signal_mode") or "").strip()
+
+    raw_blockers = [str(x).strip() for x in (blockers or []) if str(x).strip()]
+    bp = bundle.get("blueprint_v1")
+    if isinstance(bp, dict) and isinstance(bp.get("strategist_report"), dict) and bp.get("strategist_report"):
+        raw_blockers = list(raw_blockers) + [
+            "Master Blueprint strategist output was withheld: it does not bypass "
+            "transcript/workflow truth checks.",
+        ]
+    if not raw_blockers:
+        raw_blockers = [
+            "Minimum evidence and/or segment bars were not met, or checks did not pass.",
+        ]
+
+    human = [_humanize_export_blocker(b) for b in raw_blockers]
+    # De-dupe while preserving order
+    seen: set = set()
+    human_unique: List[str] = []
+    for h in human:
+        if h and h not in seen:
+            seen.add(h)
+            human_unique.append(h)
+
+    export_status = str(wmeta.get("export_status") or "").strip().lower()
+    limited_reason = _resolve_limited_reason_label(
+        bundle, raw_blockers, wmeta, export_status, word_count, readiness_band
+    )
+    verdict_line = {
+        "content": "## Episode verdict: **C — Weak episode (limited read)**",
+        "input": "## Episode verdict: **C — Unreadable input (low confidence)**",
+        "system": "## Episode verdict: **C — System limited (retry recommended)**",
+    }.get(limited_reason, "## Episode verdict: **C — Weak episode (limited read)**")
+
+    whats_going_on: List[str] = [
+        "This episode did not provide enough **structured signal** for a full breakdown "
+        "(low evidence, weak segmentation, and/or transcript quality limits what can be verified).",
+        "",
+        "**Translation:** the content lacks a clear analyzable spine on the tape, or the transcript "
+        "is too weak to extract it reliably.",
+    ]
+    if export_status == "degraded":
+        whats_going_on = [
+            "Enrichment or transport hit limits (for example local model timeouts). "
+            "You may still have usable audio—what’s missing is **reliably extracted structure**.",
+            "",
+            "**Translation:** treat this as a partial read until you re-run with stable enrichment "
+            "or a cleaner transcript.",
+        ]
+
+    pattern_issues = [
+        "**No clear structure** — ideas drift instead of building in stages.",
+        "**Low specificity** — abstract talk without concrete claims or scenes.",
+        "**Weak segmentation** — few “moments” to anchor clips or chapter-style insights.",
+    ]
+    # Tie pattern list to humanized blockers when obvious
+    if any("evidence" in x.lower() for x in human_unique):
+        pattern_issues[0] = pattern_issues[0] + " *(reinforced by thin evidence rows.)*"
+    if any("segment" in x.lower() for x in human_unique):
+        pattern_issues[2] = pattern_issues[2] + " *(reinforced by missing segments.)*"
+
+    fix_next = [
+        "**Force a clear episode thesis early** — “This episode is about X; we’ll show it through Y.”",
+        "**Break the conversation into segments** — chapters, not one long ramble.",
+        "**Add concrete examples** — stories beat philosophy-only blocks for clips and growth.",
+    ]
+
+    growth_lines = [
+        "Episodes like this (ambient, philosophical, or passive-listening formats) often:",
+        "",
+        "- perform well for **passive listening / retention**",
+        "- perform poorly for **clips and growth** unless you add stakes and scenes",
+        "",
+        "**Decide:** is this a **growth episode** or a **retention episode**? Right now it reads "
+        "as neither optimized.",
+    ]
+    g_low = genre.lower()
+    if any(x in g_low for x in ("sleep", "ambient", "meditation", "asmr")):
+        growth_lines = [
+            "This genre often optimizes for **calm or sleep**, not for **clip-friendly tension**.",
+            "",
+            "**Decide:** if growth matters, add one sharp, concrete beat; if not, own the format and "
+            "measure retention instead of clip velocity.",
+        ]
+
+    why_limited: List[str] = [
+        "Deeper scoring and clip picks would be guesswork without grounded evidence and segments.",
+        "",
+        "*This remains honest: there are **no synthetic scores** or faux-authoritative packaging here.*",
+        "",
+        "**Why this is limited** (plain language): the run had **insufficient signal** for a "
+        "full network-grade strategist export — same bar as before, better coaching.",
+    ]
+    detail_bits: List[str] = []
+    if word_count:
+        detail_bits.append(f"Transcript words (when counted): ~{word_count}")
+    if signal_mode:
+        detail_bits.append(f"Signal mode: {signal_mode}")
+    if primary_topic and "insufficient" not in primary_topic.lower():
+        detail_bits.append(f"Primary topic (best effort): {primary_topic}")
+    elif thesis:
+        detail_bits.append(f"Working thesis (best effort): {thesis}")
+    if detail_bits:
+        why_limited.insert(0, "")
+        why_limited.insert(0, " · ".join(detail_bits))
+
+    lines: List[str] = [
+        "# SoapBoxx Episode Report",
+        "",
+        verdict_line,
+        "",
+        f"**Show / episode:** {creator + ' · ' if creator else ''}{title}",
+        "",
+        "### What's going on",
+    ]
+    lines.extend(whats_going_on)
+    lines.extend(
+        [
+            "",
+            "### Likely issues (from pattern + this run)",
+            "",
+        ]
+    )
+    for i, p in enumerate(pattern_issues[:3], start=1):
+        lines.append(f"{i}. {p}")
+    lines.append("")
+    lines.append("**From this run specifically:**")
+    for h in human_unique[:6]:
+        lines.append(f"- {h}")
+    lines.extend(
+        [
+            "",
+            "### What to fix next episode",
+            "",
+        ]
+    )
+    for f in fix_next:
+        lines.append(f"- {f}")
+    lines.extend(
+        [
+            "",
+            "### Growth insight",
+            "",
+        ]
+    )
+    lines.extend(growth_lines)
+    lines.extend(["", "### Why this is limited", ""])
+    lines.extend(why_limited)
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    lines.append(
+        "*Technical details for support / QA:* "
+        + "; ".join(str(x) for x in raw_blockers[:8])
+    )
+    lines.append("")
+    return "\n".join(lines).strip() + "\n"
+
+
+def render_insufficient_signal_export_markdown(
+    bundle: Dict[str, Any], blockers: List[str]
+) -> str:
+    """Backward-compatible name for :func:`render_limited_signal_export_markdown`."""
+    return render_limited_signal_export_markdown(bundle, blockers)
+
+
+def _render_strategist_export_markdown(bundle: Dict[str, Any]) -> str:
+    wf = bundle.get("workflow_report") if isinstance(bundle.get("workflow_report"), dict) else {}
+    r3b = bundle.get("report_v3") if isinstance(bundle.get("report_v3"), dict) else {}
+    wmeta = wf.get("metadata") if isinstance(wf.get("metadata"), dict) else {}
+    if wmeta.get("export_status") in ("insufficient_signal", "degraded"):
+        blockers = wmeta.get("export_blockers") or []
+        if not isinstance(blockers, list):
+            blockers = [str(blockers)]
+        return render_insufficient_signal_export_markdown(bundle, [str(x) for x in blockers if str(x).strip()])
+    # Authoritative path: if a unified evaluator already finalized export_status, do not run
+    # a second independent truth gate here.
+    if wmeta.get("export_status") == "ok":
+        abort = False
+        reasons: List[str] = []
+    else:
+        abort, reasons = strategist_truth_gate_bundle(bundle)
+    if abort:
+        return render_insufficient_signal_export_markdown(bundle, reasons)
+
+    sr = _derive_strategist_report_from_bundle(bundle)
+    bp = bundle.get("blueprint_v1") if isinstance(bundle.get("blueprint_v1"), dict) else {}
+    title = str(sr.get("title") or (((bundle.get("report_v3") or {}).get("episode_snapshot") or {}).get("title") or "")).strip()
+    creator = str(sr.get("creator") or (((bundle.get("report_v3") or {}).get("episode_snapshot") or {}).get("creator") or "")).strip()
+    genre = str(sr.get("genre") or (((bundle.get("report_v3") or {}).get("episode_snapshot") or {}).get("genre") or "")).strip()
+    snap = sr.get("snapshot") if isinstance(sr.get("snapshot"), dict) else {}
+    core = sr.get("core_breakdown") if isinstance(sr.get("core_breakdown"), dict) else {}
+    evidence_anchors = [x for x in (core.get("evidence_anchors") or []) if isinstance(x, dict)]
+    tension_position = core.get("tension_position") if isinstance(core.get("tension_position"), dict) else {}
+    up = sr.get("upgrade_plan") if isinstance(sr.get("upgrade_plan"), dict) else {}
+    sf = up.get("structure_fix") if isinstance(up.get("structure_fix"), dict) else {}
+    sv = sr.get("strategic_value_for_network") if isinstance(sr.get("strategic_value_for_network"), dict) else {}
+    lines: List[str] = [
+        "# SoapBoxx Episode Report",
+        "",
+    ]
+    try:
+        from .episode_progress import format_progress_markdown_lines
+    except ImportError:
+        from episode_progress import format_progress_markdown_lines
+
+    lines.extend(format_progress_markdown_lines(bundle))
+    lines.extend(
+        [
+        "## Podcast performance & growth intelligence",
+        "",
+        f"**Title:** {title or '—'}",
+        f"**Show / creator:** {creator or '—'}",
+        f"**Genre:** {genre or '—'}",
+        f"**Positioning:** {str(bp.get('product_positioning') or sr.get('product_positioning') or 'A podcast performance and growth intelligence layer').strip()}",
+        "",
+        "## Podcast Performance Insight",
+        f"> {str(sr.get('punchline_header') or '').strip() or 'Strong topic, but the episode circles the same point without committing to one argument.'}",
+        "",
+        "## Snapshot",
+        f"- Score: {snap.get('overall_score', '—')} / 10",
+        f"- Signal: {str(snap.get('signal_strength') or '—').strip()}",
+        f"- Diagnosis: {str(snap.get('diagnosis') or '').strip()}",
+        f"- Core problem: {str(sr.get('core_problem') or snap.get('diagnosis') or '').strip()}",
+        "",
+        "## Core Breakdown",
+        f"**Thesis (fixed):** {str(core.get('thesis') or '').strip()}",
+        "",
+        "**Claims:**",
+        ]
+    )
+    for c in [str(x).strip() for x in (core.get("key_claims") or []) if str(x).strip()][:3]:
+        lines.append(f"- {c}")
+    if evidence_anchors:
+        lines.extend(["", "## Evidence Anchors"])
+        for row in evidence_anchors[:3]:
+            cl = str(row.get("claim") or "").strip()
+            an = str(row.get("anchor") or "").strip()
+            if cl and an:
+                lines.append(f"- {cl} -> {an}")
+    implicit_argument = str(tension_position.get("implicit_argument") or "").strip()
+    stronger_position = str(tension_position.get("stronger_position") or "").strip()
+    if implicit_argument or stronger_position:
+        lines.extend(["", "## Tension Call"])
+        if implicit_argument:
+            lines.append(f"- {implicit_argument}")
+        if stronger_position:
+            lines.append(f"- {stronger_position}")
+    lines.extend(["", "## What's Working"])
+    for w in [str(x).strip() for x in (sr.get("what_working") or []) if str(x).strip()][:3]:
+        lines.append(f"- {w}")
+    lines.extend(["", "## What's Missing"])
+    for m in [str(x).strip() for x in (sr.get("what_missing") or []) if str(x).strip()][:3]:
+        lines.append(f"- {m}")
+
+    tier = export_structural_tier(bundle)
+    if tier == "compressed":
+        lines.extend(
+            [
+                "",
+                "*Packaging sections omitted (upgrade plan, guest slots, network framing): transcript length or signal density is below the bar for actionable distribution advice. Do not treat omitted blocks as hidden recommendations.*",
+            ]
+        )
+        act = compressed_action_bullets(bundle, sr)
+        if act:
+            lines.extend(["", "## If You Had to Act Anyway"])
+            for b in act:
+                lines.append(f"- {b}")
+        one_line_fix_c = str(sr.get("one_line_fix") or "").strip()
+        if one_line_fix_c:
+            lines.extend(["", "## 1-Line Fix", one_line_fix_c])
+        return "\n".join(lines).strip() + "\n"
+
+    lines.extend(["", "## Upgrade Plan"])
+    repo = str(up.get("reposition_episode") or "").strip()
+    if repo:
+        lines.append(f"**Reposition:** {repo}")
+    lines.append("")
+    lines.append("**Structure:**")
+    for k, label in (("opening_hook", "Hook"), ("midpoint_tension", "Tension"), ("closing_takeaway", "Takeaway")):
+        v = str(sf.get(k) or "").strip()
+        if v:
+            lines.append(f"- {label}: {v}")
+    for r in [str(x).strip() for x in (up.get("recommendations") or []) if str(x).strip()][:3]:
+        lines.append(f"- Recommendation: {r}")
+    lines.append("")
+    lines.append("**Clips:**")
+    for c in [str(x).strip() for x in (up.get("clip_opportunities") or []) if str(x).strip()][:3]:
+        lines.append(f"- {c}")
+    lines.extend(["", "## Questions That Should Have Been Asked"])
+    for q in [str(x).strip() for x in (sr.get("question_upgrade") or []) if str(x).strip()][:3]:
+        lines.append(f"- {q}")
+    lines.extend(["", "## Guest Opportunities"])
+    for g in [x for x in (sr.get("guest_content_opportunities") or []) if isinstance(x, dict)][:3]:
+        who = str(g.get("who_type") or "").strip()
+        why = str(g.get("why_they_matter") or "").strip()
+        unlock = str(g.get("what_they_unlock") or "").strip()
+        if who:
+            lines.append(f"- {who} -> {why} {unlock}".strip())
+    lines.extend(["", "## Strategic Value"])
+    wu = str(sv.get("what_improving_unlocks") or "").strip()
+    upf = str(sv.get("where_it_underperforms") or "").strip()
+    if wu:
+        lines.append(f"- {wu}")
+    if upf:
+        lines.append(f"- {upf}")
+    lines.extend(["", "## Network Insight"])
+    for x in [str(x).strip() for x in (sr.get("network_level_insight") or []) if str(x).strip()][:4]:
+        lines.append(f"- {x}")
+    rollout = str(sr.get("network_rollout_line") or "").strip()
+    if rollout:
+        lines.extend(["", f"> {rollout}"])
+    one_line_fix = str(sr.get("one_line_fix") or "").strip()
+    conviction = str(sr.get("conviction_statement") or "").strip()
+    if conviction:
+        lines.extend(["", "## Conviction", conviction])
+    if one_line_fix:
+        lines.extend(["", "## 1-Line Fix", one_line_fix])
+    return "\n".join(lines).strip() + "\n"
+
+
 def render_unified_episode_export_markdown(bundle: Dict[str, Any]) -> str:
     """
-    One markdown string for sharing: **v3-primary** header and numbered sections that mirror workflow
-    JSON (highlights, evidence, follow-ups, guests, segments, analytics). Uses ``workflow_report``
-    when present (AI-enriched); otherwise falls back to ``report_v3`` fields.
+    One markdown string for sharing: strategist-first export via :func:`_render_strategist_export_markdown`.
 
-    Does not emit legacy lines like "v2 only supported" or meta "no narrative" primary topics.
+    When ``SOAPBOXX_EXPORT_COMPRESSION`` is on (default), borderline signal yields a **shorter**
+    markdown: spine through *What's Missing*, honesty note, :func:`compressed_action_bullets`, then
+    optional 1-Line Fix. See :func:`export_structural_tier`.
+
+    When ``bundle`` includes ``blueprint_v1`` (from Master Blueprint v1 via ``FeedbackEngine``), the
+    strategist payload is still subject to the truth gate and compression tier.
     """
+    # Final export is strategist-only by design; legacy diagnostic/readiness sections are excluded.
+    return _render_strategist_export_markdown(bundle)
     r3 = bundle.get("report_v3") or {}
     wf = bundle.get("workflow_report") or {}
     snap = dict(r3.get("episode_snapshot") or {})
@@ -2904,6 +4450,11 @@ def render_unified_episode_export_markdown(bundle: Dict[str, Any]) -> str:
     lines.extend(format_episode_spine_markdown_lines(spine_u))
     lines.append("")
 
+    bp_lines = _format_master_blueprint_v1_section(bundle)
+    if bp_lines:
+        lines.extend(bp_lines)
+        lines.append("")
+
     # --- 1. Key Highlights
     hl_rows: List[str] = []
     for h in (wf.get("highlights") or [])[:8]:
@@ -2955,6 +4506,8 @@ def render_unified_episode_export_markdown(bundle: Dict[str, Any]) -> str:
             ev = _dedupe_repeated_sentences(str(e.get("evidence") or "").strip())
             if _is_broken_evidence_claim_line(cl):
                 continue
+            if _is_broken_evidence_quote_line(ev):
+                continue
             ek = _normalized_evidence_claim_key(cl)
             if ek and ek in seen_ev_keys:
                 continue
@@ -2975,6 +4528,9 @@ def render_unified_episode_export_markdown(bundle: Dict[str, Any]) -> str:
             cl = str(row.get("claim") or "").strip()
             if _is_broken_evidence_claim_line(cl):
                 continue
+            ev_r = _dedupe_repeated_sentences(str(row.get("evidence") or "").strip())
+            if _is_broken_evidence_quote_line(ev_r):
+                continue
             ek = _normalized_evidence_claim_key(cl)
             if ek and ek in seen_ev_keys:
                 continue
@@ -2982,7 +4538,6 @@ def render_unified_episode_export_markdown(bundle: Dict[str, Any]) -> str:
                 seen_ev_keys.add(ek)
             ts = row.get("timestamp")
             ts_s = f"{float(ts):.1f}s" if ts is not None else "n/a"
-            ev_r = _dedupe_repeated_sentences(str(row.get("evidence") or "").strip())
             lines.append(
                 f"- **[{row.get('id')}]** {ts_s} | {row.get('type')} | "
                 f"**Claim:** {row.get('claim')} | **Evidence:** {ev_r}"
@@ -3028,16 +4583,56 @@ def render_unified_episode_export_markdown(bundle: Dict[str, Any]) -> str:
     lines.append("## 4. Guest / Research Recommendations")
     gr = wf.get("guest_recommendations") or []
     if gr:
-        lines.append("| Suggested Guest | Title | Topic / Angle | Claim | Relevance |")
-        lines.append("| --- | --- | --- | --- | --- |")
-        for g in gr[:8]:
-            if not isinstance(g, dict):
-                continue
+        use_rich = bool(
+            gr
+            and isinstance(gr[0], dict)
+            and gr[0].get("guest_archetype")
+            and (gr[0].get("what_it_fixes") or gr[0].get("topic_angle"))
+        )
+        if use_rich:
             lines.append(
-                f"| {g.get('name', '')} | {g.get('title') or g.get('role', '')} | "
-                f"{g.get('topic_angle') or g.get('angle', '')} | {g.get('claim_id', '')} | "
-                f"{g.get('relevance', '')} |"
+                "**Guest strategy — what to bring on next** *(tied to this episode’s weaknesses, not a name list)*"
             )
+            lines.append("")
+            first = gr[0] if gr and isinstance(gr[0], dict) else {}
+            commit = str(first.get("commitment_line") or "").strip()
+            if commit:
+                lines.append(commit)
+                lines.append("")
+            n = 0
+            for g in gr[:8]:
+                if not isinstance(g, dict):
+                    continue
+                n += 1
+                nm = str(g.get("name") or "Guest archetype").strip()
+                why = str(g.get("angle") or "").strip()
+                look = str(g.get("topic_angle") or "").strip()
+                fix = str(g.get("what_it_fixes") or "").strip()
+                seq = str(g.get("sequence_label") or "").strip()
+                head = f"### {seq}: {nm}" if seq else f"### {n}. {nm}"
+                lines.append(head)
+                lines.append("")
+                if why:
+                    lines.append(f"- **Why:** {why}")
+                if look:
+                    lines.append(f"- **Look for:** {look}")
+                if fix:
+                    lines.append(f"- **What it fixes:** {fix}")
+                nem = str(g.get("next_episode_move") or "").strip()
+                if nem and str(g.get("guest_sequence") or "") == "primary":
+                    lines.append(f"- **Next episode move:** {nem}")
+                lines.append("")
+        else:
+            lines.append("| Suggested Guest | Title | Topic / Angle | Claim | Relevance |")
+            lines.append("| --- | --- | --- | --- | --- |")
+            for g in gr[:8]:
+                if not isinstance(g, dict):
+                    continue
+                lines.append(
+                    f"| {g.get('name', '')} | {g.get('title') or g.get('role', '')} | "
+                    f"{g.get('topic_angle') or g.get('angle', '')} | {g.get('claim_id', '')} | "
+                    f"{g.get('relevance', '')} |"
+                )
     else:
         lines.append(
             "- *(See coach report guest strategy in `markdown_v3`, or enable workflow AI enrichment.)*"
@@ -3099,8 +4694,12 @@ def generate_episode_report_v3(
 ) -> Dict[str, Any]:
     """
     Full v3 pipeline: base brief (v2 generator) + v3 enrichment + markdown.
+
+    Applies :func:`transcript_for_v3_pipeline` before the brief pass (normalization is **on** by
+    default; set ``SOAPBOXX_TRANSCRIPT_NORMALIZE=0`` to disable).
     """
     meta = dict(metadata or {})
+    transcript = transcript_for_v3_pipeline(transcript or "")
     base = generate_episode_brief(
         transcript,
         meta,
@@ -3133,7 +4732,23 @@ def generate_episode_report_v3(
         "genre": meta.get("genre"),
     }
     out["episode_spine"] = build_episode_spine(report, None)
+    try:
+        from .episode_progress import (
+            attach_export_telemetry_to_metadata,
+            persist_episode_progress_after_export,
+            prepare_bundle_for_export,
+        )
+    except ImportError:
+        from episode_progress import (  # type: ignore
+            attach_export_telemetry_to_metadata,
+            persist_episode_progress_after_export,
+            prepare_bundle_for_export,
+        )
+
+    prepare_bundle_for_export(out)
+    attach_export_telemetry_to_metadata(out.get("meta") or {}, out)
     out["markdown_export"] = render_unified_episode_export_markdown(out)
+    persist_episode_progress_after_export(out)
     return out
 
 
@@ -3152,6 +4767,11 @@ __all__ = [
     "build_coach_report",
     "validate_references",
     "build_v3_report",
+    "apply_identity_consistency_to_report_v3",
+    "apply_claim_quality_gate",
+    "apply_semantic_grounding_validator",
+    "apply_system_health_label",
+    "validate_v3_invariants",
     "render_episode_report_v3_markdown",
     "render_unified_episode_export_markdown",
     "build_episode_spine",
@@ -3162,4 +4782,12 @@ __all__ = [
     "merge_workflow_followups_into_engagement",
     "is_low_signal_insight_line",
     "classify_output_mode",
+    "strict_export_enabled",
+    "strategist_truth_gate_bundle",
+    "render_limited_signal_export_markdown",
+    "workflow_export_should_abort_insufficient",
+    "bundle_grounded_evidence_counts",
+    "export_structural_tier",
+    "export_compression_enabled",
+    "compressed_action_bullets",
 ]

@@ -13,10 +13,12 @@ try:
     from soapboxx_core import SoapBoxxCore
     from transcriber import Transcriber
 
-    print("✅ Backend imports successful")
+    _TRANSCRIPTION_IMPORT_OK = True
+    _TRANSCRIPTION_IMPORT_ERROR = ""
 except ImportError as e:
-    print(f"❌ Backend import failed: {e}")
-    sys.exit(1)
+    SoapBoxxCore = Transcriber = None  # type: ignore
+    _TRANSCRIPTION_IMPORT_OK = False
+    _TRANSCRIPTION_IMPORT_ERROR = str(e)
 
 
 def test_transcription_services():
@@ -111,14 +113,17 @@ def test_core_service_switching():
 
 def main():
     """Main test function"""
-    print("🚀 Testing Transcription Service Switching Functionality")
+    if not _TRANSCRIPTION_IMPORT_OK:
+        print(f"[FAIL] Backend import failed: {_TRANSCRIPTION_IMPORT_ERROR}")
+        sys.exit(1)
+    print("Testing Transcription Service Switching Functionality")
     print("=" * 60)
 
     test_transcription_services()
     test_core_service_switching()
 
     print("\n" + "=" * 60)
-    print("✅ Testing completed!")
+    print("[OK] Testing completed!")
     print("\nTo use the transcription service switching in the UI:")
     print("1. Open the SoapBoxx application")
     print("2. Go to the SoapBoxx tab")

@@ -5,7 +5,7 @@ import re
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 # Try to import error tracker
 try:
@@ -29,6 +29,37 @@ except ImportError:
 
 def _ollama_llm_configured() -> bool:
     return bool(os.getenv("SOAPBOXX_OLLAMA_MODEL", "").strip())
+
+
+def _master_blueprint_v1_enabled() -> bool:
+    """Opt-in: set ``SOAPBOXX_BLUEPRINT_V1=1`` to run multi-lens blueprint (extra Ollama calls when model is set)."""
+    return os.getenv("SOAPBOXX_BLUEPRINT_V1", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _run_master_blueprint_v1_for_bundle(out: Dict[str, Any], transcript: str, meta: Dict[str, str]) -> None:
+    """Populate ``out["blueprint_v1"]`` with strategist-facing output only."""
+    try:
+        from .blueprint_v1.pipeline import run_blueprint_v1
+        from .blueprint_v1.schemas import EpisodicInput
+    except ImportError:
+        from blueprint_v1.pipeline import run_blueprint_v1  # type: ignore
+        from blueprint_v1.schemas import EpisodicInput  # type: ignore
+
+    brief = out.get("brief") or {}
+    snap = brief.get("episode_snapshot") if isinstance(brief.get("episode_snapshot"), dict) else {}
+    desc = str(snap.get("why_it_matters") or "").strip()
+    title_m = str(meta.get("title") or snap.get("title") or "").strip()
+    creator_m = str(meta.get("creator") or snap.get("creator") or "").strip()
+    genre_m = str(meta.get("genre") or snap.get("genre") or "").strip()
+    inp = EpisodicInput.from_metadata_transcript(
+        transcript,
+        title=title_m,
+        description=desc[:3000],
+        creator=creator_m,
+        genre=genre_m,
+    )
+    rep = run_blueprint_v1(inp, max_retries=2)
+    out["blueprint_v1"] = rep.public_payload()
 
 
 @dataclass
@@ -177,19 +208,30 @@ class FeedbackEngine:
         ``soapboxx_v3_workflow.soapboxx_v3_workflow_local``, using the same ``report_v3`` so the
         brief is not generated twice. Requires ``SOAPBOXX_OLLAMA_MODEL`` (Ollama) for AI-filled
         sections; set ``SOAPBOXX_WORKFLOW_USE_AI=0`` to skip AI enrichment.
+
+        **Master Blueprint v1:** set ``SOAPBOXX_BLUEPRINT_V1=1`` to attach ``blueprint_v1`` as a
+        strategist-facing performance + growth intelligence layer and add a matching section to
+        ``markdown_export``. Adds Ollama JSON calls when ``SOAPBOXX_OLLAMA_MODEL`` is set.
         """
         try:
-            from .episode_report_v3 import generate_episode_report_v3
+            from .episode_report_v3 import (
+                generate_episode_report_v3,
+                transcript_for_v3_pipeline,
+            )
         except ImportError:
-            from episode_report_v3 import generate_episode_report_v3
+            from episode_report_v3 import (  # type: ignore
+                generate_episode_report_v3,
+                transcript_for_v3_pipeline,
+            )
 
         meta = {
             "title": title,
             "creator": creator,
             "genre": genre,
         }
+        tx = transcript_for_v3_pipeline(transcript or "")
         out = generate_episode_report_v3(
-            transcript,
+            tx,
             meta,
             client=self.client,
             use_new_api=self.use_new_api,
@@ -197,6 +239,11 @@ class FeedbackEngine:
             strict_references=strict_references,
             include_v2_markdown=include_v2_markdown,
         )
+        if _master_blueprint_v1_enabled():
+            try:
+                _run_master_blueprint_v1_for_bundle(out, tx, meta)
+            except Exception as e:
+                out.setdefault("warnings", []).append(f"Master Blueprint v1 failed: {e}")
         if include_workflow_json:
             try:
                 try:
@@ -205,7 +252,7 @@ class FeedbackEngine:
                     from soapboxx_v3_workflow import soapboxx_v3_workflow_local
 
                 out["workflow_report"] = soapboxx_v3_workflow_local(
-                    transcript,
+                    tx,
                     meta,
                     strict_references=strict_references,
                     validate=True,
@@ -226,6 +273,7 @@ class FeedbackEngine:
                 render_episode_report_v3_markdown,
                 render_unified_episode_export_markdown,
             )
+            from .soapboxx_v3_workflow import maybe_editorial_pass_unified_markdown
         except ImportError:
             from episode_report_v3 import (
                 build_episode_spine,
@@ -233,6 +281,7 @@ class FeedbackEngine:
                 render_episode_report_v3_markdown,
                 render_unified_episode_export_markdown,
             )
+            from soapboxx_v3_workflow import maybe_editorial_pass_unified_markdown
 
         wf_arg = wf if isinstance(wf, dict) else None
         if isinstance(r3, dict):
@@ -242,7 +291,52 @@ class FeedbackEngine:
             out["markdown_v3"] = render_episode_report_v3_markdown(
                 r3, workflow_report=wf_arg
             )
+        try:
+            from .episode_progress import (
+                attach_export_telemetry_to_metadata,
+                prepare_bundle_for_export,
+            )
+        except ImportError:
+            from episode_progress import (  # type: ignore
+                attach_export_telemetry_to_metadata,
+                prepare_bundle_for_export,
+            )
+
+        prepare_bundle_for_export(out)
+        wm = wf_arg.get("metadata") if isinstance(wf_arg, dict) else None
+        if isinstance(wm, dict):
+            attach_export_telemetry_to_metadata(wm, out)
+        else:
+            attach_export_telemetry_to_metadata(out.get("meta") or {}, out)
         out["markdown_export"] = render_unified_episode_export_markdown(out)
+        wf_meta = (
+            (out.get("workflow_report") or {}).get("metadata")
+            if isinstance(out.get("workflow_report"), dict)
+            else None
+        )
+        if isinstance(wf_meta, dict) and wf_meta.get("export_status") in (
+            "insufficient_signal",
+            "degraded",
+        ):
+            ed_applied = False
+        else:
+            md2, ed_applied = maybe_editorial_pass_unified_markdown(
+                str(out.get("markdown_export") or ""),
+                {
+                    "title": title,
+                    "creator": creator,
+                    "genre": genre,
+                },
+            )
+        if ed_applied:
+            out["markdown_export"] = md2
+            out["editorial_pass_applied"] = True
+            wf2 = out.get("workflow_report")
+            if isinstance(wf2, dict):
+                wf2["markdown_export"] = md2
+                wm = wf2.get("metadata")
+                if isinstance(wm, dict):
+                    wm["editorial_pass_applied"] = True
         return out
 
     def _perform_ai_analysis(self, transcript: str, analysis_depth: str) -> Dict:
