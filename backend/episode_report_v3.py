@@ -7,6 +7,12 @@ narrative/analytical assembly + weights — see ``lens_engine_prompts.assemble_d
 
 Builds on normalized **v2** brief JSON from episode_intelligence.generate_episode_brief.
 The coach always surfaces a single-sentence thesis line (argument-shaped); low-signal runs pair it with an honest-read note.
+
+**Structured intelligence source of truth:** when enabled (default; ``SOAPBOXX_V3_ATOMIC_GROUND_TRUTH=1`` or
+``atomic_ground_truth=True`` on :func:`build_v3_report`), claims and graph-derived guests come **only** from
+``atomic_pipeline.run_atomic_pipeline`` — v3 does not re-extract claims, re-cluster topics, or synthesize guests
+from narrative heuristics. Narrative/coach/dual_lens remain presentation layers on top of the same transcript
+and brief context. Set ``SOAPBOXX_V3_ATOMIC_GROUND_TRUTH=0`` to restore brief-only claim rows (legacy/tests).
 """
 
 from __future__ import annotations
@@ -80,6 +86,15 @@ try:
 except ImportError:
     from report_invariants import validate_v3_invariants  # type: ignore
 
+try:
+    from .atomic_pipeline import envelope_to_json, run_atomic_pipeline
+except ImportError:
+    try:
+        from atomic_pipeline import envelope_to_json, run_atomic_pipeline  # type: ignore
+    except ImportError:  # pragma: no cover
+        envelope_to_json = None  # type: ignore[assignment]
+        run_atomic_pipeline = None  # type: ignore[assignment]
+
 REPORT_V3_VERSION = "3"
 SEMANTIC_DUP_THRESHOLD = 0.8
 MIN_EVIDENCE_CONFIDENCE = 0.2
@@ -135,6 +150,16 @@ def transcript_for_v3_pipeline(text: str) -> str:
     if not _transcript_normalize_enabled():
         return text or ""
     return normalize_transcript_for_v3(text or "")
+
+
+def _workflow_body_guest_rows(workflow: Dict[str, Any]) -> List[Any]:
+    """Delegate to :func:`soapboxx_v3_workflow.workflow_guest_rows` (alias drift self-heal)."""
+    try:
+        from .soapboxx_v3_workflow import workflow_guest_rows
+    except ImportError:
+        from soapboxx_v3_workflow import workflow_guest_rows  # type: ignore
+    return workflow_guest_rows(workflow)
+
 
 INSIGHT_TRANSFORM_RULES = """
 You are NOT allowed to output raw transcript fragments.
@@ -2672,18 +2697,112 @@ def _refresh_dual_lens_and_takeaway(
     )
 
 
+def _v3_atomic_ground_truth_resolve(explicit: Optional[bool]) -> bool:
+    if explicit is not None:
+        return bool(explicit)
+    v = os.getenv("SOAPBOXX_V3_ATOMIC_GROUND_TRUTH", "1").strip().lower()
+    return v not in ("0", "false", "no", "off")
+
+
+def _brief_claim_row_from_atomic(c: Any) -> Dict[str, Any]:
+    cat = str(getattr(c, "category", "") or "")
+    if cat == "historical_fact":
+        claim_type = "fact"
+    elif cat == "rhetorical":
+        claim_type = "belief"
+    else:
+        claim_type = "interpretation"
+    return {
+        "id": c.id,
+        "text": _clean_claim_text(str(getattr(c, "raw_statement", "") or "")),
+        "claim_type": claim_type,
+        "confidence": getattr(c, "confidence", "medium"),
+        "evidence_basis": getattr(c, "evidence_basis", "unknown"),
+    }
+
+
+def _v3_guests_from_atomic_recommendations(
+    guests: Sequence[Any],
+    topic_graph: Any,
+    claim_by_id: Dict[str, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Map atomic guest recommendations to v3 guest rows (no narrative-based guest synthesis)."""
+    out: List[Dict[str, Any]] = []
+    nodes = list(getattr(topic_graph, "nodes", None) or [])
+    topic_by_id = {str(getattr(n, "topic_id", "")): n for n in nodes if getattr(n, "topic_id", None)}
+
+    for g in guests:
+        tid = str(getattr(g, "target_topic_id", "") or "")
+        topic = topic_by_id.get(tid)
+        label = ""
+        if topic is not None:
+            label = str(getattr(topic, "label", "") or "").strip()
+        if not label:
+            label = "topic cluster"
+        target_claim = ""
+        if topic is not None:
+            for cid in list(getattr(topic, "evidence_claim_ids", None) or []):
+                bc = claim_by_id.get(str(cid))
+                if bc:
+                    target_claim = str(bc.get("text") or "")
+                    break
+        if not target_claim:
+            for bc in claim_by_id.values():
+                target_claim = str(bc.get("text") or "")
+                if target_claim:
+                    break
+        reason = getattr(g, "recommendation_reason", None)
+        why = ""
+        if reason is not None:
+            why = str(getattr(reason, "primary_angle", "") or "").strip()
+            if not why:
+                why = str(getattr(reason, "what_they_would_challenge", "") or "").strip()
+        gt = str(getattr(g, "guest_type", "") or "academic")
+        title_g = gt.replace("_", " ").title()
+        out.append(
+            {
+                "guest": f"{title_g} — {label[:120]}",
+                "role": gt,
+                "why_this_episode": why,
+                "target_claim": _clean_claim_text(target_claim),
+            }
+        )
+    return out
+
+
 def build_v3_report(
     brief: Dict[str, Any],
     transcript: str,
     *,
     metadata: Optional[Dict[str, str]] = None,
+    atomic_ground_truth: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
     Assemble full v3 report dict: clean insights, evidence rows, engagement, guests, segments, analytics.
+
+    When atomic ground truth is on (default), structured claims and graph guests come from
+    ``run_atomic_pipeline`` only; brief ``claims`` / ``guests`` rows are not used for those fields.
     """
     meta = dict(metadata or {})
     cleaned = (transcript or "").strip()
-    claims = [c for c in (brief.get("claims") or []) if isinstance(c, dict)]
+    use_atomic = _v3_atomic_ground_truth_resolve(atomic_ground_truth)
+    atomic_env: Any = None
+    atomic_err: Optional[str] = None
+    if use_atomic and run_atomic_pipeline is not None:
+        try:
+            atomic_env = run_atomic_pipeline(cleaned)
+        except Exception as e:
+            atomic_err = str(e)
+            atomic_env = None
+
+    if atomic_env is not None:
+        claims = [_brief_claim_row_from_atomic(c) for c in atomic_env.claims]
+        brief = {**brief, "claims": claims}
+    elif use_atomic:
+        claims = []
+        brief = {**brief, "claims": claims}
+    else:
+        claims = [c for c in (brief.get("claims") or []) if isinstance(c, dict)]
     claim_by_id = {str(c.get("id")): c for c in claims if c.get("id")}
 
     raw_claims = extract_claims(cleaned, claims)
@@ -2703,14 +2822,21 @@ def build_v3_report(
     strategies = inject_strategy_layer(clean_insights)
 
     guests_v3: List[Dict[str, Any]] = []
-    for g in brief.get("guests") or []:
-        if not isinstance(g, dict):
-            continue
-        mid = str(g.get("maps_to_claim_id") or "").strip()
-        claim = claim_by_id.get(mid) or (claims[0] if claims else {})
-        if not claim:
-            continue
-        guests_v3.append(map_guest_to_claim(g, claim))
+    if atomic_env is not None:
+        guests_v3 = _v3_guests_from_atomic_recommendations(
+            atomic_env.guest_recommendations,
+            atomic_env.topic_graph,
+            claim_by_id,
+        )
+    else:
+        for g in brief.get("guests") or []:
+            if not isinstance(g, dict):
+                continue
+            mid = str(g.get("maps_to_claim_id") or "").strip()
+            claim = claim_by_id.get(mid) or (claims[0] if claims else {})
+            if not claim:
+                continue
+            guests_v3.append(map_guest_to_claim(g, claim))
     gaps = identify_gaps(clean_insights)
     signal_mode = detect_signal_mode(brief)
     report_readiness = compute_report_readiness(
@@ -2728,6 +2854,8 @@ def build_v3_report(
     for n in v3_gates.get("notes") or []:
         if n not in rnotes:
             rnotes.append(n)
+    if atomic_err:
+        rnotes.append(f"atomic_pipeline_error: {atomic_err}")
 
     output_mode, diagnostic_reasons = classify_output_mode(
         brief,
@@ -2752,7 +2880,7 @@ def build_v3_report(
     )
 
     forced_guests = recommend_guests(narrative, gaps=gaps)
-    if len(guests_v3) < 3:
+    if atomic_env is None and len(guests_v3) < 3:
         for fg in forced_guests:
             guests_v3.append(
                 {
@@ -2820,9 +2948,14 @@ def build_v3_report(
             "creator": meta.get("creator") or snap.get("creator") or "",
             "genre": meta.get("genre") or snap.get("genre") or "",
             "generated_at": meta.get("generated_at") or _utc_now_iso(),
+            "structured_intelligence_source": (
+                "atomic_pipeline" if atomic_env is not None else "episode_brief_v2"
+            ),
         },
         "report_readiness": report_readiness,
     }
+    if atomic_env is not None and envelope_to_json is not None:
+        report["atomic_pipeline"] = envelope_to_json(atomic_env)
     r3 = apply_identity_consistency_to_report_v3(report)
     r3 = apply_claim_quality_gate(r3)
     r3 = apply_semantic_grounding_validator(r3)
@@ -2898,7 +3031,7 @@ def build_episode_spine(
                 claims_out.append({"id": cid, "line": cl})
 
     guests_out: List[Dict[str, str]] = []
-    gr = wf.get("guest_recommendations") if isinstance(wf.get("guest_recommendations"), list) else []
+    gr = _workflow_body_guest_rows(wf)
     for g in gr[:10]:
         if not isinstance(g, dict):
             continue
@@ -4581,7 +4714,7 @@ def render_unified_episode_export_markdown(bundle: Dict[str, Any]) -> str:
 
     # --- 4. Guest / Research Recommendations
     lines.append("## 4. Guest / Research Recommendations")
-    gr = wf.get("guest_recommendations") or []
+    gr = _workflow_body_guest_rows(wf)
     if gr:
         use_rich = bool(
             gr
@@ -4691,12 +4824,15 @@ def generate_episode_report_v3(
     api_key: Optional[str] = None,
     strict_references: bool = True,
     include_v2_markdown: bool = True,
+    atomic_ground_truth: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
     Full v3 pipeline: base brief (v2 generator) + v3 enrichment + markdown.
 
     Applies :func:`transcript_for_v3_pipeline` before the brief pass (normalization is **on** by
     default; set ``SOAPBOXX_TRANSCRIPT_NORMALIZE=0`` to disable).
+
+    ``atomic_ground_truth`` is forwarded to :func:`build_v3_report` (see module docstring).
     """
     meta = dict(metadata or {})
     transcript = transcript_for_v3_pipeline(transcript or "")
@@ -4708,7 +4844,9 @@ def generate_episode_report_v3(
         api_key=api_key,
     )
     brief = base.get("brief") or {}
-    report = build_v3_report(brief, transcript or "", metadata=meta)
+    report = build_v3_report(
+        brief, transcript or "", metadata=meta, atomic_ground_truth=atomic_ground_truth
+    )
     warnings = list(base.get("warnings") or [])
 
     if strict_references:

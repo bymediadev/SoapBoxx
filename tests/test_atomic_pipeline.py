@@ -1,11 +1,13 @@
 # tests/test_atomic_pipeline.py
+import os
+import sys
 import unittest
 
-from backend.atomic_pipeline import (
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+
+from atomic_pipeline import (  # noqa: E402
     Claim,
-    Verification,
     envelope_to_json,
-    extract_atomic_claims,
     run_atomic_pipeline,
     verify_claims,
 )
@@ -59,11 +61,11 @@ class TestAtomicPipeline(unittest.TestCase):
 [400.0s] Leadership disagreements shaped whether groups would negotiate or move quickly.
 """
         r = run_atomic_pipeline(transcript)
-        self.assertTrue(len(r.claims) >= 2)
-        self.assertTrue(r.topic_graph.nodes or True)  # may be empty if clustering strict
-        # If we have at least two supported claims clustered, expect graph
+        self.assertGreaterEqual(len(r.claims), 2)
         supported = sum(1 for v in r.verification if v.status == "supported")
         self.assertGreaterEqual(supported, 1)
+        if len(r.topic_graph.nodes) >= 1:
+            self.assertTrue(all(len(n.evidence_claim_ids) >= 2 for n in r.topic_graph.nodes))
 
     def test_clip_reduction_when_mostly_low_confidence(self):
         claims = [

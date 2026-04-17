@@ -3,11 +3,16 @@ Creator-facing **reality checks** for v3 episode reports — not JSON shape test
 
 Use these to assert outputs are specific, transcript-grounded, and worth shipping.
 Designed for golden JSON (substring expectations) and CI gates with clear failure strings.
+
+Non-blocking notes (``DEGRADED:`` / ``WARN:``) are **deduped** and **capped** via
+:func:`quality_signal_cap_limit` (``SOAPBOXX_V3_QUALITY_SIGNAL_CAP``, default 6) so operator
+surfaces do not drown in repeat warnings.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
@@ -38,6 +43,79 @@ _TENSION_MARKERS = (
     "risk",
     "breaks when",
 )
+
+def quality_signal_cap_limit() -> int:
+    """
+    Max non-blocking reality / ship notes shown per category (after dedupe).
+
+    Override with ``SOAPBOXX_V3_QUALITY_SIGNAL_CAP`` (integer, clamped 1–25). Default **6**.
+    """
+    raw = os.getenv("SOAPBOXX_V3_QUALITY_SIGNAL_CAP", "6").strip()
+    try:
+        n = int(raw)
+    except ValueError:
+        n = 6
+    return max(1, min(n, 25))
+
+
+def cap_nonblocking_signal_notes(
+    notes: Sequence[str],
+    *,
+    prefix_for_overflow: str = "DEGRADED",
+    overflow_label: str = "quality notes",
+) -> List[str]:
+    """
+    Dedupe (case-insensitive) and cap non-blocking notes so WARN/DEGRADED lines stay meaningful.
+
+    If more notes exist after dedupe than the cap, one summary line is appended.
+    """
+    cap = quality_signal_cap_limit()
+    seen: set[str] = set()
+    deduped: List[str] = []
+    for n in notes:
+        s = str(n).strip()
+        if not s:
+            continue
+        k = s.lower()
+        if k in seen:
+            continue
+        seen.add(k)
+        deduped.append(s)
+    if len(deduped) <= cap:
+        return deduped
+    omitted = len(deduped) - cap
+    return deduped[:cap] + [
+        f"{prefix_for_overflow}: {omitted} additional {overflow_label} omitted "
+        f"(signal density cap; raise SOAPBOXX_V3_QUALITY_SIGNAL_CAP to show more)."
+    ]
+
+
+def cap_would_ship_reasons(reasons: Sequence[str]) -> List[str]:
+    """
+    Preserve all ``FAIL:`` lines; dedupe and cap WARN / other non-fail reasons only.
+    """
+    cap = quality_signal_cap_limit()
+    fails = [str(r) for r in reasons if str(r).startswith("FAIL:")]
+    rest = [str(r) for r in reasons if not str(r).startswith("FAIL:")]
+    seen: set[str] = set()
+    deduped: List[str] = []
+    for r in rest:
+        s = r.strip()
+        if not s:
+            continue
+        k = s.lower()
+        if k in seen:
+            continue
+        seen.add(k)
+        deduped.append(s)
+    if len(deduped) <= cap:
+        return fails + deduped
+    omitted = len(deduped) - cap
+    return fails + deduped[:cap] + [
+        f"WARN: {omitted} additional ship note(s) omitted "
+        f"(signal density cap; raise SOAPBOXX_V3_QUALITY_SIGNAL_CAP to show more)."
+    ]
+
 
 _STOP = frozenset(
     """
@@ -140,12 +218,15 @@ def would_ship_v3(
     """
     Human-style ship bar: not diagnostic, thesis not generic, enough packaging rows,
     and thesis mostly grounded in transcript tokens.
+
+    **Thin evidence:** zero evidence rows is a **FAIL**. Fewer than ``min_evidence_rows`` but at
+    least one row is a **WARN** only (low-signal / narration-heavy episodes still ship as
+    degraded, not refused).
     """
     reasons: List[str] = []
     mode = str(report.get("output_mode") or "").lower()
     if mode == "diagnostic":
         reasons.append("FAIL: output_mode is diagnostic — not shippable as a full brief.")
-        return (False, reasons)
 
     thesis = extract_thesis_text(report)
     if not thesis.strip():
@@ -157,9 +238,11 @@ def would_ship_v3(
         reasons.append('FAIL: thesis contains "unknown" — reads unfinished.')
 
     ev = [e for e in (report.get("evidence_mapping") or []) if isinstance(e, dict)]
-    if len(ev) < min_evidence_rows:
+    if len(ev) == 0:
+        reasons.append("FAIL: no evidence rows — cannot anchor claims or clip packaging.")
+    elif len(ev) < min_evidence_rows:
         reasons.append(
-            f"FAIL: expected at least {min_evidence_rows} evidence rows, got {len(ev)}."
+            f"WARN: thin evidence ({len(ev)} row(s)); {min_evidence_rows}+ recommended for clip-grade exports."
         )
 
     clips = collect_clip_proxy_texts(report)
@@ -176,7 +259,9 @@ def would_ship_v3(
                 "(many thesis words not found in transcript — possible drift)."
             )
 
-    return (not reasons, reasons)
+    reasons_capped = cap_would_ship_reasons(reasons)
+    ship_ok = not any(str(r).startswith("FAIL:") for r in reasons_capped)
+    return (ship_ok, reasons_capped)
 
 
 def default_reality_rules_path() -> Path:
@@ -204,10 +289,13 @@ def validate_reality_golden(
     report: Mapping[str, Any],
     transcript: str,
     rules: Mapping[str, Any],
-) -> List[str]:
+) -> Tuple[List[str], List[str]]:
     """
-    Apply golden **expectations** (not full-string equality). Returns a list of failure lines;
-    empty list means pass.
+    Apply golden **expectations** (not full-string equality).
+
+    Returns ``(failures, degraded_notes)``:
+    - **failures** — blocking issues (empty ⇒ golden bar passed).
+    - **degraded_notes** — non-blocking signal (e.g. thin evidence vs ``min_evidence_rows``).
 
     Keys whose names start with ``_`` (e.g. ``_comment``) are ignored.
 
@@ -216,7 +304,7 @@ def validate_reality_golden(
       - signal_mode / signal_mode_one_of: str | list[str]
       - expected_thesis_contains / thesis_must_contain: list[str] — needles in thesis (lower)
       - forbidden_terms / thesis_must_not_contain / banned_substrings_in_thesis: list[str]
-      - min_evidence_rows: int
+      - min_evidence_rows: int — **ideal** minimum; ``n == 0`` fails; ``1 <= n < min`` degrades only
       - min_segments: int — v3 ``segments`` list length
       - min_clip_proxies: int — segment titles + coach clip lines
       - forbid_generic_thesis: bool
@@ -224,6 +312,7 @@ def validate_reality_golden(
       - min_thesis_grounding_ratio: float — default 0.0 = skip
     """
     fails: List[str] = []
+    degraded: List[str] = []
     rules = _rules_without_meta(rules)
     thesis = extract_thesis_text(report)
     low_thesis = thesis.lower()
@@ -265,8 +354,15 @@ def validate_reality_golden(
     mer = rules.get("min_evidence_rows")
     if mer is not None:
         n = len([e for e in (report.get("evidence_mapping") or []) if isinstance(e, dict)])
-        if n < int(mer):
-            fails.append(f"FAIL: evidence rows {n} < min_evidence_rows {mer}")
+        mer_i = int(mer)
+        if mer_i > 0 and n == 0:
+            fails.append(
+                f"FAIL: no evidence rows (min_evidence_rows expectation was {mer_i} for full-signal packaging)."
+            )
+        elif mer_i > 0 and 0 < n < mer_i:
+            degraded.append(
+                f"DEGRADED: evidence rows {n} below ideal min_evidence_rows {mer_i} — thin clip anchors; report still valid."
+            )
 
     ms = rules.get("min_segments")
     if ms is not None:
@@ -297,7 +393,9 @@ def validate_reality_golden(
                 f"FAIL: thesis grounding ratio {r:.2f} < min_thesis_grounding_ratio {mgr}"
             )
 
-    return fails
+    return fails, cap_nonblocking_signal_notes(
+        degraded, prefix_for_overflow="DEGRADED", overflow_label="golden expectation notes"
+    )
 
 
 __all__ = [
@@ -312,4 +410,7 @@ __all__ = [
     "default_reality_rules_path",
     "load_reality_rules_from_path",
     "load_default_reality_rules",
+    "quality_signal_cap_limit",
+    "cap_nonblocking_signal_notes",
+    "cap_would_ship_reasons",
 ]

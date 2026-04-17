@@ -7,19 +7,25 @@ Provides simplified backend orchestration without complex dependencies
 import time
 import json
 import os
+import uuid
 from typing import Dict, List, Optional
 from pathlib import Path
 
 
 class BarebonesSoapBoxxCore:
-    """Simplified SoapBoxx core with local functionality only"""
-    
+    """Simplified SoapBoxx core with local functionality only.
+
+    ``session_id`` is empty until ``start_session()`` runs; each call assigns a
+    new id. Methods that need an active session guard on ``session_data`` and
+    return ``{"error": ...}`` when there is no session.
+    """
+
     def __init__(self):
         self.session_data = {}
         self.export_directory = "Exports"
         self.logs_directory = "logs"
         self.ensure_directories()
-        self.session_id = self._generate_session_id()
+        self.session_id = ""  # set only in start_session()
     
     def ensure_directories(self):
         """Ensure required directories exist"""
@@ -27,15 +33,16 @@ class BarebonesSoapBoxxCore:
         Path(self.logs_directory).mkdir(exist_ok=True)
     
     def _generate_session_id(self) -> str:
-        """Generate unique session ID"""
-        timestamp = int(time.time())
-        return f"session_{timestamp}"
-    
+        """Generate a unique session ID (new ID on every ``start_session`` call)."""
+        return f"session_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
+
     def start_session(self, session_name: str = None) -> Dict:
         """Start a new SoapBoxx session"""
         if not session_name:
             session_name = f"SoapBoxx Session {time.strftime('%Y-%m-%d %H:%M:%S')}"
-        
+
+        self.session_id = self._generate_session_id()
+
         self.session_data = {
             "session_id": self.session_id,
             "session_name": session_name,

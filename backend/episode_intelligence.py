@@ -9,7 +9,14 @@ This module still generates the **v2 brief JSON** used as the base layer inside 
 legacy one-page ``markdown`` export.
 
 **LLM inference (Ollama only):** set ``SOAPBOXX_OLLAMA_MODEL`` (and optional ``OLLAMA_HOST``)
-so ``generate_episode_brief`` calls a local Ollama server. For long transcripts, set
+so ``generate_episode_brief`` calls a local Ollama server. All brief/claim responses use a strict
+JSON envelope ``{"text": str, "data": object}`` (see ``LLM_ENVELOPE_SYSTEM_SUFFIX`` and
+``coerce_ollama_message_to_envelope``). By default, if ``data.episode_snapshot`` is missing or invalid,
+the parser also tries a v2-shaped JSON object in ``text`` (set ``SOAPBOXX_LLM_ENVELOPE_TEXT_FALLBACK=0``
+to disable). ``SOAPBOXX_LLM_STRICT_USEFULNESS=1`` to
+reject very short ``text`` when ``data`` is empty; ``SOAPBOXX_LLM_MIN_TEXT_CHARS`` (default 10) with
+strict mode. Set ``SOAPBOXX_LLM_VALIDATE_BRIEF_SCHEMA=1`` to run lightweight v2 brief semantics checks
+(see ``llm_data_contracts.validate_brief_v2_semantics``). For long transcripts, set
 ``SOAPBOXX_BRIEF_MAX_CHARS`` to match your model context (single full transcript pass before
 chunked fallback). Optional ``SOAPBOXX_OLLAMA_NUM_CTX`` / ``OLLAMA_NUM_CTX`` and ``SOAPBOXX_OLLAMA_TOP_P``
 are forwarded to Ollama ``options``.
@@ -18,6 +25,7 @@ are forwarded to Ollama ``options``.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import urllib.error
@@ -44,6 +52,205 @@ except ImportError:  # pragma: no cover - local fallback when dependency missing
 
     def wait_exponential(**_kwargs: Any) -> Any:  # type: ignore
         return None
+
+
+_LOG = logging.getLogger(__name__)
+
+
+def llm_env_truthy(key: str) -> bool:
+    """True if ``key`` is set to ``1`` / ``true`` / ``yes`` / ``on`` (shared LLM envelope flags)."""
+    return os.getenv(key, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _llm_envelope_text_fallback_enabled() -> bool:
+    """Whether to parse v2 brief JSON from envelope ``text`` when ``data`` is incomplete.
+
+    Default **on** (local models often put the brief only in ``text``). Set
+    ``SOAPBOXX_LLM_ENVELOPE_TEXT_FALLBACK=0`` / ``false`` / ``off`` to require strict ``data``.
+    """
+    raw = os.getenv("SOAPBOXX_LLM_ENVELOPE_TEXT_FALLBACK", "").strip().lower()
+    if raw in ("0", "false", "no", "off"):
+        return False
+    return True
+
+
+def _warn_raw_envelope_violations(raw_str: str) -> None:
+    """Log likely prompt-contract drift before ``json.loads`` (fences, prose prefix)."""
+    if "```" in raw_str:
+        _LOG.warning(
+            "LLM envelope: markdown fence in message.content (expected raw JSON only)"
+        )
+    s = raw_str.strip()
+    if s and not s.startswith("{"):
+        _LOG.warning(
+            "LLM envelope: content does not start with '{' after strip (possible prose prefix)"
+        )
+
+
+def _dict_looks_like_structured_task_payload(d: Any) -> bool:
+    """True if ``d`` plausibly holds brief/workflow rows (not arbitrary metadata)."""
+    if not isinstance(d, dict) or not d:
+        return False
+    markers = frozenset(
+        {
+            "episode_snapshot",
+            "highlights",
+            "evidence_map",
+            "follow_up_questions",
+            "claims",
+            "narrative",
+            "evidence_gaps",
+            "production_moves",
+            "guests",
+            "action_plan_7d",
+            "segments",
+            "analytics",
+            "snapshot",
+            "brief",
+        }
+    )
+    if markers & d.keys():
+        return True
+    # Some models use ``snapshot`` instead of ``episode_snapshot`` (lifted elsewhere too).
+    if isinstance(d.get("snapshot"), dict):
+        return True
+    return False
+
+
+def _maybe_parse_json_object_string(val: Any) -> Any:
+    """Some models put a JSON object inside a string field; parse once if it looks like an object."""
+    if not isinstance(val, str):
+        return val
+    s = val.strip()
+    if len(s) < 2 or s[0] != "{":
+        return val
+    try:
+        j = json.loads(s)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return val
+    return j if isinstance(j, dict) else val
+
+
+def _unwrap_wrapped_payload(parsed: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """If the model nested the payload one level under a common key, return the inner dict."""
+    for wrap in (
+        "response",
+        "output",
+        "result",
+        "message",
+        "brief",
+        "payload",
+        "answer",
+        "content",
+        "envelope",
+        "body",
+        "assistant",
+    ):
+        inner = parsed.get(wrap)
+        if not isinstance(inner, dict):
+            continue
+        if _dict_looks_like_structured_task_payload(inner):
+            return inner
+        # Nested envelope: {"response": {"data": {v2 brief}}}
+        nested = inner.get("data")
+        if isinstance(nested, dict) and (
+            _dict_looks_like_structured_task_payload(nested)
+            or isinstance(nested.get("episode_snapshot"), dict)
+        ):
+            return nested
+        # Another common pattern: wrapper holds only stringified JSON in "content"
+        if wrap == "content" and not _dict_looks_like_structured_task_payload(inner):
+            c = inner.get("content") or inner.get("text")
+            if isinstance(c, str) and c.strip().startswith("{"):
+                jd = _maybe_parse_json_object_string(c)
+                if isinstance(jd, dict) and _dict_looks_like_structured_task_payload(jd):
+                    return jd
+    if len(parsed) == 1:
+        only = next(iter(parsed.values()))
+        if isinstance(only, dict):
+            if _dict_looks_like_structured_task_payload(only):
+                return only
+            nd = only.get("data")
+            if isinstance(nd, dict) and (
+                _dict_looks_like_structured_task_payload(nd)
+                or isinstance(nd.get("episode_snapshot"), dict)
+            ):
+                return nd
+    return None
+
+
+def _normalize_envelope_key_aliases(parsed: Dict[str, Any]) -> Dict[str, Any]:
+    """Map ``Text``/``Data`` and similar to ``text``/``data`` before strict contract checks."""
+    out = dict(parsed)
+    if "text" not in out:
+        for alt in ("Text", "TEXT", "_text"):
+            if alt in out:
+                tv = out.pop(alt)
+                out["text"] = tv if isinstance(tv, str) else ("" if tv is None else str(tv))
+                break
+    if "data" not in out and "Data" in out:
+        out["data"] = out.pop("Data")
+    return out
+
+
+def _lift_snapshot_to_episode_snapshot(parsed: Dict[str, Any]) -> Dict[str, Any]:
+    """If only ``snapshot`` is present, mirror to ``episode_snapshot`` for marker detection."""
+    out = dict(parsed)
+    if "episode_snapshot" not in out and isinstance(out.get("snapshot"), dict):
+        out["episode_snapshot"] = out["snapshot"]
+    return out
+
+
+def _peel_single_key_structured_shell(parsed: Dict[str, Any]) -> Dict[str, Any]:
+    """Unwrap a single-key shell (e.g. result/output) until ``text``, ``data``, or a task-shaped root."""
+    cur: Dict[str, Any] = parsed
+    for _ in range(6):
+        if "text" in cur:
+            return cur
+        if _dict_looks_like_structured_task_payload(cur) and "text" not in cur:
+            return cur
+        if len(cur) != 1:
+            return cur
+        inner = next(iter(cur.values()))
+        if not isinstance(inner, dict):
+            return cur
+        if (
+            "text" in inner
+            or "data" in inner
+            or _dict_looks_like_structured_task_payload(inner)
+        ):
+            cur = _normalize_envelope_key_aliases(inner)
+            cur = _lift_snapshot_to_episode_snapshot(cur)
+            continue
+        return cur
+    return cur
+
+
+def _validate_envelope_usefulness(text: str, data: Dict[str, Any]) -> None:
+    """
+    Reject vacuous envelopes: **both** ``text`` (stripped) and ``data`` empty.
+
+    ``text`` is optional UX metadata; ``data`` is the structural payload (may be empty only if
+    ``text`` carries content). Optional stricter check when ``SOAPBOXX_LLM_STRICT_USEFULNESS=1``.
+    """
+    if data is None:
+        raise ValueError('Invalid LLM contract: missing "data"')
+    if not isinstance(data, dict):
+        raise ValueError('Invalid LLM contract: "data" must be a JSON object')
+    t = (text or "").strip()
+    if not t and len(data) == 0:
+        raise ValueError("Empty envelope: text and data are both empty")
+    if llm_env_truthy("SOAPBOXX_LLM_STRICT_USEFULNESS"):
+        try:
+            min_chars = int(os.getenv("SOAPBOXX_LLM_MIN_TEXT_CHARS", "10"))
+        except ValueError:
+            min_chars = 10
+        min_chars = max(0, min_chars)
+        if len(t) < min_chars and len(data) == 0:
+            raise ValueError(
+                "Uninformative LLM output: text shorter than minimum and data is empty "
+                f"(min_chars={min_chars}; disable with SOAPBOXX_LLM_STRICT_USEFULNESS=0)"
+            )
 
 
 # Phrases that read as generic AI filler — strip or reject lines containing them.
@@ -95,11 +302,22 @@ If a line does not change what someone does next, it does not belong in this bri
 """.strip()
 
 
+LLM_ENVELOPE_SYSTEM_SUFFIX = """
+---
+Response contract (mandatory): reply with ONE JSON object and exactly two top-level keys: "text" and "data" only.
+- "text": always a string (one-line summary or "").
+- "data": always a JSON object. Put the task-specific structured payload inside "data" (see the task schema below).
+No markdown. No code fences. No top-level keys other than "text" and "data".
+""".strip()
+
+
 BRIEF_JSON_SCHEMA_HINT = """
 Follow the workflow: stakes -> claims -> counter-angle -> evidence gaps -> production moves -> guests -> 7-day actions.
 Do not write episode recap filler. No generic praise.
 
-Return ONLY valid JSON (no markdown fences) matching this shape:
+The episode brief object below is the REQUIRED shape of the "data" field (not the root — the root is {"text": "...", "data": { ... }}).
+
+Inside "data", use exactly this shape:
 {
   "episode_snapshot": {
     "title": "string",
@@ -511,6 +729,95 @@ def chunk_transcript(text: str, max_chars: int = CHUNK_SIZE, overlap: int = CHUN
     return chunks
 
 
+def coerce_ollama_message_to_envelope(content: Any) -> Dict[str, Any]:
+    """
+    Normalize Ollama ``message.content`` to ``{"text": str, "data": dict}``.
+
+    Raises ``ValueError`` if the model output cannot be coerced. Supports a
+    legacy root object (e.g. brief or workflow JSON without the envelope) by
+    wrapping it as ``{"text": "", "data": <root>}``.
+    """
+    if content is None:
+        raise ValueError('Invalid LLM contract: missing message "content"')
+
+    parsed: Any
+    if isinstance(content, str):
+        s = content.strip()
+        if not s:
+            raise ValueError("Invalid LLM contract: empty message content")
+        _warn_raw_envelope_violations(content)
+        try:
+            parsed = json.loads(s)
+        except json.JSONDecodeError:
+            try:
+                parsed = _parse_json_loose(s)
+            except (json.JSONDecodeError, TypeError, ValueError) as e2:
+                raise ValueError("Invalid LLM contract: content is not valid JSON") from e2
+    elif isinstance(content, dict):
+        parsed = content
+    else:
+        raise ValueError(
+            f'Invalid LLM contract: message content must be str or dict, got {type(content).__name__}'
+        )
+
+    if not isinstance(parsed, dict):
+        raise ValueError("Invalid LLM contract: JSON root must be an object")
+
+    parsed = _normalize_envelope_key_aliases(parsed)
+    parsed = _lift_snapshot_to_episode_snapshot(parsed)
+    parsed = _peel_single_key_structured_shell(parsed)
+
+    if "text" not in parsed:
+        # Stringified JSON in ``data`` (models sometimes double-encode).
+        raw_d = parsed.get("data")
+        if isinstance(raw_d, str):
+            jd = _maybe_parse_json_object_string(raw_d)
+            if isinstance(jd, dict):
+                parsed = {**parsed, "data": jd}
+        # Legacy: model returned the task JSON at the root (no envelope).
+        if _dict_looks_like_structured_task_payload(parsed):
+            out = {"text": "", "data": parsed}
+            _validate_envelope_usefulness(out["text"], out["data"])
+            return out
+        # JSON-mode / partial: only ``data`` at top level (authoritative payload; text omitted).
+        if isinstance(parsed.get("data"), dict):
+            out = {"text": "", "data": parsed["data"]}
+            _validate_envelope_usefulness(out["text"], out["data"])
+            return out
+        # Nested: ``{"response": {...}}`` or a single-key wrapper around the brief.
+        inner = _unwrap_wrapped_payload(parsed)
+        if inner is not None:
+            out = {"text": "", "data": inner}
+            _validate_envelope_usefulness(out["text"], out["data"])
+            return out
+        raise ValueError(
+            'Invalid LLM contract: missing "text" and no usable structured payload '
+            '(expected object "data", v2 brief keys at root, or one nested wrapper level).'
+        )
+
+    text = parsed.get("text")
+    if text is None:
+        text = ""
+    elif not isinstance(text, str):
+        text = json.dumps(text, ensure_ascii=False) if isinstance(text, (dict, list)) else str(text)
+
+    data = parsed.get("data")
+    if isinstance(data, str):
+        data = _maybe_parse_json_object_string(data)
+    if data is None:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    if len(data) == 0:
+        hoisted = {k: v for k, v in parsed.items() if k not in ("text", "data")}
+        if _dict_looks_like_structured_task_payload(hoisted):
+            data = hoisted
+
+    out = {"text": text, "data": data}
+    _validate_envelope_usefulness(out["text"], out["data"])
+    return out
+
+
 def _strip_json_fence(raw: str) -> str:
     s = raw.strip()
     if s.startswith("```"):
@@ -596,6 +903,240 @@ def _parse_json_loose(raw: str) -> Dict[str, Any]:
     raise json.JSONDecodeError("could not parse brief JSON", blob, 0)
 
 
+def _maybe_validate_brief_semantics(brief: Dict[str, Any]) -> None:
+    if not llm_env_truthy("SOAPBOXX_LLM_VALIDATE_BRIEF_SCHEMA"):
+        return
+    try:
+        from .llm_data_contracts import validate_brief_v2_semantics
+    except ImportError:
+        from llm_data_contracts import validate_brief_v2_semantics  # type: ignore
+    validate_brief_v2_semantics(brief)
+
+
+def _v2_brief_payload_without_snapshot(data: Dict[str, Any]) -> bool:
+    """True when ``data`` looks like a v2 brief body but ``episode_snapshot`` is missing or not a dict."""
+    if not isinstance(data, dict) or isinstance(data.get("episode_snapshot"), dict):
+        return False
+    claims = data.get("claims")
+    if isinstance(claims, list) and len(claims) > 0:
+        return True
+    narr = data.get("narrative")
+    if isinstance(narr, list) and len(narr) > 0:
+        return True
+    pm = data.get("production_moves")
+    return isinstance(pm, dict) and bool(pm)
+
+
+_SNAPSHOT_FIELD_KEYS = frozenset(
+    {"title", "creator", "genre", "primary_topic", "why_it_matters", "reader"}
+)
+
+
+def _unwrap_nested_brief_envelope(data_obj: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Peel accidental double envelopes: ``{"data": {"data": {brief}}}`` or inner LLM envelope
+    ``{"text": "", "data": {brief}}`` sitting inside ``data``.
+    """
+    out = dict(data_obj)
+    mid = out.get("data")
+    if isinstance(mid, dict):
+        inner = mid.get("data")
+        if isinstance(inner, dict) and (
+            isinstance(inner.get("episode_snapshot"), dict)
+            or _v2_brief_payload_without_snapshot(inner)
+        ):
+            return inner
+        # Full second envelope inside data
+        if isinstance(inner, dict) and "text" in inner and isinstance(inner.get("data"), dict):
+            inner2 = inner["data"]
+            if isinstance(inner2.get("episode_snapshot"), dict) or _v2_brief_payload_without_snapshot(
+                inner2
+            ):
+                return inner2
+    return out
+
+
+def _coerce_brief_data_shape(data_obj: Dict[str, Any]) -> Dict[str, Any]:
+    """Heal common local-model layout mistakes (aliases, flat snapshot fields, nested data)."""
+    out = _unwrap_nested_brief_envelope(data_obj)
+
+    if not isinstance(out.get("episode_snapshot"), dict):
+        alt = out.get("snapshot")
+        if isinstance(alt, dict):
+            out = dict(out)
+            out["episode_snapshot"] = alt
+            out.pop("snapshot", None)
+
+    # Single top-level "data" key whose value is the whole brief
+    if (
+        isinstance(out.get("data"), dict)
+        and len([k for k in out if k != "data"]) == 0
+    ):
+        inner_only = out["data"]
+        if isinstance(inner_only.get("episode_snapshot"), dict) or _v2_brief_payload_without_snapshot(
+            inner_only
+        ):
+            return dict(inner_only)
+
+    # Snapshot fields placed at root next to claims / narrative (no episode_snapshot object)
+    if not isinstance(out.get("episode_snapshot"), dict):
+        snap_keys = [k for k in out if k in _SNAPSHOT_FIELD_KEYS]
+        if len(snap_keys) >= 2:
+            out = dict(out)
+            snap = {k: out.pop(k) for k in snap_keys}
+            out["episode_snapshot"] = snap
+
+    return out
+
+
+def _text_likely_contains_json_object(t: str) -> bool:
+    """
+    The LLM envelope allows ``text`` to be a plain one-line summary (not JSON).
+    Only run ``_parse_json_loose`` when ``text`` plausibly embeds an object.
+    """
+    s = (t or "").strip()
+    if not s:
+        return False
+    if s.startswith("{") or "```" in s:
+        return True
+    return "{" in s
+
+
+def _unwrap_parsed_text_to_brief_dict(parsed: Dict[str, Any]) -> Dict[str, Any]:
+    """If the model put a full envelope or only ``data`` in ``text``, return the v2 brief dict."""
+    if not isinstance(parsed, dict):
+        return {}
+    inner_data = parsed.get("data")
+    if isinstance(inner_data, dict) and (
+        isinstance(inner_data.get("episode_snapshot"), dict)
+        or _v2_brief_payload_without_snapshot(inner_data)
+    ):
+        return dict(inner_data)
+    if isinstance(parsed.get("episode_snapshot"), dict) or _v2_brief_payload_without_snapshot(parsed):
+        return dict(parsed)
+    return dict(parsed)
+
+
+def _maybe_parse_episode_snapshot_string_field(data_obj: Dict[str, Any]) -> None:
+    """If ``episode_snapshot`` is a JSON object string, replace with the parsed dict."""
+    es = data_obj.get("episode_snapshot")
+    if isinstance(es, str) and es.strip():
+        try:
+            inner = json.loads(es)
+            if isinstance(inner, dict):
+                data_obj["episode_snapshot"] = inner
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+
+
+def _brief_from_llm_envelope(env: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract the v2 brief dict: prefer ``data.episode_snapshot``; heal common local-model drift."""
+    if "text" not in env:
+        raise ValueError('Invalid LLM contract: missing "text"')
+    data_obj = env.get("data")
+    if not isinstance(data_obj, dict):
+        data_obj = {}
+    else:
+        data_obj = dict(data_obj)
+
+    _maybe_parse_episode_snapshot_string_field(data_obj)
+    data_obj = _coerce_brief_data_shape(data_obj)
+    _maybe_parse_episode_snapshot_string_field(data_obj)
+
+    if isinstance(data_obj.get("episode_snapshot"), dict):
+        _maybe_validate_brief_semantics(data_obj)
+        return data_obj
+
+    if _v2_brief_payload_without_snapshot(data_obj):
+        _LOG.warning(
+            'LLM brief: "data" has v2 fields but no episode_snapshot object; '
+            "downstream normalization will fill title/creator/genre from METADATA."
+        )
+        return data_obj
+
+    t = env.get("text") or ""
+    if not isinstance(t, str):
+        t = ""
+    if _llm_envelope_text_fallback_enabled() and t.strip():
+        if _text_likely_contains_json_object(t):
+            try:
+                parsed_raw = _parse_json_loose(t)
+            except (json.JSONDecodeError, TypeError, ValueError) as e:
+                raise ValueError(
+                    'Brief must be returned in envelope "data" with episode_snapshot, '
+                    "or valid v2 JSON in \"text\" (parse failed). "
+                    "Set SOAPBOXX_LLM_ENVELOPE_TEXT_FALLBACK=0 only if you require strict data-only mode."
+                ) from e
+            if isinstance(parsed_raw, dict):
+                parsed = _unwrap_parsed_text_to_brief_dict(parsed_raw)
+                pes = parsed.get("episode_snapshot")
+                if isinstance(pes, str) and pes.strip():
+                    try:
+                        inner = json.loads(pes)
+                        if isinstance(inner, dict):
+                            parsed = dict(parsed)
+                            parsed["episode_snapshot"] = inner
+                    except (json.JSONDecodeError, TypeError, ValueError):
+                        pass
+                if isinstance(parsed.get("episode_snapshot"), dict):
+                    _LOG.warning(
+                        'LLM brief: using JSON from envelope "text"; prefer episode_snapshot inside "data".'
+                    )
+                    _maybe_validate_brief_semantics(parsed)
+                    return parsed
+                if _v2_brief_payload_without_snapshot(parsed):
+                    _LOG.warning(
+                        'LLM brief: using partial v2 JSON from envelope "text" (no episode_snapshot); '
+                        "METADATA will fill snapshot fields."
+                    )
+                    return parsed
+        raise ValueError(
+            'Brief must be returned in envelope "data" with episode_snapshot, '
+            'or v2-shaped JSON in "text". When "text" is a plain summary (not JSON), '
+            'the full brief must appear inside "data". '
+            "Set SOAPBOXX_LLM_ENVELOPE_TEXT_FALLBACK=0 to forbid parsing from \"text\"."
+        )
+    raise ValueError(
+        'Brief must be returned in envelope "data" with episode_snapshot (or v2 fields without it), '
+        'and/or valid v2 JSON in "text". '
+        "Parsing from \"text\" is on by default; set SOAPBOXX_LLM_ENVELOPE_TEXT_FALLBACK=0 to require data-only."
+    )
+
+
+def _claims_from_llm_envelope(env: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Strict: ``data.claims`` only. Legacy: ``data.claims`` if present, else one ``_parse_json_loose(text)`` pass."""
+    if "text" not in env:
+        raise ValueError('Invalid LLM contract: missing "text"')
+    d = env.get("data") or {}
+    if not isinstance(d, dict):
+        d = {}
+    claims = d.get("claims")
+    if isinstance(claims, list):
+        return [c for c in claims if isinstance(c, dict)]
+    allow_text = _llm_envelope_text_fallback_enabled()
+    t = env.get("text") or ""
+    if not isinstance(t, str):
+        t = ""
+    if allow_text:
+        if not t.strip():
+            return []
+        _LOG.warning(
+            'LLM claims: using JSON from envelope "text"; prefer {"data": {"claims": [...]}}.'
+        )
+        try:
+            jo = _parse_json_loose(t)
+            cl = jo.get("claims")
+            if isinstance(cl, list):
+                return [c for c in cl if isinstance(c, dict)]
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+        return []
+    raise ValueError(
+        'Claims chunk must set "data.claims", or allow parsing from "text" '
+        "(default: allowed; set SOAPBOXX_LLM_ENVELOPE_TEXT_FALLBACK=0 for strict data-only)."
+    )
+
+
 def _has_banned_slop(text: str) -> bool:
     low = text.lower()
     return any(b in low for b in BANNED_SUBSTRINGS)
@@ -633,8 +1174,11 @@ def _ollama_chat(
     max_tokens: int = 4_096,
     temperature: float = 0.25,
     stage: str = "episode_intelligence.brief",
-) -> str:
-    """Local Ollama HTTP API — no OpenAI API key. Requires SOAPBOXX_OLLAMA_MODEL and a running server."""
+) -> Dict[str, Any]:
+    """Local Ollama HTTP API — no OpenAI API key. Requires SOAPBOXX_OLLAMA_MODEL and a running server.
+
+    Returns a strict ``{"text": str, "data": dict}`` envelope (see ``LLM_ENVELOPE_SYSTEM_SUFFIX``).
+    """
     host = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
     model = os.getenv("SOAPBOXX_OLLAMA_MODEL", "").strip()
     if not model:
@@ -655,11 +1199,12 @@ def _ollama_chat(
             o_opts["top_p"] = float(_tp)
         except ValueError:
             pass
+    system_full = (system.rstrip() + "\n\n" + LLM_ENVELOPE_SYSTEM_SUFFIX)
     # Ollama JSON mode improves parse success for brief/claim extraction (esp. small local models).
     payload_obj: Dict[str, Any] = {
         "model": model,
         "messages": [
-            {"role": "system", "content": system},
+            {"role": "system", "content": system_full},
             {"role": "user", "content": user},
         ],
         "stream": False,
@@ -689,7 +1234,7 @@ def _ollama_chat(
         if isinstance(e, OllamaTransportError):
             raise RuntimeError(str(e)) from e
         raise
-    return (data.get("message") or {}).get("content") or ""
+    return coerce_ollama_message_to_envelope((data.get("message") or {}).get("content"))
 
 
 def _openai_chat(
@@ -699,7 +1244,7 @@ def _openai_chat(
     user: str,
     max_tokens: int = 4_096,
     temperature: float = 0.25,
-) -> str:
+) -> Dict[str, Any]:
     """Ollama-only: ``SOAPBOXX_OLLAMA_MODEL`` must be set (see ``_ollama_chat``)."""
     if not os.getenv("SOAPBOXX_OLLAMA_MODEL", "").strip():
         raise RuntimeError(
@@ -717,7 +1262,7 @@ def _openai_chat_with_retry(
     user: str,
     max_tokens: int = 4_096,
     temperature: float = 0.25,
-) -> str:
+) -> Dict[str, Any]:
     """Retries are handled in ``ollama_api_chat`` (bounded exponential)."""
     return _openai_chat(
         client,
@@ -759,10 +1304,11 @@ def _extract_claims_chunk(
 ) -> List[Dict[str, Any]]:
     sys = (
         "You extract testable claims from podcast transcript chunks. "
-        "Output ONLY valid JSON: {\"claims\": [...]} with fields: text, claim_type, confidence, "
+        "Inside the required \"data\" object, output exactly: {\"claims\": [...]}. "
+        "Each claim has fields: text, claim_type, confidence, "
         "why_it_matters, counter_angle (one sentence or empty), next_action. "
         "Each text must be ONE short paraphrase sentence (no dialogue, no filler words). "
-        "Max 4 claims per chunk. Skip small talk."
+        "Max 4 claims per chunk. Skip small talk. Use \"text\": \"\" unless you add a one-line note."
     )
     md = dict(metadata or {})
     title = str(md.get("title") or "")[:120]
@@ -771,12 +1317,14 @@ def _extract_claims_chunk(
         f"EPISODE_TITLE: {title or '(unknown)'}\nGENRE: {genre or '(unknown)'}\n"
         f"CHUNK {chunk_idx}:\n{chunk}\n\nReturn JSON only."
     )
-    raw = _openai_chat_with_retry(
+    env = _openai_chat_with_retry(
         client, use_new_api, sys, user, max_tokens=1_800, temperature=0.2
     )
     try:
-        data = _parse_json_loose(raw)
-        return list(data.get("claims") or [])
+        return _claims_from_llm_envelope(env)
+    except ValueError as e:
+        _LOG.warning("claims chunk envelope: %s", e)
+        return []
     except (json.JSONDecodeError, TypeError):
         return []
 
@@ -806,10 +1354,10 @@ def _synthesize_full_brief(
         + "TRANSCRIPT EXCERPT (for voice and nuance; do not invent facts not supported here):\n"
         + f"{transcript_sample[:12000]}\n"
     )
-    raw = _openai_chat_with_retry(
+    env = _openai_chat_with_retry(
         client, use_new_api, sys, user, max_tokens=4_096, temperature=0.25
     )
-    return _parse_json_loose(raw)
+    return _brief_from_llm_envelope(env)
 
 
 def _single_pass_brief(
@@ -835,10 +1383,10 @@ def _single_pass_brief(
         + f"METADATA:\n{json.dumps(meta, ensure_ascii=False)}\n\n"
         + f"TRANSCRIPT:\n{transcript}\n"
     )
-    raw = _openai_chat_with_retry(
+    env = _openai_chat_with_retry(
         client, use_new_api, sys, user, max_tokens=4_096, temperature=0.25
     )
-    return _parse_json_loose(raw)
+    return _brief_from_llm_envelope(env)
 
 
 def _minimal_brief(metadata: Dict[str, str]) -> Dict[str, Any]:

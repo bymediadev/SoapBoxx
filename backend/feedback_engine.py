@@ -366,13 +366,14 @@ class FeedbackEngine:
         except ImportError:
             from soapboxx_v3_workflow import call_llm
 
-        analysis_text = call_llm(
+        env = call_llm(
             prompt,
             max_tokens=max_tokens,
             temperature=temp,
             system=self._get_system_prompt(analysis_depth),
             client=None,
-        ).strip()
+        )
+        analysis_text = (env.get("text") or "").strip() if isinstance(env, dict) else ""
 
         # Parse and enhance the response
         parsed_response = self._parse_enhanced_analysis_response(

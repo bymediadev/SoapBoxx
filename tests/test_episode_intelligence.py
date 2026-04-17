@@ -1,5 +1,6 @@
 """Unit tests for episode brief pipeline (no API calls)."""
 
+import json
 import os
 import sys
 import unittest
@@ -16,6 +17,291 @@ from episode_intelligence import (  # noqa: E402
     generate_episode_brief,
     render_markdown,
 )
+
+
+class TestLlmEnvelope(unittest.TestCase):
+    def test_empty_text_and_data_rejected(self):
+        with self.assertRaises(ValueError) as ctx:
+            ei.coerce_ollama_message_to_envelope('{"text":"","data":{}}')
+        self.assertIn("Empty envelope", str(ctx.exception))
+
+    @patch.dict(os.environ, {"SOAPBOXX_LLM_STRICT_USEFULNESS": "1"}, clear=False)
+    def test_strict_rejects_short_text_when_data_empty(self):
+        with self.assertRaises(ValueError) as ctx:
+            ei.coerce_ollama_message_to_envelope('{"text":"hi","data":{}}')
+        self.assertIn("Uninformative", str(ctx.exception))
+
+    def test_coerce_wraps_legacy_root_brief(self):
+        root = {
+            "episode_snapshot": {
+                "title": "T",
+                "creator": "",
+                "genre": "G",
+                "primary_topic": "P",
+                "why_it_matters": "W",
+            },
+            "narrative": [],
+            "claims": [],
+        }
+        e = ei.coerce_ollama_message_to_envelope(root)
+        self.assertEqual(e["text"], "")
+        self.assertEqual(e["data"]["episode_snapshot"]["title"], "T")
+
+    def test_coerce_ollama_content_uses_loose_parse_when_strict_fails(self):
+        """Ollama sometimes returns trailing commas or minor glitches; still coerce to envelope."""
+        raw = (
+            '{"text": "ok", "data": {"episode_snapshot": '
+            '{"title": "T", "creator": "", "genre": "G", "primary_topic": "P", "why_it_matters": "W"}},}'
+        )
+        e = ei.coerce_ollama_message_to_envelope(raw)
+        self.assertEqual(e.get("text"), "ok")
+        self.assertIsInstance(e.get("data", {}).get("episode_snapshot"), dict)
+
+    def test_coerce_string_json_envelope(self):
+        s = json.dumps({"text": "note", "data": {"x": 1}})
+        e = ei.coerce_ollama_message_to_envelope(s)
+        self.assertEqual(e["text"], "note")
+        self.assertEqual(e["data"]["x"], 1)
+
+    def test_coerce_Text_Data_key_aliases(self):
+        inner = {
+            "episode_snapshot": {
+                "title": "T",
+                "creator": "",
+                "genre": "G",
+                "primary_topic": "P",
+                "why_it_matters": "W",
+            },
+            "claims": [],
+        }
+        s = json.dumps({"Text": "hi", "Data": inner}, ensure_ascii=False)
+        e = ei.coerce_ollama_message_to_envelope(s)
+        self.assertEqual(e["text"], "hi")
+        self.assertEqual(e["data"]["episode_snapshot"]["title"], "T")
+
+    def test_coerce_nested_response_data_brief(self):
+        inner = {
+            "episode_snapshot": {
+                "title": "T",
+                "creator": "",
+                "genre": "G",
+                "primary_topic": "P",
+                "why_it_matters": "W",
+            },
+            "claims": [],
+        }
+        s = json.dumps({"response": {"data": inner}}, ensure_ascii=False)
+        e = ei.coerce_ollama_message_to_envelope(s)
+        self.assertEqual(e["text"], "")
+        self.assertEqual(e["data"]["episode_snapshot"]["title"], "T")
+
+    def test_coerce_snapshot_root_without_episode_snapshot_key(self):
+        snap = {
+            "title": "T",
+            "creator": "",
+            "genre": "G",
+            "primary_topic": "P",
+            "why_it_matters": "W",
+        }
+        root = {"snapshot": snap, "claims": [{"id": "c1", "text": "x"}]}
+        e = ei.coerce_ollama_message_to_envelope(json.dumps(root))
+        self.assertIn("episode_snapshot", e["data"])
+        self.assertEqual(e["data"]["episode_snapshot"]["title"], "T")
+
+    def test_coerce_data_only_envelope_omits_text_key(self):
+        """Ollama JSON mode often returns only ``data``; text is optional transport metadata."""
+        inner = {"episode_snapshot": {"x": 1}, "claims": []}
+        s = json.dumps({"data": inner}, ensure_ascii=False)
+        e = ei.coerce_ollama_message_to_envelope(s)
+        self.assertEqual(e["text"], "")
+        self.assertEqual(e["data"], inner)
+
+    def test_coerce_text_null_becomes_empty_string(self):
+        s = json.dumps({"text": None, "data": {"k": 1}})
+        e = ei.coerce_ollama_message_to_envelope(s)
+        self.assertEqual(e["text"], "")
+        self.assertEqual(e["data"]["k"], 1)
+
+    def test_coerce_stringified_data_field(self):
+        inner = {"episode_snapshot": {"title": "T"}, "claims": []}
+        packed = json.dumps(inner, ensure_ascii=False)
+        s = json.dumps({"data": packed})
+        e = ei.coerce_ollama_message_to_envelope(s)
+        self.assertEqual(e["text"], "")
+        self.assertEqual(e["data"]["episode_snapshot"]["title"], "T")
+
+    def test_coerce_nested_response_wrapper(self):
+        inner = {"episode_snapshot": {"title": "T"}, "claims": []}
+        s = json.dumps({"response": inner}, ensure_ascii=False)
+        e = ei.coerce_ollama_message_to_envelope(s)
+        self.assertEqual(e["text"], "")
+        self.assertEqual(e["data"]["episode_snapshot"]["title"], "T")
+
+    def test_coerce_brief_keys_beside_text_not_under_data(self):
+        s = json.dumps(
+            {
+                "text": "",
+                "episode_snapshot": {
+                    "title": "T",
+                    "creator": "",
+                    "genre": "G",
+                    "primary_topic": "P",
+                    "why_it_matters": "W",
+                },
+                "claims": [],
+            },
+            ensure_ascii=False,
+        )
+        e = ei.coerce_ollama_message_to_envelope(s)
+        self.assertEqual(e["data"]["episode_snapshot"]["title"], "T")
+
+    @patch.dict(os.environ, {"SOAPBOXX_LLM_VALIDATE_BRIEF_SCHEMA": "1"}, clear=False)
+    def test_maybe_validate_brief_schema_rejects_empty_primary_topic(self):
+        bad = {
+            "episode_snapshot": {
+                "title": "T",
+                "creator": "C",
+                "genre": "G",
+                "primary_topic": "",
+                "why_it_matters": "W",
+            },
+            "narrative": [],
+            "claims": [],
+            "evidence_gaps": {"supported": [], "weak_or_unsupported": [], "proof_needed": []},
+            "production_moves": {
+                "segment_to_run": {"name": "", "goal": ""},
+                "host_questions": [],
+                "clip_candidates": [],
+                "risk_note": "",
+            },
+            "guests": [],
+            "action_plan_7d": [],
+        }
+        with self.assertRaises(ValueError) as ctx:
+            ei._maybe_validate_brief_semantics(bad)
+        self.assertIn("primary_topic", str(ctx.exception))
+
+    def test_brief_from_envelope_prefers_data(self):
+        inner = {
+            "episode_snapshot": {
+                "title": "T",
+                "creator": "",
+                "genre": "G",
+                "primary_topic": "Morning",
+                "why_it_matters": "W",
+            },
+            "narrative": [],
+            "claims": [],
+            "evidence_gaps": {"supported": [], "weak_or_unsupported": [], "proof_needed": []},
+            "production_moves": {
+                "segment_to_run": {"name": "S", "goal": "g"},
+                "host_questions": [],
+                "clip_candidates": [],
+                "risk_note": "",
+            },
+            "guests": [],
+            "action_plan_7d": [],
+        }
+        b = ei._brief_from_llm_envelope({"text": "", "data": inner})
+        self.assertEqual(b["episode_snapshot"]["primary_topic"], "Morning")
+
+    def test_brief_from_envelope_partial_data_without_snapshot(self):
+        """Local models sometimes omit episode_snapshot; normalize() fills from METADATA later."""
+        partial = {
+            "claims": [{"id": "c1", "text": "A claim", "claim_type": "fact"}],
+            "narrative": [],
+        }
+        b = ei._brief_from_llm_envelope({"text": "", "data": partial})
+        self.assertNotIn("episode_snapshot", b)
+        self.assertEqual(len(b["claims"]), 1)
+
+    def test_brief_from_envelope_text_recovery_default_on(self):
+        """When data is empty, parse v2 brief from text (default; no env var)."""
+        inner = {
+            "episode_snapshot": {
+                "title": "T",
+                "creator": "",
+                "genre": "G",
+                "primary_topic": "P",
+                "why_it_matters": "W",
+            },
+            "narrative": [],
+            "claims": [],
+        }
+        text = json.dumps(inner, ensure_ascii=False)
+        b = ei._brief_from_llm_envelope({"text": text, "data": {}})
+        self.assertEqual(b["episode_snapshot"]["title"], "T")
+
+    @patch.dict(os.environ, {"SOAPBOXX_LLM_ENVELOPE_TEXT_FALLBACK": "0"}, clear=False)
+    def test_brief_from_envelope_strict_rejects_text_only(self):
+        inner = {
+            "episode_snapshot": {
+                "title": "T",
+                "creator": "",
+                "genre": "G",
+                "primary_topic": "P",
+                "why_it_matters": "W",
+            },
+            "narrative": [],
+            "claims": [],
+        }
+        text = json.dumps(inner, ensure_ascii=False)
+        with self.assertRaises(ValueError):
+            ei._brief_from_llm_envelope({"text": text, "data": {}})
+
+    def test_brief_plain_text_summary_no_parse_failed_message(self):
+        """Prompt allows a one-line summary in ``text``; do not mis-report JSON parse errors."""
+        with self.assertRaises(ValueError) as ctx:
+            ei._brief_from_llm_envelope(
+                {"text": "Plain one-line summary with no JSON.", "data": {}}
+            )
+        self.assertNotIn("parse failed", str(ctx.exception).lower())
+
+    def test_brief_coerces_flat_snapshot_fields_at_root(self):
+        partial = {
+            "title": "Wild West",
+            "creator": "Host",
+            "primary_topic": "Frontier history",
+            "why_it_matters": "Because",
+            "claims": [{"id": "c1", "text": "A claim line", "claim_type": "fact"}],
+        }
+        b = ei._brief_from_llm_envelope({"text": "", "data": partial})
+        self.assertEqual(b["episode_snapshot"]["title"], "Wild West")
+        self.assertEqual(b["episode_snapshot"]["primary_topic"], "Frontier history")
+        self.assertEqual(len(b["claims"]), 1)
+
+    def test_brief_text_full_envelope_unwrapped(self):
+        """Sometimes the model JSON-encodes the whole envelope into ``text``."""
+        inner = {
+            "episode_snapshot": {
+                "title": "T",
+                "creator": "C",
+                "genre": "G",
+                "primary_topic": "P",
+                "why_it_matters": "W",
+            },
+            "narrative": [],
+            "claims": [],
+        }
+        wrapped = {"text": "", "data": inner}
+        text = json.dumps(wrapped, ensure_ascii=False)
+        b = ei._brief_from_llm_envelope({"text": text, "data": {}})
+        self.assertEqual(b["episode_snapshot"]["title"], "T")
+
+    def test_brief_coerces_double_nested_data_key(self):
+        inner = {
+            "episode_snapshot": {
+                "title": "T",
+                "creator": "C",
+                "genre": "G",
+                "primary_topic": "P",
+                "why_it_matters": "W",
+            },
+            "narrative": [],
+            "claims": [],
+        }
+        b = ei._brief_from_llm_envelope({"text": "", "data": {"data": inner}})
+        self.assertEqual(b["episode_snapshot"]["title"], "T")
 
 
 class TestParseJsonLoose(unittest.TestCase):
@@ -296,7 +582,11 @@ class TestEpisodeIntelligence(unittest.TestCase):
             },
             clear=False,
         ):
-            with patch.object(ei, "_openai_chat_with_retry", return_value=minimal_json):
+            with patch.object(
+                ei,
+                "_openai_chat_with_retry",
+                return_value={"text": "", "data": json.loads(minimal_json)},
+            ):
                 r = generate_episode_brief("word " * 100, {"title": "Ep"})
         self.assertEqual(r.get("model"), "ollama:llama3.1:8b")
         self.assertEqual(r["brief"]["episode_snapshot"]["primary_topic"], "Morning mindset")

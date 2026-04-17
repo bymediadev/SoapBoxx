@@ -6,8 +6,32 @@ Provides local text analysis without external API dependencies
 
 import re
 import time
-from dataclasses import dataclass
-from typing import Dict, List, Optional
+from dataclasses import asdict, dataclass, fields
+from typing import Any, Dict, List, Optional
+
+
+def _validate_feedback_scores_payload(d: Any) -> None:
+    """
+    Lightweight data-contract check for ``scores`` after ``asdict(FeedbackScore)``.
+
+    Catches drift/extra keys early without pulling in Pydantic; does not replace
+    internal use of :class:`FeedbackScore` for computation.
+    """
+    if not isinstance(d, dict):
+        raise TypeError("scores must be a dict")
+    expected = {f.name for f in fields(FeedbackScore)}
+    missing = expected - d.keys()
+    if missing:
+        raise ValueError(f"scores missing keys: {sorted(missing)}")
+    unexpected = d.keys() - expected
+    if unexpected:
+        raise ValueError(f"scores unexpected keys: {sorted(unexpected)}")
+    for f in fields(FeedbackScore):
+        v = d[f.name]
+        if not isinstance(v, (int, float)):
+            raise TypeError(
+                f"scores.{f.name} must be int or float, got {type(v).__name__}"
+            )
 
 
 @dataclass
@@ -61,12 +85,15 @@ class BarebonesFeedbackEngine:
             metrics = self._calculate_content_metrics(transcript)
             scores = self._calculate_local_scores(transcript, analysis_depth)
             feedback = self._generate_local_feedback(transcript, metrics, scores, analysis_depth)
-            
+
+            scores_out = asdict(scores)
+            _validate_feedback_scores_payload(scores_out)
+
             result = {
                 "success": True,
                 "analysis_depth": analysis_depth,
-                "metrics": metrics,
-                "scores": scores,
+                "metrics": asdict(metrics),
+                "scores": scores_out,
                 "feedback": feedback,
                 "timestamp": time.time(),
                 "analysis_type": "local"

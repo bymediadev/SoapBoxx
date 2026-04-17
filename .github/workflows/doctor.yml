@@ -41,11 +41,16 @@ jobs:
         run: |
           python -c "import pydantic, tenacity; import backend.episode_report_v3, backend.soapboxx_v3_workflow, backend.episode_intelligence, backend.blueprint_v1.pipeline; print('imports ok')"
 
+      - name: Verify backend module paths (no shadow copies)
+        env:
+          PYTHONUTF8: '1'
+        run: python scripts/verify_soapboxx_backend.py
+
       - name: Unit tests (v3 + doctor validator)
         env:
           PYTHONUTF8: '1'
         run: |
-          python -m unittest tests.test_episode_report_v3 tests.test_soapboxx_v3_workflow tests.test_episode_intelligence tests.test_doctor_validate_report tests.test_blueprint_v1_pipeline tests.test_blueprint_v1_golden
+          python -m unittest tests.test_episode_report_v3 tests.test_soapboxx_v3_workflow tests.test_episode_intelligence tests.test_verify_soapboxx_backend tests.test_doctor_validate_report tests.test_blueprint_v1_pipeline tests.test_blueprint_v1_golden
 
       - name: Workflow JSON + validate (sample transcript)
         env:

@@ -3,21 +3,115 @@
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+
+import soapboxx_v3_workflow as soapboxx_v3_workflow  # noqa: E402
 
 from soapboxx_v3_workflow import (  # noqa: E402
     WORKFLOW_SPEC_VERSION,
     _compute_structure_diagnostics,
     _editorial_pass_enabled,
     _derive_structure_state,
+    _merge_capitalized_spans,
+    _safe_claim_text,
+    _should_emit_guest_outreach_targets,
     _topic_specific_guest_fallback,
     generate_guest_archetypes_from_issues,
     should_generate_guests,
     validate_json,
+    workflow_guest_rows,
     workflow_report_from_v3_report,
 )
 from guest_generation_decision import build_guest_decision_trace  # noqa: E402
+
+
+class TestCallLlmJsonEnvelope(unittest.TestCase):
+    def test_requires_non_empty_data_without_text_fallback(self):
+        with patch.dict(os.environ, {"SOAPBOXX_LLM_ENVELOPE_TEXT_FALLBACK": "0"}, clear=False):
+            with patch.object(
+                soapboxx_v3_workflow,
+                "call_llm_with_retry",
+                return_value={"text": '{"k": true}', "data": {}},
+            ):
+                with self.assertRaises(ValueError) as ctx:
+                    soapboxx_v3_workflow.call_llm_json("prompt", client=None)
+                self.assertIn("non-empty", str(ctx.exception))
+
+    def test_parses_text_when_fallback_enabled(self):
+        with patch.dict(os.environ, {"SOAPBOXX_LLM_ENVELOPE_TEXT_FALLBACK": "1"}, clear=False):
+            with patch.object(
+                soapboxx_v3_workflow,
+                "call_llm_with_retry",
+                return_value={"text": '{"k": true}', "data": {}},
+            ):
+                r = soapboxx_v3_workflow.call_llm_json("prompt", client=None)
+                self.assertTrue(r.get("k"))
+
+    def test_strict_mode_prefers_data_over_text(self):
+        with patch.dict(os.environ, {"SOAPBOXX_LLM_ENVELOPE_TEXT_FALLBACK": "0"}, clear=False):
+            with patch.object(
+                soapboxx_v3_workflow,
+                "call_llm_with_retry",
+                return_value={
+                    "text": '{"wrong": true}',
+                    "data": {"right": 1, "highlights": []},
+                },
+            ):
+                r = soapboxx_v3_workflow.call_llm_json("prompt", client=None)
+                self.assertEqual(r.get("right"), 1)
+                self.assertIsNone(r.get("wrong"))
+
+    def test_legacy_mode_raises_when_data_and_text_both_empty(self):
+        with patch.dict(os.environ, {"SOAPBOXX_LLM_ENVELOPE_TEXT_FALLBACK": "1"}, clear=False):
+            with patch.object(
+                soapboxx_v3_workflow,
+                "call_llm_with_retry",
+                return_value={"text": "", "data": {}},
+            ):
+                with self.assertRaises(ValueError) as ctx:
+                    soapboxx_v3_workflow.call_llm_json("prompt", client=None)
+                self.assertIn("nothing to parse", str(ctx.exception))
+
+    def test_validate_workflow_data_rejects_unknown_keys_only(self):
+        with patch.dict(
+            os.environ,
+            {
+                "SOAPBOXX_LLM_ENVELOPE_TEXT_FALLBACK": "0",
+                "SOAPBOXX_LLM_VALIDATE_WORKFLOW_DATA": "1",
+            },
+            clear=False,
+        ):
+            with patch.object(
+                soapboxx_v3_workflow,
+                "call_llm_with_retry",
+                return_value={"text": "", "data": {"not_a_workflow_key": 1}},
+            ):
+                with self.assertRaises(ValueError) as ctx:
+                    soapboxx_v3_workflow.call_llm_json("prompt", client=None)
+                self.assertIn("recognized keys", str(ctx.exception))
+
+
+class TestWorkflowGuestAlias(unittest.TestCase):
+    def test_workflow_guest_rows_self_heals_when_lists_diverge(self):
+        """Rogue reassignment of one key: getter re-binds both to one list (canonical wins if non-empty)."""
+        wf = {
+            "guests": [{"name": "Canonical"}],
+            "guest_recommendations": [{"name": "Legacy"}],
+        }
+        rows = workflow_guest_rows(wf)
+        self.assertEqual(rows[0]["name"], "Canonical")
+        self.assertIs(wf["guests"], wf["guest_recommendations"])
+
+    def test_workflow_guest_rows_prefers_legacy_when_canonical_empty(self):
+        wf = {
+            "guests": [],
+            "guest_recommendations": [{"name": "OnlyLegacy"}],
+        }
+        rows = workflow_guest_rows(wf)
+        self.assertEqual(rows[0]["name"], "OnlyLegacy")
+        self.assertIs(wf["guests"], wf["guest_recommendations"])
 
 
 class TestValidateJson(unittest.TestCase):
@@ -234,7 +328,7 @@ class TestValidateJson(unittest.TestCase):
             "guests": [],
         }
         wf = workflow_report_from_v3_report(r3)
-        gr = wf.get("guest_recommendations") or []
+        gr = workflow_guest_rows(wf)
         self.assertGreaterEqual(len(gr), 2)
         self.assertTrue(any(isinstance(g, dict) and g.get("guest_archetype") for g in gr))
         self.assertTrue(str(gr[0].get("commitment_line") or "").startswith("**Start with this:**"))
@@ -254,12 +348,226 @@ class TestValidateJson(unittest.TestCase):
         self.assertNotIn("civil liberties", names)
         self.assertNotIn("criminal or civil litigator", names)
 
+    def test_workflow_guests_passthrough_atomic_envelope_when_v3_guests_empty(self):
+        """Atomic SSOT must reach workflow even if v3 ``guests`` list is empty (mapping drift)."""
+        r3 = {
+            "clean_insights": [],
+            "evidence_mapping": [],
+            "engagement_questions": {},
+            "claims": [{"id": "a1", "text": "Federal policy shaped removal timelines in 1877."}],
+            "guests": [],
+            "segments": [],
+            "coach_report": {},
+            "episode_snapshot": {"title": "History test"},
+            "analytics_actionable": {},
+            "atomic_pipeline": {
+                "claims": [
+                    {"id": "a1", "raw_statement": "Federal policy shaped removal timelines in 1877."}
+                ],
+                "topic_graph": {
+                    "nodes": [
+                        {
+                            "topic_id": "t1",
+                            "label": "Federal Removal Policy",
+                            "evidence_claim_ids": ["a1"],
+                            "category": "history",
+                            "weight": 0.75,
+                        }
+                    ],
+                    "edges": [],
+                },
+                "guest_recommendations": [
+                    {
+                        "guest_type": "historian",
+                        "target_topic_id": "t1",
+                        "relevance_score": 0.82,
+                        "recommendation_reason": {
+                            "primary_angle": "Primary source framing for policy cluster.",
+                            "what_they_would_challenge": "",
+                        },
+                        "ideal_questions": [],
+                    }
+                ],
+            },
+        }
+        wf = workflow_report_from_v3_report(r3)
+        gr = workflow_guest_rows(wf)
+        self.assertGreaterEqual(len(gr), 1)
+        self.assertEqual(gr[0].get("source"), "atomic_pipeline")
+        self.assertIn("Historian", str(gr[0].get("name") or ""))
+        self.assertEqual(str(gr[0].get("claim_id") or ""), "a1")
+
+    def test_workflow_guests_subject_fallback_when_atomic_envelope_empty(self):
+        """When atomic_pipeline exists but graph guests are empty, derive guests from claim entities."""
+        r3 = {
+            "clean_insights": [],
+            "evidence_mapping": [],
+            "engagement_questions": {},
+            "claims": [
+                {
+                    "id": "c1",
+                    "text": "Robert Wright and Billy discussed Jesse Evans with Jim Miller.",
+                }
+            ],
+            "guests": [],
+            "segments": [],
+            "coach_report": {},
+            "episode_snapshot": {"title": "Test"},
+            "analytics_actionable": {},
+            "atomic_pipeline": {
+                "claims": [
+                    {
+                        "id": "c1",
+                        "raw_statement": "Robert Wright and Billy discussed Jesse Evans with Jim Miller.",
+                    }
+                ],
+                "topic_graph": {"nodes": [], "edges": []},
+                "guest_recommendations": [],
+            },
+        }
+        wf = workflow_report_from_v3_report(r3)
+        gr = workflow_guest_rows(wf)
+        self.assertGreaterEqual(len(gr), 1)
+        self.assertTrue(wf.get("guests_from_subject_fallback"))
+        self.assertEqual(gr[0].get("source"), "subject_fallback_tier3")
+        self.assertEqual(gr[0].get("reason"), "derived_from_entity_domain_mapping")
+        self.assertEqual(gr[0].get("name"), "True Crime Historian")
+        sig = str(gr[0].get("entity_signals") or "")
+        self.assertIn("Jesse", sig)
+        self.assertIn("Western Author", str(gr[1].get("name") or ""))
+        oo = wf.get("guest_outreach_targets") or {}
+        self.assertEqual(oo.get("domain_key"), "outlaw_history")
+        experts = oo.get("experts") or []
+        self.assertTrue(any("Tom Clavin" in str(e.get("name")) for e in experts))
+        pods = oo.get("podcasts") or []
+        self.assertTrue(any("Legends of the Old West" in str(p.get("name")) for p in pods))
+
+    def test_merge_capitalized_spans_does_not_bridge_over_lowercase(self):
+        words = "Robert met Billy at the Jesse Evans office".replace(",", " ").split()
+        merged = _merge_capitalized_spans(words)
+        self.assertIn("Robert", merged)
+        self.assertIn("Billy", merged)
+        self.assertIn("Jesse Evans", merged)
+        self.assertNotIn("Robert Billy", merged)
+
+    def test_merge_capitalized_spans_strips_boundary_punctuation(self):
+        """Comma-/quote-attached tokens normalize before cap checks (punctuation-heavy transcripts)."""
+        words = ['"Robert', "Wright,", "said", "the", "sheriff."]
+        merged = _merge_capitalized_spans(words)
+        self.assertIn("Robert Wright", merged)
+        self.assertNotIn("Wright", merged)
+
+    def test_outreach_trigger_loose_tier3_source_and_fallback_flag(self):
+        """Outreach attaches if ``guests_from_subject_fallback`` or ``tier3`` appears in source."""
+        self.assertTrue(
+            _should_emit_guest_outreach_targets(
+                [{"source": "SUBJECT_FALLBACK_TIER3", "name": "x"}],
+                guests_from_subject_fallback=False,
+                claim_rows_for_subjects=[{"id": "c1", "text": "a"}],
+            )
+        )
+        self.assertTrue(
+            _should_emit_guest_outreach_targets(
+                [{"source": "other", "name": "x"}],
+                guests_from_subject_fallback=True,
+                claim_rows_for_subjects=[{"id": "c1", "text": "a"}],
+            )
+        )
+        self.assertFalse(
+            _should_emit_guest_outreach_targets(
+                [{"source": "atomic_pipeline", "name": "x"}],
+                guests_from_subject_fallback=False,
+                claim_rows_for_subjects=[{"id": "c1", "text": "a"}],
+            )
+        )
+
+    def test_safe_claim_text_dict_and_nested(self):
+        self.assertEqual(_safe_claim_text("plain"), "plain")
+        self.assertEqual(_safe_claim_text({"text": "A", "raw_statement": "B"}), "A")
+        nested = {"text": {"raw_statement": "Robert Wright discussed the matter."}}
+        self.assertIn("Robert Wright", _safe_claim_text(nested))
+        t = _safe_claim_text(nested)
+        self.assertIsInstance(t.replace(",", " ").split(), list)
+
+    def test_workflow_guests_subject_fallback_without_atomic_pipeline(self):
+        """Subject fallback must run when ``atomic_pipeline`` is absent (not only inside atomic branch)."""
+        r3 = {
+            "clean_insights": [],
+            "evidence_mapping": [],
+            "engagement_questions": {},
+            "claims": [{"id": "c1", "text": "Robert Wright discussed the case with Jim Miller."}],
+            "guests": [],
+            "segments": [],
+            "coach_report": {},
+            "episode_snapshot": {"title": "Test"},
+            "analytics_actionable": {},
+        }
+        wf = workflow_report_from_v3_report(r3)
+        gr = workflow_guest_rows(wf)
+        self.assertGreaterEqual(len(gr), 1)
+        self.assertTrue(wf.get("guests_from_subject_fallback"))
+        self.assertEqual(gr[0].get("source"), "subject_fallback_tier3")
+
+    def test_subject_fallback_uses_evidence_mapping_when_top_level_claims_empty(self):
+        """UI may show evidence rows while ``claims`` is empty — guests must still extract entities."""
+        r3 = {
+            "clean_insights": [],
+            "claims": [],
+            "evidence_mapping": [
+                {
+                    "id": "c1",
+                    "claim": "Robert Wright and Jim Miller discussed the filing.",
+                    "evidence": "quote",
+                    "timestamp": None,
+                    "type": "other",
+                    "strength": 7,
+                }
+            ],
+            "engagement_questions": {},
+            "guests": [],
+            "segments": [],
+            "coach_report": {},
+            "episode_snapshot": {"title": "Test"},
+            "analytics_actionable": {},
+        }
+        wf = workflow_report_from_v3_report(r3)
+        gr = workflow_guest_rows(wf)
+        self.assertGreaterEqual(len(gr), 1)
+        self.assertTrue(wf.get("guests_from_subject_fallback"))
+        self.assertEqual(gr[0].get("source"), "subject_fallback_tier3")
+
+    def test_workflow_guests_nested_claim_text_does_not_crash(self):
+        """Structured or nested ``text`` fields must not break ``.replace`` / extraction."""
+        r3 = {
+            "clean_insights": [],
+            "evidence_mapping": [],
+            "engagement_questions": {},
+            "claims": [
+                {
+                    "id": "c1",
+                    "text": {"raw_statement": "Robert Wright and Jim Miller met about the case."},
+                }
+            ],
+            "guests": [],
+            "segments": [],
+            "coach_report": {},
+            "episode_snapshot": {"title": "Test"},
+            "analytics_actionable": {},
+        }
+        wf = workflow_report_from_v3_report(r3)
+        gr = workflow_guest_rows(wf)
+        self.assertGreaterEqual(len(gr), 1)
+        self.assertTrue(wf.get("guests_from_subject_fallback"))
+        self.assertEqual(gr[0].get("source"), "subject_fallback_tier3")
+
 
 class TestV3RealityChecksInWorkflow(unittest.TestCase):
     def test_metadata_contains_v3_reality_check(self):
         import episode_report_v3 as v3
         from soapboxx_v3_workflow import soapboxx_v3_workflow_local
 
+        old_gt = os.environ.get("SOAPBOXX_V3_ATOMIC_GROUND_TRUTH")
+        os.environ["SOAPBOXX_V3_ATOMIC_GROUND_TRUTH"] = "0"
         brief = {
             "episode_snapshot": {
                 "title": "Systems vs Goals",
@@ -287,30 +595,36 @@ class TestV3RealityChecksInWorkflow(unittest.TestCase):
             "Guest: Habits survive low motivation because routines automate behavior. "
             "Host: Remove friction for good actions and add friction for bad ones."
         )
-        r3 = v3.build_v3_report(brief, transcript, metadata={})
-        meta = {"title": "Systems vs Goals", "creator": "Test", "genre": "Education"}
-        old_ai = os.environ.get("SOAPBOXX_WORKFLOW_USE_AI")
-        old_rc = os.environ.get("SOAPBOXX_V3_REALITY_CHECK")
         try:
-            os.environ["SOAPBOXX_V3_REALITY_CHECK"] = "1"
-            os.environ["SOAPBOXX_WORKFLOW_USE_AI"] = "0"
-            wf = soapboxx_v3_workflow_local(
-                transcript,
-                meta,
-                validate=False,
-                strict_references=False,
-                report_v3=r3,
-                brief_warnings=[],
-            )
+            r3 = v3.build_v3_report(brief, transcript, metadata={}, atomic_ground_truth=False)
+            meta = {"title": "Systems vs Goals", "creator": "Test", "genre": "Education"}
+            old_ai = os.environ.get("SOAPBOXX_WORKFLOW_USE_AI")
+            old_rc = os.environ.get("SOAPBOXX_V3_REALITY_CHECK")
+            try:
+                os.environ["SOAPBOXX_V3_REALITY_CHECK"] = "1"
+                os.environ["SOAPBOXX_WORKFLOW_USE_AI"] = "0"
+                wf = soapboxx_v3_workflow_local(
+                    transcript,
+                    meta,
+                    validate=False,
+                    strict_references=False,
+                    report_v3=r3,
+                    brief_warnings=[],
+                )
+            finally:
+                if old_ai is not None:
+                    os.environ["SOAPBOXX_WORKFLOW_USE_AI"] = old_ai
+                else:
+                    os.environ.pop("SOAPBOXX_WORKFLOW_USE_AI", None)
+                if old_rc is not None:
+                    os.environ["SOAPBOXX_V3_REALITY_CHECK"] = old_rc
+                else:
+                    os.environ.pop("SOAPBOXX_V3_REALITY_CHECK", None)
         finally:
-            if old_ai is not None:
-                os.environ["SOAPBOXX_WORKFLOW_USE_AI"] = old_ai
+            if old_gt is None:
+                os.environ.pop("SOAPBOXX_V3_ATOMIC_GROUND_TRUTH", None)
             else:
-                os.environ.pop("SOAPBOXX_WORKFLOW_USE_AI", None)
-            if old_rc is not None:
-                os.environ["SOAPBOXX_V3_REALITY_CHECK"] = old_rc
-            else:
-                os.environ.pop("SOAPBOXX_V3_REALITY_CHECK", None)
+                os.environ["SOAPBOXX_V3_ATOMIC_GROUND_TRUTH"] = old_gt
 
         chk = (wf.get("metadata") or {}).get("v3_reality_check") or {}
         self.assertIn("passed", chk)

@@ -505,7 +505,12 @@ def _minimal_segments_for_claims(claim_texts: List[str]) -> List[Dict[str, Any]]
 def _ensure_followups_for_claim_ids(
     report: Dict[str, Any], claim_ids: List[str]
 ) -> None:
-    existing = [q for q in (report.get("follow_up_questions") or []) if isinstance(q, dict)]
+    valid_set = {str(x).strip() for x in claim_ids if str(x).strip()}
+    existing = [
+        q
+        for q in (report.get("follow_up_questions") or [])
+        if isinstance(q, dict) and str(q.get("claim_id") or "").strip() in valid_set
+    ]
     have = set()
     for q in existing:
         cid = str(q.get("claim_id") or "")

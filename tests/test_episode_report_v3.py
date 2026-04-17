@@ -10,6 +10,20 @@ import episode_report_v3 as v3  # noqa: E402
 
 
 class TestEpisodeReportV3(unittest.TestCase):
+    """Brief-fixture tests use legacy brief claims; isolate env from other modules (e.g. reality golden)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._saved_atomic_gt = os.environ.get("SOAPBOXX_V3_ATOMIC_GROUND_TRUTH")
+        os.environ["SOAPBOXX_V3_ATOMIC_GROUND_TRUTH"] = "0"
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls._saved_atomic_gt is None:
+            os.environ.pop("SOAPBOXX_V3_ATOMIC_GROUND_TRUTH", None)
+        else:
+            os.environ["SOAPBOXX_V3_ATOMIC_GROUND_TRUTH"] = cls._saved_atomic_gt
+
     def test_apply_identity_consistency_resets_off_topic_thesis(self):
         report = {
             "meta": {"title": "Nez Perce War"},
@@ -340,6 +354,44 @@ class TestEpisodeReportV3(unittest.TestCase):
         self.assertFalse(inv.get("contract_satisfied"))
         codes = {v.get("code") for v in (inv.get("violations") or [])}
         self.assertIn("CLAIM_SET_EMPTY", codes)
+
+    def test_atomic_ground_truth_ignores_brief_claims_and_attaches_envelope(self):
+        brief = {
+            "episode_snapshot": {
+                "title": "T",
+                "creator": "C",
+                "genre": "G",
+                "primary_topic": "p",
+                "why_it_matters": "w",
+            },
+            "narrative": [],
+            "claims": [
+                {
+                    "id": "c1",
+                    "text": "Brief-only claim that must not appear when atomic ground truth is on.",
+                    "claim_type": "interpretation",
+                }
+            ],
+            "evidence_gaps": {"supported": [], "weak_or_unsupported": [], "proof_needed": []},
+            "production_moves": {
+                "segment_to_run": {"name": "s", "goal": "g"},
+                "host_questions": [],
+                "clip_candidates": [],
+                "risk_note": "",
+            },
+            "guests": [],
+            "action_plan_7d": [],
+        }
+        transcript = (
+            "[12.0s] In 1877 federal policy forced removal of the Nez Perce from their homeland. "
+            "[20.0s] Military campaigns targeted the band during that removal."
+        )
+        r = v3.build_v3_report(brief, transcript, metadata={}, atomic_ground_truth=True)
+        self.assertEqual(r.get("meta", {}).get("structured_intelligence_source"), "atomic_pipeline")
+        self.assertIsInstance(r.get("atomic_pipeline"), dict)
+        claim_ids = [str(c.get("id")) for c in (r.get("claims") or []) if isinstance(c, dict)]
+        self.assertNotIn("c1", claim_ids)
+        self.assertTrue(any(cid.startswith("a") for cid in claim_ids), msg=claim_ids)
 
     def test_narrative_reconstruction_skips_offline_tooling_bullets(self):
         brief = {

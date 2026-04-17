@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
@@ -70,23 +71,24 @@ class TestReportRealityChecks(unittest.TestCase):
 
     def test_would_ship_v3_passes_on_strong_fixture(self):
         brief, transcript = _systems_vs_goals_fixture()
-        report = v3.build_v3_report(brief, transcript, metadata={})
+        report = v3.build_v3_report(brief, transcript, metadata={}, atomic_ground_truth=True)
         ok, reasons = rr.would_ship_v3(report, transcript)
         self.assertTrue(ok, msg="; ".join(reasons))
 
     def test_validate_reality_golden_json_fixture(self):
         brief, transcript = _systems_vs_goals_fixture()
-        report = v3.build_v3_report(brief, transcript, metadata={})
+        report = v3.build_v3_report(brief, transcript, metadata={}, atomic_ground_truth=True)
         base = os.path.join(os.path.dirname(__file__), "golden", "episode_001", "v3_reality_expected.json")
         with open(base, encoding="utf-8") as f:
             rules = json.load(f)
-        fails = rr.validate_reality_golden(report, transcript, rules)
+        fails, degraded = rr.validate_reality_golden(report, transcript, rules)
         self.assertEqual(fails, [], msg="; ".join(fails))
+        _ = degraded  # strong fixture may still emit non-blocking notes in future rules
 
     def test_validate_reality_golden_surfaces_exact_reason(self):
         brief, transcript = _systems_vs_goals_fixture()
-        report = v3.build_v3_report(brief, transcript, metadata={})
-        fails = rr.validate_reality_golden(
+        report = v3.build_v3_report(brief, transcript, metadata={}, atomic_ground_truth=True)
+        fails, _degraded = rr.validate_reality_golden(
             report,
             transcript,
             {"expected_thesis_contains": ["definitely-not-in-thesis-xyz"]},
@@ -94,9 +96,82 @@ class TestReportRealityChecks(unittest.TestCase):
         self.assertEqual(len(fails), 1)
         self.assertIn("missing expected phrase", fails[0])
 
+    def test_thin_evidence_is_degraded_not_failure(self):
+        """1..min-1 evidence rows: golden bar does not FAIL (degraded note only)."""
+        report = {
+            "output_mode": "full",
+            "signal_mode": "HIGH_SIGNAL",
+            "narrative_reconstruction": {"core_thesis": "Systems beat goals when motivation drops."},
+            "evidence_mapping": [
+                {
+                    "id": "c1",
+                    "claim": "Systems beat goals when motivation drops.",
+                    "evidence": "Host: Systems beat goals when motivation drops here in the studio.",
+                    "timestamp": 1.0,
+                    "type": "interpretive",
+                }
+            ],
+            "segments": [{"segment_title": "Opening", "trigger_clip": "c1"}],
+            "coach_report": {"opportunities": {"clip_moments": ["Turn: systems versus goals tension."]}},
+        }
+        transcript = "Host: Systems beat goals when motivation drops here in the studio."
+        fails, degraded = rr.validate_reality_golden(
+            report, transcript, {"min_evidence_rows": 3, "min_segments": 1}
+        )
+        self.assertEqual(fails, [])
+        self.assertTrue(any("DEGRADED:" in x and "evidence rows" in x for x in degraded))
+
+    def test_would_ship_accepts_one_evidence_row_with_warn(self):
+        report = {
+            "output_mode": "full",
+            "narrative_reconstruction": {
+                "core_thesis": "Remove friction for good actions and add friction for bad ones when pressure appears."
+            },
+            "evidence_mapping": [
+                {
+                    "id": "c1",
+                    "claim": "Remove friction for good actions.",
+                    "evidence": "Guest: Remove friction for good actions and add friction for bad ones.",
+                    "timestamp": 1.0,
+                    "type": "interpretive",
+                }
+            ],
+            "segments": [{"segment_title": "A"}, {"segment_title": "B"}],
+            "coach_report": {"opportunities": {"clip_moments": ["Moment one with tension.", "Moment two however risk."]}},
+        }
+        transcript = (
+            "Guest: Remove friction for good actions and add friction for bad ones. "
+            "However risk emerges when social pressure rewards shortcuts."
+        )
+        ok, reasons = rr.would_ship_v3(report, transcript, min_evidence_rows=2, min_clip_proxies=2)
+        self.assertTrue(ok)
+        self.assertTrue(any(str(r).startswith("WARN:") for r in reasons))
+        self.assertFalse(any(str(r).startswith("FAIL:") and "evidence" in r.lower() for r in reasons))
+
     def test_strong_clip_proxy(self):
         self.assertTrue(rr.strong_clip_proxy("I didn't realize the habit was actually protecting me."))
         self.assertFalse(rr.strong_clip_proxy("Habits are good for wellness and balance."))
+
+    def test_cap_nonblocking_signal_notes_dedupes_and_truncates(self):
+        with patch.dict(os.environ, {"SOAPBOXX_V3_QUALITY_SIGNAL_CAP": "3"}):
+            raw = [f"DEGRADED: unique signal {i}" for i in range(10)]
+            raw.append("DEGRADED: unique signal 2")  # duplicate line
+            out = rr.cap_nonblocking_signal_notes(raw)
+            self.assertEqual(len(out), 4)  # 3 kept + overflow summary
+            self.assertTrue(any("density cap" in x.lower() for x in out))
+
+    def test_cap_would_ship_reasons_preserves_all_fails(self):
+        with patch.dict(os.environ, {"SOAPBOXX_V3_QUALITY_SIGNAL_CAP": "2"}):
+            reasons = [
+                "FAIL: alpha",
+                "WARN: w1",
+                "WARN: w2",
+                "WARN: w3",
+                "FAIL: beta",
+            ]
+            out = rr.cap_would_ship_reasons(reasons)
+            self.assertEqual(len([x for x in out if x.startswith("FAIL:")]), 2)
+            self.assertTrue(any("WARN:" in x and "density cap" in x.lower() for x in out))
 
 
 if __name__ == "__main__":

@@ -8,6 +8,16 @@ follow-ups → guests → segments → analytics. This module is the workflow la
 available — **runs multi-step AI extraction** to fill highlights, evidence_map, follow-ups,
 guests, segments, and analytics (`metadata.workflow_mode` = ``local+ai``).
 
+**Structured intelligence contract:** the v3 report’s canonical claims / graph-backed guests come from
+`atomic_pipeline.run_atomic_pipeline` when atomic ground truth is enabled (default in
+`episode_report_v3.build_v3_report`). The workflow layer formats and enriches; it does not replace
+that structured core. Set ``SOAPBOXX_V3_ATOMIC_GROUND_TRUTH=0`` only for legacy or tests.
+
+When the v3 report is atomic-backed, **AI enrichment does not overwrite** ``evidence_map`` or
+canonical ``guests`` (legacy alias ``guest_recommendations`` — see ``_atomic_structure_lock_from_report_v3``); follow-ups are filtered to
+existing evidence ids or reverted to the v3-derived baseline. ``metadata.atomic_structure_lock_applied``
+is set after a successful enrich pass when that lock was active.
+
 - ``metadata.workflow_spec_version`` is always ``WORKFLOW_SPEC_VERSION`` (``"3"``); ``primary_episode_workflow`` is ``True``.
 - Set ``SOAPBOXX_WORKFLOW_USE_AI=0`` to skip AI and keep deterministic mapping only (`local`).
 - Transcript window: ``SOAPBOXX_WORKFLOW_MAX_WORDS`` defaults to **500_000** (~7 chars/word cap toward the hard character ceiling). Set ``SOAPBOXX_WORKFLOW_MAX_WORDS=0`` to use only ``SOAPBOXX_WORKFLOW_MAX_CHARS`` (default 3_000_000). Hard ceiling 3_500_000 characters.
@@ -15,12 +25,15 @@ guests, segments, and analytics (`metadata.workflow_mode` = ``local+ai``).
 - Each successful run adds ``markdown_export`` (unified numbered markdown) to the workflow JSON for scripts/CI — not wired to the PyQt main window.
 - Follow-up questions (when AI is on) use **claim + evidence + local transcript window + episode meta**, plus an optional second **batch sharpen** pass. Set ``SOAPBOXX_WORKFLOW_SHARPEN_FU=0`` to disable only the sharpen pass (saves one LLM call).
 - **Quality gate:** if the transcript is below ``SOAPBOXX_WORKFLOW_MIN_WORDS`` (default 200), or line-level uniqueness falls below ``SOAPBOXX_WORKFLOW_MIN_LINE_UNIQUENESS`` (default 0.22), multi-step enrichment is skipped in favor of **one** ``enrich_workflow_report_minimal`` call. Set ``SOAPBOXX_WORKFLOW_SKIP_GATE=1`` to always run full enrichment.
-- **Reality check (v3):** after ``report_v3`` is built, ``soapboxx_v3_workflow_local`` runs ``report_reality_checks.validate_reality_golden`` using ``backend/data/v3_reality_expected.json`` by default. Set ``SOAPBOXX_V3_REALITY_RULES`` to a JSON path to override; ``SOAPBOXX_V3_REALITY_CHECK=0`` to skip. Results are stored on ``metadata.v3_reality_check`` and echoed into ``metadata.source_warnings``.
+- **Reality check (v3):** after ``report_v3`` is built, ``soapboxx_v3_workflow_local`` runs ``report_reality_checks.validate_reality_golden`` using ``backend/data/v3_reality_expected.json`` by default. Set ``SOAPBOXX_V3_REALITY_RULES`` to a JSON path to override; ``SOAPBOXX_V3_REALITY_CHECK=0`` to skip. Results are stored on ``metadata.v3_reality_check`` (``failures`` vs non-blocking ``degraded_notes``) and echoed into ``metadata.source_warnings``.
 
 **Alternate:** ``use_cloud_llm=True`` — AI-only pipeline (`soapboxx_v3_workflow_cloud`), no v3 coach merge.
 
 **LLM:** ``SOAPBOXX_OLLAMA_MODEL`` + ``OLLAMA_HOST`` (default http://127.0.0.1:11434) — Ollama only.
-Ollama uses JSON mode for structured steps. Optional: ``SOAPBOXX_OLLAMA_NUM_CTX`` / ``OLLAMA_NUM_CTX`` (context),
+Responses are normalized to a strict envelope ``{"text": str, "data": object}`` (shared with
+``episode_intelligence``). ``call_llm_json`` requires non-empty ``data`` unless
+``SOAPBOXX_LLM_ENVELOPE_TEXT_FALLBACK=0`` for strict ``data``-only mode (default allows ``text``). Set ``SOAPBOXX_LLM_VALIDATE_WORKFLOW_DATA=1`` to require at least
+one known workflow key on parsed JSON (see ``llm_data_contracts``). Ollama uses JSON mode. Optional: ``SOAPBOXX_OLLAMA_NUM_CTX`` / ``OLLAMA_NUM_CTX`` (context),
 ``SOAPBOXX_OLLAMA_TOP_P``. **Editorial pass** on unified markdown: ``maybe_editorial_pass_unified_markdown`` — on by
 default when a model is set (disable with ``SOAPBOXX_EDITORIAL_PASS=0``). CLI applies it when writing JSON;
 ``generate_network_brief_v3`` applies it to the final ``markdown_export`` and syncs ``workflow_report``.
@@ -29,12 +42,13 @@ default when a model is set (disable with ``SOAPBOXX_EDITORIAL_PASS=0``). CLI ap
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 try:
     from tenacity import retry, stop_after_attempt, wait_exponential
@@ -60,9 +74,23 @@ except ImportError:  # pragma: no cover - fallback when dependency missing
     ValidationError = Exception  # type: ignore
 
 try:
-    from .episode_intelligence import _clean_claim_text
+    from .episode_intelligence import (
+        LLM_ENVELOPE_SYSTEM_SUFFIX,
+        _clean_claim_text,
+        _llm_envelope_text_fallback_enabled,
+        coerce_ollama_message_to_envelope,
+        llm_env_truthy,
+    )
 except ImportError:
-    from episode_intelligence import _clean_claim_text
+    from episode_intelligence import (  # type: ignore
+        LLM_ENVELOPE_SYSTEM_SUFFIX,
+        _clean_claim_text,
+        _llm_envelope_text_fallback_enabled,
+        coerce_ollama_message_to_envelope,
+        llm_env_truthy,
+    )
+
+_LOG_WF = logging.getLogger(__name__)
 
 try:
     from .guest_generation_decision import gather_issue_blob_for_guests, should_generate_guests
@@ -76,6 +104,97 @@ REQUIRED_QUESTION_TYPES = frozenset({"counter", "validation", "application"})
 
 # Structured workflow JSON is v3; distinct from the v2 compact brief JSON in episode_intelligence.
 WORKFLOW_SPEC_VERSION = "3"
+
+
+def workflow_guest_rows(workflow: Optional[Dict[str, Any]]) -> List[Any]:
+    """Return the workflow guest list: prefer ``guests``, then legacy ``guest_recommendations``.
+
+    If both keys hold lists but they are **not** the same object (alias drift), re-bind via
+    :func:`set_workflow_guest_rows` using canonical ``guests`` when non-empty, else legacy rows.
+    """
+    if not isinstance(workflow, dict):
+        return []
+    g = workflow.get("guests")
+    gr = workflow.get("guest_recommendations")
+    if isinstance(g, list) and isinstance(gr, list) and g is not gr:
+        source = g if g else gr
+        if g and gr and g != gr:
+            _LOG_WF.debug(
+                "workflow_guest_rows: guest list value conflict; canonical `guests` overrides legacy `guest_recommendations`"
+            )
+        elif __debug__:
+            _LOG_WF.debug(
+                "workflow_guest_rows: healing guests/guest_recommendations alias drift (different list ids)"
+            )
+        set_workflow_guest_rows(workflow, source)
+        return workflow["guests"]
+    if isinstance(g, list):
+        return g
+    if isinstance(gr, list):
+        return gr
+    return []
+
+
+def set_workflow_guest_rows(workflow: Dict[str, Any], rows: List[Any]) -> None:
+    """
+    Set canonical ``guests`` and mirror to ``guest_recommendations`` for backward compatibility.
+
+    Copies ``rows`` into a **single** new list so both keys share one reference; use this (or in-place
+    mutation on that list) instead of assigning only one key—reassigning one key with ``+`` or slicing
+    would break the alias invariant.
+    """
+    unified: List[Any] = list(rows)
+    workflow["guests"] = unified
+    workflow["guest_recommendations"] = unified
+    if __debug__:
+        assert workflow["guests"] is workflow["guest_recommendations"]
+
+
+def _safe_claim_text(claim: Any) -> str:
+    """
+    Normalize any claim-shaped value to a plain string for ``.split()`` / ``.replace()`` / matching.
+    Handles str, dicts with text/raw_statement/claim (including nested dicts), and other scalars.
+    """
+    if claim is None:
+        return ""
+    if isinstance(claim, str):
+        return claim
+    if isinstance(claim, dict):
+        for key in ("text", "raw_statement", "claim"):
+            v = claim.get(key)
+            if isinstance(v, str) and v.strip():
+                return v
+            if isinstance(v, dict):
+                inner = _safe_claim_text(v)
+                if inner.strip():
+                    return inner
+        return ""
+    return str(claim)
+
+
+def _workflow_claim_rows_for_subject_fallback(r3: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    When ``report_v3["claims"]`` is empty, still use atomic envelope claims or evidence_mapping
+    rows so subject extraction can see the same text the UI labels as claims.
+    """
+    ap = r3.get("atomic_pipeline")
+    if isinstance(ap, dict):
+        raw = ap.get("claims") or []
+        ac = [c for c in raw if isinstance(c, dict)]
+        if ac:
+            return ac
+    out: List[Dict[str, Any]] = []
+    for row in r3.get("evidence_mapping") or []:
+        if not isinstance(row, dict):
+            continue
+        cid = str(row.get("id") or "").strip()
+        cl = _safe_claim_text({"claim": row.get("claim")})
+        if not cl.strip():
+            cl = _safe_claim_text(row)
+        if cid and cl.strip():
+            out.append({"id": cid, "text": cl.strip()})
+    return out
+
 
 # Default word budget for workflow LLM transcript window (override via ``SOAPBOXX_WORKFLOW_MAX_WORDS``).
 DEFAULT_WORKFLOW_MAX_WORDS = 500_000
@@ -166,11 +285,12 @@ def _run_v3_reality_check_into_meta(
             return
 
     tx = transcript or ""
-    fails = rrc.validate_reality_golden(r3, tx, rules)
+    fails, degraded_notes = rrc.validate_reality_golden(r3, tx, rules)
     ship_ok, ship_fails = rrc.would_ship_v3(r3, tx)
     meta_out["v3_reality_check"] = {
         "passed": len(fails) == 0,
         "failures": fails,
+        "degraded_notes": degraded_notes,
         "would_ship": ship_ok,
         "ship_blockers": ship_fails,
         "rules_source": rules_label,
@@ -180,11 +300,19 @@ def _run_v3_reality_check_into_meta(
         source_warnings.append(
             f"v3_reality: {len(fails)} expectation(s) failed — see metadata.v3_reality_check.failures"
         )
+    if degraded_notes:
+        for note in degraded_notes:
+            source_warnings.append(f"v3_reality (non-blocking): {note}")
     if not ship_ok and ship_fails:
-        source_warnings.append(
-            f"v3_reality: would-ship bar not met ({len(ship_fails)} item(s)) — "
-            "see metadata.v3_reality_check.ship_blockers"
-        )
+        fail_only = [x for x in ship_fails if str(x).startswith("FAIL:")]
+        warn_only = [x for x in ship_fails if not str(x).startswith("FAIL:")]
+        if fail_only:
+            source_warnings.append(
+                f"v3_reality: would-ship bar not met ({len(fail_only)} blocker(s)) — "
+                "see metadata.v3_reality_check.ship_blockers"
+            )
+        for w in warn_only:
+            source_warnings.append(f"v3_reality (non-blocking): {w}")
 
 
 if BaseModel:
@@ -242,15 +370,21 @@ def _ollama_chat(
     system: str = "",
     json_format: bool = False,
     stage: str = "workflow.llm",
-) -> str:
+) -> Dict[str, Any]:
     host = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
     model = os.getenv("SOAPBOXX_OLLAMA_MODEL", "").strip()
     if not model:
         raise RuntimeError("SOAPBOXX_OLLAMA_MODEL not set")
-    messages: List[Dict[str, str]] = []
-    if (system or "").strip():
-        messages.append({"role": "system", "content": system.strip()})
-    messages.append({"role": "user", "content": prompt})
+    base_sys = (system or "").strip()
+    full_sys = (
+        (base_sys + "\n\n" + LLM_ENVELOPE_SYSTEM_SUFFIX)
+        if base_sys
+        else LLM_ENVELOPE_SYSTEM_SUFFIX
+    )
+    messages: List[Dict[str, str]] = [
+        {"role": "system", "content": full_sys},
+        {"role": "user", "content": prompt},
+    ]
     ollama_opts: Dict[str, Any] = {
         "num_predict": max_tokens,
         "temperature": temperature,
@@ -272,9 +406,8 @@ def _ollama_chat(
         "messages": messages,
         "stream": False,
         "options": ollama_opts,
+        "format": "json",
     }
-    if json_format:
-        payload["format"] = "json"
     try:
         try:
             from .ollama_chat_http import ollama_api_chat
@@ -298,7 +431,7 @@ def _ollama_chat(
         if isinstance(e, OllamaTransportError):
             raise RuntimeError(str(e)) from e
         raise
-    return (data.get("message") or {}).get("content") or ""
+    return coerce_ollama_message_to_envelope((data.get("message") or {}).get("content"))
 
 
 def call_llm(
@@ -310,7 +443,7 @@ def call_llm(
     client: Any = None,
     json_format: bool = False,
     stage: str = "workflow.llm",
-) -> str:
+) -> Dict[str, Any]:
     """Local Ollama only. Set ``SOAPBOXX_OLLAMA_MODEL``; ``client`` is ignored (compat)."""
     if not os.getenv("SOAPBOXX_OLLAMA_MODEL", "").strip():
         raise RuntimeError(
@@ -335,7 +468,7 @@ def call_llm_with_retry(
     client: Any = None,
     json_format: bool = False,
     stage: str = "workflow.llm",
-) -> str:
+) -> Dict[str, Any]:
     """Retries are handled inside :func:`_ollama_chat` / ``ollama_api_chat`` (bounded exponential)."""
     return call_llm(
         prompt,
@@ -356,14 +489,65 @@ def call_llm_json(
     parser: Callable[[str], Any] = json.loads,
     client: Any = None,
 ) -> Any:
-    raw = call_llm_with_retry(
+    """Resolve structured workflow JSON from the LLM envelope (binary policy, no middle tier).
+
+    - **Default:** use non-empty ``data``; if ``data`` is empty, parse ``text`` (local models often omit ``data``).
+    - **Strict** (``SOAPBOXX_LLM_ENVELOPE_TEXT_FALLBACK=0``): non-empty ``data`` only; ``text`` ignored for structure.
+
+    Transport integrity only. Optional semantic checks: set ``SOAPBOXX_LLM_VALIDATE_WORKFLOW_DATA=1``
+    to require at least one known workflow key on the resolved object (see ``llm_data_contracts``).
+    """
+    env = call_llm_with_retry(
         prompt,
         max_tokens=max_tokens,
         temperature=temperature,
         client=client,
         json_format=True,
     )
-    return parser(_strip_json_fence(raw))
+    if not isinstance(env, dict):
+        raise TypeError("call_llm_json: expected envelope dict from LLM")
+    raw_data = env.get("data")
+    data = raw_data if isinstance(raw_data, dict) else {}
+    tr = env.get("text")
+    text = tr if isinstance(tr, str) else ""
+
+    allow_text = _llm_envelope_text_fallback_enabled()
+
+    if allow_text:
+        if len(data) > 0:
+            result: Any = data
+        else:
+            if not text.strip():
+                raise ValueError(
+                    'call_llm_json: "data" is empty and "text" is empty — nothing to parse.'
+                )
+            _LOG_WF.warning(
+                'call_llm_json: using structured JSON from envelope "text" because "data" was empty.'
+            )
+            result = parser(_strip_json_fence(text))
+    else:
+        if len(data) > 0:
+            result = data
+        else:
+            raise ValueError(
+                'call_llm_json (strict mode): expected non-empty "data" '
+                '(SOAPBOXX_LLM_ENVELOPE_TEXT_FALLBACK=0 disables parsing JSON from "text").'
+            )
+
+    if llm_env_truthy("SOAPBOXX_LLM_VALIDATE_WORKFLOW_DATA"):
+        try:
+            from .llm_data_contracts import (
+                WORKFLOW_LLM_KNOWN_KEYS,
+                validate_workflow_data_has_known_keys,
+            )
+        except ImportError:
+            from llm_data_contracts import (  # type: ignore
+                WORKFLOW_LLM_KNOWN_KEYS,
+                validate_workflow_data_has_known_keys,
+            )
+        validate_workflow_data_has_known_keys(result, expected=WORKFLOW_LLM_KNOWN_KEYS)
+
+    return result
 
 
 def _workflow_transcript_excerpt(transcript: str) -> str:
@@ -755,16 +939,17 @@ Episode title (context): {title or "(untitled)"}
 {md_in}
 """
     try:
-        out = call_llm(
+        env = call_llm(
             prompt,
             max_tokens=mt,
             temperature=0.22,
             system=(
-                "You output ONLY the revised markdown. No markdown fences around the whole document. "
-                "No commentary before or after."
+                "Put the full revised markdown document ONLY in the JSON \"text\" field. "
+                'Use \"data\": {}. No markdown fences inside \"text\". No commentary before or after the document.'
             ),
             json_format=False,
-        ).strip()
+        )
+        out = (env.get("text") or "").strip()
         if len(out) < min(400, len(markdown) // 4) and len(markdown) > 800:
             return markdown, False
         return out, True
@@ -781,19 +966,48 @@ def _workflow_ai_enrichment_enabled() -> bool:
     )
 
 
+def _atomic_structure_lock_from_report_v3(r3: Optional[Dict[str, Any]]) -> bool:
+    """
+    When the v3 report was built from atomic ground truth, workflow AI enrichment must not
+    replace evidence_map or guests / guest_recommendations (SSOT — see episode_report_v3).
+    """
+    if not r3 or not isinstance(r3, dict):
+        return False
+    meta = r3.get("meta") if isinstance(r3.get("meta"), dict) else {}
+    if str(meta.get("structured_intelligence_source") or "").strip() == "atomic_pipeline":
+        return True
+    ap = r3.get("atomic_pipeline")
+    return isinstance(ap, dict) and bool(ap)
+
+
+def _snapshot_workflow_rows(rows: Any) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    if not isinstance(rows, list):
+        return out
+    for r in rows:
+        if isinstance(r, dict):
+            out.append(dict(r))
+    return out
+
+
 def enrich_workflow_report_minimal(
     transcript: str,
     body: Dict[str, Any],
     *,
     client: Any = None,
     episode_meta: Optional[Dict[str, Any]] = None,
+    report_v3: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Single LLM call when the quality gate skips full multi-step enrichment (very short transcript
     or highly duplicated lines). Uses the same transcript window as full enrichment
     (``SOAPBOXX_WORKFLOW_MAX_CHARS``). Produces a smaller but valid workflow slice.
+
+    When ``report_v3`` indicates atomic ground truth, the LLM must not replace ``evidence_map``
+    rows (baseline from ``workflow_report_from_v3_report`` is preserved).
     """
     out = dict(body)
+    lock = _atomic_structure_lock_from_report_v3(report_v3)
     excerpt = _workflow_transcript_excerpt(transcript)
     if not excerpt.strip():
         _sanitize_workflow_highlights(out)
@@ -827,7 +1041,7 @@ Return ONE JSON object only with keys:
 
 Rules: complete sentences; no trailing ellipsis; no empty strings; evidence must be copied verbatim from TRANSCRIPT; claims must match the episode title/subject when provided.
 
-Output JSON only.
+Output JSON only. Put that single object in the \"data\" field of the response contract (\"text\" may be \"\" ).
 """
     try:
         data = call_llm_json(prompt, max_tokens=4000, temperature=0.2, client=client)
@@ -839,11 +1053,31 @@ Output JSON only.
         return out
     if isinstance(data.get("highlights"), list) and data["highlights"]:
         out["highlights"] = data["highlights"][:5]
-    if isinstance(data.get("evidence_map"), list) and data["evidence_map"]:
+    if (
+        not lock
+        and isinstance(data.get("evidence_map"), list)
+        and data["evidence_map"]
+    ):
         em = _filter_grounded_evidence_map(transcript or "", data["evidence_map"][:8])
         out["evidence_map"] = _sanitize_evidence_map_claims(em)
     if isinstance(data.get("follow_up_questions"), list) and data["follow_up_questions"]:
-        out["follow_up_questions"] = data["follow_up_questions"]
+        if lock:
+            valid_ids = {
+                str(e.get("id"))
+                for e in (out.get("evidence_map") or [])
+                if isinstance(e, dict) and e.get("id")
+            }
+            if valid_ids:
+                fu = [
+                    q
+                    for q in data["follow_up_questions"]
+                    if isinstance(q, dict)
+                    and str(q.get("claim_id") or "") in valid_ids
+                ]
+                if fu:
+                    out["follow_up_questions"] = fu
+        else:
+            out["follow_up_questions"] = data["follow_up_questions"]
     _sanitize_workflow_highlights(out)
     return out
 
@@ -854,6 +1088,7 @@ def enrich_workflow_report_with_ai(
     *,
     client: Any = None,
     episode_meta: Optional[Dict[str, Any]] = None,
+    report_v3: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Fill workflow JSON using multi-step LLM extraction (highlights, evidence, Q&A, guests,
@@ -862,8 +1097,19 @@ def enrich_workflow_report_with_ai(
 
     ``episode_meta`` (title, creator, genre, …) is passed into follow-up generation so questions
     are anchored to the show and claims, not generic podcast boilerplate.
+
+    When ``report_v3`` indicates atomic ground truth, ``evidence_map`` and
+    ``guests`` (legacy alias ``guest_recommendations``) from ``body`` are immutable: enrichment may add highlights,
+    analytics, segments, and filtered follow-ups only.
     """
     out = dict(body)
+    _g0 = workflow_guest_rows(out)
+    if _g0:
+        set_workflow_guest_rows(out, _g0)  # mirror canonical ``guests`` + legacy alias
+    lock = _atomic_structure_lock_from_report_v3(report_v3)
+    baseline_em = _snapshot_workflow_rows(out.get("evidence_map")) if lock else []
+    baseline_guests = _snapshot_workflow_rows(workflow_guest_rows(out)) if lock else []
+    baseline_fuq = _snapshot_workflow_rows(out.get("follow_up_questions")) if lock else []
     excerpt = _workflow_transcript_excerpt(transcript)
     if not excerpt:
         return out
@@ -873,7 +1119,9 @@ def enrich_workflow_report_with_ai(
         out["highlights"] = highlights
 
     ev_mode = _workflow_evidence_mode()
-    if ev_mode == "v3":
+    if lock:
+        pass  # evidence_map stays baseline from workflow_report_from_v3_report
+    elif ev_mode == "v3":
         pass  # keep evidence_map from workflow_report_from_v3_report(body)
     elif ev_mode == "full":
         evidence_map = generate_evidence_map(excerpt, client=client, episode_meta=episode_meta)
@@ -904,25 +1152,43 @@ def enrich_workflow_report_with_ai(
                 client=client,
                 episode_meta=episode_meta,
             )
-        out["follow_up_questions"] = questions
+        if lock:
+            valid_ids = {
+                str(e.get("id")) for e in em if isinstance(e, dict) and e.get("id")
+            }
+            if valid_ids:
+                questions = [
+                    q
+                    for q in questions
+                    if isinstance(q, dict) and str(q.get("claim_id") or "") in valid_ids
+                ]
+            else:
+                questions = []
+            if not questions and baseline_fuq:
+                questions = baseline_fuq
+        if questions:
+            out["follow_up_questions"] = questions
+    elif lock and baseline_fuq:
+        out["follow_up_questions"] = baseline_fuq
 
-    guests = generate_guest_recommendations(
-        em,
-        client=client,
-        highlights=out.get("highlights") or [],
-        episode_meta=episode_meta,
-        transcript=transcript or "",
-    )
-    if guests:
-        for g in guests:
-            if not isinstance(g, dict):
-                continue
-            if not str(g.get("title") or "").strip():
-                r = str(g.get("role") or "").strip()
-                if r:
-                    g["title"] = r
-            g.setdefault("topic_angle", g.get("angle"))
-        out["guest_recommendations"] = guests
+    if not lock:
+        guests = generate_guest_recommendations(
+            em,
+            client=client,
+            highlights=out.get("highlights") or [],
+            episode_meta=episode_meta,
+            transcript=transcript or "",
+        )
+        if guests:
+            for g in guests:
+                if not isinstance(g, dict):
+                    continue
+                if not str(g.get("title") or "").strip():
+                    r = str(g.get("role") or "").strip()
+                    if r:
+                        g["title"] = r
+                g.setdefault("topic_angle", g.get("angle"))
+            set_workflow_guest_rows(out, guests)
 
     hl = out.get("highlights") or []
     segments = generate_segments(em, hl, client=client)
@@ -939,6 +1205,15 @@ def enrich_workflow_report_with_ai(
             "actionable_steps": list(analytics.get("actionable_steps") or []),
         }
 
+    if lock:
+        # Only restore SSOT snapshots when they actually contain rows. An empty baseline must not
+        # overwrite valid mapper output (e.g. Tier-3 guests) when the snapshot was stale or empty.
+        if baseline_em:
+            out["evidence_map"] = baseline_em
+        if baseline_guests:
+            set_workflow_guest_rows(out, baseline_guests)
+
+    _prune_follow_up_questions_to_evidence_map(out)
     _sanitize_workflow_highlights(out)
     return out
 
@@ -1163,6 +1438,34 @@ def attach_summary_and_score(report: Dict[str, Any]) -> Dict[str, Any]:
     report["summary"] = " ".join(summary_parts)[:800]
     report["score"] = int(score)
     return report
+
+
+def _prune_follow_up_questions_to_evidence_map(report: Dict[str, Any]) -> None:
+    """Drop follow-ups whose ``claim_id`` is not in ``evidence_map`` (LLM id drift or post-hoc row drops)."""
+    em = report.get("evidence_map") or []
+    if not isinstance(em, list):
+        return
+    valid = {
+        str(e.get("id"))
+        for e in em
+        if isinstance(e, dict) and str(e.get("id") or "").strip()
+    }
+    if not valid:
+        return
+    fuq = report.get("follow_up_questions")
+    if not isinstance(fuq, list) or not fuq:
+        return
+    pruned = [
+        q
+        for q in fuq
+        if isinstance(q, dict) and str(q.get("claim_id") or "").strip() in valid
+    ]
+    if len(pruned) != len(fuq):
+        _LOG_WF.warning(
+            "Dropped %d follow_up_question(s) with claim_id not in evidence_map",
+            len(fuq) - len(pruned),
+        )
+    report["follow_up_questions"] = pruned
 
 
 def _sanitize_workflow_highlights(report: Dict[str, Any]) -> None:
@@ -1931,6 +2234,540 @@ def _dedupe_guest_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
+def _workflow_guest_rows_from_atomic_envelope(ap: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Build workflow guest rows (``guests`` / ``guest_recommendations``) directly from the v3 report's ``atomic_pipeline``
+    (envelope JSON). Decoupled from v3 ``guests`` list and from legacy generic-guest heuristics
+    so atomic graph output is not lost when claim/label text does not round-trip through v3 rows.
+    Each row sets ``source`` = ``atomic_pipeline`` for downstream debugging.
+    """
+    raw = ap.get("guest_recommendations") or []
+    if not isinstance(raw, list) or not raw:
+        return []
+    claims = [c for c in (ap.get("claims") or []) if isinstance(c, dict)]
+    claim_by_id = {str(c.get("id")): c for c in claims if c.get("id")}
+    tg = ap.get("topic_graph") if isinstance(ap.get("topic_graph"), dict) else {}
+    nodes = tg.get("nodes") if isinstance(tg.get("nodes"), list) else []
+    topic_by_id = {
+        str(n.get("topic_id")): n for n in nodes if isinstance(n, dict) and n.get("topic_id")
+    }
+    out: List[Dict[str, Any]] = []
+    for g in raw:
+        if not isinstance(g, dict):
+            continue
+        tid = str(g.get("target_topic_id") or "")
+        topic = topic_by_id.get(tid) if tid else None
+        if not isinstance(topic, dict):
+            topic = {}
+        label = str(topic.get("label") or "").strip() or "topic cluster"
+        target_claim = ""
+        for cid in topic.get("evidence_claim_ids") or []:
+            bc = claim_by_id.get(str(cid))
+            if bc:
+                target_claim = _safe_claim_text(bc)
+                break
+        if not target_claim:
+            for bc in claim_by_id.values():
+                target_claim = _safe_claim_text(bc)
+                if target_claim:
+                    break
+        gt = str(g.get("guest_type") or "academic")
+        title_g = gt.replace("_", " ").title()
+        reason = g.get("recommendation_reason") if isinstance(g.get("recommendation_reason"), dict) else {}
+        why = str(reason.get("primary_angle") or "").strip()
+        if not why:
+            why = str(reason.get("what_they_would_challenge") or "").strip()
+        claim_id = ""
+        ecids = topic.get("evidence_claim_ids") or []
+        if ecids:
+            claim_id = str(ecids[0])
+        elif claim_by_id:
+            claim_id = str(next(iter(claim_by_id.keys())))
+        try:
+            rs = float(g.get("relevance_score") or 0.0)
+        except (TypeError, ValueError):
+            rs = 0.0
+        rel = int(min(10, max(5, round(5 + rs * 5))))
+        out.append(
+            {
+                "name": f"{title_g} — {label[:120]}",
+                "title": gt,
+                "role": gt,
+                "claim_id": claim_id,
+                "angle": why or _clean_claim_text(target_claim)[:240],
+                "topic_angle": why or _clean_claim_text(target_claim)[:240],
+                "relevance": rel,
+                "source": "atomic_pipeline",
+            }
+        )
+    return out[:6]
+
+
+_SUBJECT_FALLBACK_STOPWORDS = frozenset(
+    {
+        "The",
+        "This",
+        "That",
+        "These",
+        "Those",
+        "They",
+        "There",
+        "Their",
+        "When",
+        "What",
+        "Where",
+        "Which",
+        "While",
+        "With",
+        "Without",
+        "Your",
+        "Here",
+        "Some",
+        "Many",
+        "Most",
+        "People",
+        "Someone",
+        "But",
+        "And",
+        "For",
+        "Not",
+        "You",
+        "All",
+        "Can",
+        "Her",
+        "Was",
+        "One",
+        "Our",
+        "Out",
+        "Its",
+        "His",
+        "She",
+        "Had",
+        "Who",
+        "How",
+        "Why",
+        "Such",
+        "Also",
+        "Like",
+        "Just",
+        "About",
+        "Because",
+        "After",
+        "Before",
+        "During",
+        "Then",
+        "Than",
+        "From",
+        "Into",
+        "Being",
+        "Been",
+        "Have",
+        "Will",
+        "Would",
+        "Could",
+        "Should",
+        "Every",
+        "Each",
+        "Other",
+        "Another",
+        "Even",
+        "Only",
+        "Very",
+    }
+)
+
+# Leading/trailing punctuation on transcript tokens (commas, quotes, brackets) before cap checks.
+_SUBJECT_TOKEN_STRIP_CHARS = ".,;:!?\"'()[]{}"
+
+
+def _normalize_subject_token(raw: str) -> str:
+    """Strip boundary punctuation so ``Wright,`` and ``(Robert`` normalize before ``isupper`` checks."""
+    if not raw:
+        return ""
+    return raw.strip(_SUBJECT_TOKEN_STRIP_CHARS)
+
+
+def _merge_capitalized_spans(words: List[str]) -> List[str]:
+    """
+    Merge consecutive capitalized tokens in **original word order** into entity-like spans.
+    Lowercase / stopword tokens break the span so ``Robert met Billy`` yields two entities,
+    not ``Robert Billy``.
+    """
+    merged: List[str] = []
+    buffer: List[str] = []
+    for w in words:
+        w = _normalize_subject_token(w)
+        if not w:
+            continue
+        ok = (
+            len(w) > 2
+            and w[0].isupper()
+            and w not in _SUBJECT_FALLBACK_STOPWORDS
+        )
+        if ok:
+            buffer.append(w)
+        else:
+            if buffer:
+                merged.append(" ".join(buffer))
+                buffer = []
+    if buffer:
+        merged.append(" ".join(buffer))
+    return merged
+
+
+def _score_claim_importance(claim: Any) -> float:
+    """Heuristic narrative weight for a claim (structural only, no ML)."""
+    text = _safe_claim_text(claim)
+    score = 0.0
+    score += min(len(text) / 200.0, 2.0)
+    for raw in text.split():
+        w = _normalize_subject_token(raw)
+        if w and w[0].isupper():
+            score += 0.2
+    triggers = (
+        "killed",
+        "warning",
+        "refused",
+        "hired",
+        "departed",
+        "rumor",
+        "death",
+    )
+    low = text.lower()
+    score += sum(0.5 for t in triggers if t in low)
+    return score
+
+
+def _extract_subject_entities_from_claims(claims: List[Any]) -> List[str]:
+    """
+    Tier-2 subject extraction when atomic graph guests are empty: merged spans, claim-weighted
+    ranking, deduped.
+    """
+    raw_entities: List[str] = []
+    weighted_entities: List[Tuple[str, float]] = []
+
+    for c in claims or []:
+        text = _safe_claim_text(c)
+        if not text.strip():
+            continue
+        importance = _score_claim_importance(c)
+        words: List[str] = []
+        for raw in text.replace(",", " ").split():
+            w = _normalize_subject_token(raw)
+            if w:
+                words.append(w)
+        merged = _merge_capitalized_spans(words)
+        for m in merged:
+            raw_entities.append(m)
+            weighted_entities.append((m, importance))
+
+    freq: Dict[str, int] = {}
+    for e in raw_entities:
+        freq[e] = freq.get(e, 0) + 1
+
+    ranked = sorted(
+        weighted_entities,
+        key=lambda x: (x[1], freq.get(x[0], 0)),
+        reverse=True,
+    )
+
+    seen: Set[str] = set()
+    out: List[str] = []
+    for name, _ in ranked:
+        if name in seen:
+            continue
+        seen.add(name)
+        out.append(name)
+        if len(out) >= 10:
+            break
+
+    return out
+
+
+def _infer_domain_from_entities(entities: List[str]) -> str:
+    """Map extracted entity names to a coarse subject domain (rule-based, no LLM)."""
+    blob = " ".join(entities).lower()
+    if any(k in blob for k in ("billy", "jesse", "outlaw", "miller", "killer")):
+        return "outlaw_history"
+    if any(k in blob for k in ("lawman", "sheriff", "deputy", "marshal", "posse")):
+        return "law_enforcement_history"
+    if any(k in blob for k in ("war", "tribe", "perce", "native", "nez")):
+        return "indigenous_history"
+    if any(k in blob for k in ("trade", "economy", "network", "market")):
+        return "economic_history"
+    return "general_history"
+
+
+_DOMAIN_GUEST_MAP: Dict[str, List[Tuple[str, str]]] = {
+    "outlaw_history": [
+        ("True Crime Historian", "Expert in outlaw networks and frontier violence"),
+        ("Western Author", "Focuses on historical outlaw figures and narratives"),
+    ],
+    "law_enforcement_history": [
+        ("Legal Historian", "Studies early law enforcement systems"),
+        ("Criminologist", "Analyzes patterns of crime and enforcement"),
+    ],
+    "indigenous_history": [
+        ("Indigenous Historian", "Focuses on Native American history and conflict"),
+        ("Anthropologist", "Studies tribal systems and cultural dynamics"),
+    ],
+    "economic_history": [
+        ("Economic Historian", "Analyzes trade systems and incentives"),
+    ],
+    "general_history": [
+        ("Historian", "General expertise in historical analysis and context"),
+    ],
+}
+
+
+# Static outreach layer: real experts + podcasts to contact (no API; expand per domain over time).
+_OUTREACH_BY_DOMAIN: Dict[str, Dict[str, List[Dict[str, str]]]] = {
+    "outlaw_history": {
+        "experts": [
+            {
+                "name": "Tom Clavin",
+                "type": "author",
+                "why": "Writes extensively on Old West lawmen and outlaws (Wyatt Earp, Tombstone).",
+                "angle": "How myth vs reality shaped figures like Jesse Evans and frontier violence.",
+                "best_fit": "Narrative/history breakdown episodes.",
+                "outreach_hook": (
+                    "We’re breaking down overlooked outlaw networks and wanted someone who understands "
+                    "how these stories get distorted over time."
+                ),
+            },
+            {
+                "name": "T.J. Stiles",
+                "type": "author",
+                "why": "Pulitzer Prize–winning biographer (Jesse James).",
+                "angle": "Economic and social incentives behind outlaw behavior.",
+                "best_fit": "Deeper analytical episode.",
+                "outreach_hook": (
+                    "We’re exploring how outlaw figures weren’t just criminals but products of "
+                    "economic systems."
+                ),
+            },
+            {
+                "name": "Michael Wallis",
+                "type": "author",
+                "why": "Leading voice on the American West (Billy the Kid, Route 66).",
+                "angle": "Storytelling vs historical truth in the Wild West.",
+                "best_fit": "Audience-friendly storytelling episode.",
+                "outreach_hook": (
+                    "We’re unpacking how Wild West stories get romanticized vs what actually happened."
+                ),
+            },
+            {
+                "name": "Anne F. Hyde",
+                "type": "historian",
+                "why": "Cultural and Indigenous intersections in the West.",
+                "angle": "Power structures, violence, and identity in frontier systems.",
+                "best_fit": "More academic / serious angle.",
+                "outreach_hook": (
+                    "We’re trying to understand how power and violence actually operated on the "
+                    "frontier beyond the myths."
+                ),
+            },
+        ],
+        "podcasts": [
+            {
+                "name": "Legends of the Old West",
+                "why": "Direct overlap with frontier outlaw and lawman narratives.",
+                "pitch_angle": (
+                    "We’ve built a system that breaks Wild West narratives into structured insights—"
+                    "would love to explore a deep-dive collaboration."
+                ),
+            },
+            {
+                "name": "The Wild West Podcast",
+                "why": "Same niche with a consistent audience.",
+                "pitch_angle": (
+                    "We analyze how outlaw stories connect across episodes and time periods—"
+                    "curious if a crossover fits your format."
+                ),
+            },
+            {
+                "name": "Hardcore History",
+                "why": "Aspirational; aligns with long-form narrative breakdowns.",
+                "pitch_angle": (
+                    "We’re building tools that turn long-form history into structured, analyzable narratives."
+                ),
+            },
+            {
+                "name": "True Crime Garage",
+                "why": "Bridges outlaw history to broader true-crime listeners.",
+                "pitch_angle": (
+                    "We’re exploring early American crime systems and how they compare to modern patterns."
+                ),
+            },
+        ],
+    },
+    "law_enforcement_history": {
+        "experts": [
+            {
+                "name": "Paul R. Spitzer",
+                "type": "historian",
+                "why": "U.S. marshals, posses, and frontier policing.",
+                "angle": "How formal and informal enforcement coexisted on the frontier.",
+                "best_fit": "Law-and-order vs vigilante themes.",
+                "outreach_hook": (
+                    "We’re dissecting how law enforcement narratives form—and where the record disagrees."
+                ),
+            },
+        ],
+        "podcasts": [
+            {
+                "name": "Criminal",
+                "why": "Crime and justice storytelling with a broad audience.",
+                "pitch_angle": "We connect historical enforcement patterns to how we tell crime stories today.",
+            },
+        ],
+    },
+    "indigenous_history": {
+        "experts": [
+            {
+                "name": "Pekka Hämäläinen",
+                "type": "historian",
+                "why": "Indigenous power and diplomacy on the North American continent.",
+                "angle": "Centering Native nations in frontier conflict narratives.",
+                "best_fit": "Serious historical treatment of power and survival.",
+                "outreach_hook": (
+                    "We want voices who foreground Indigenous agency—not just as backdrop to frontier myths."
+                ),
+            },
+        ],
+        "podcasts": [
+            {
+                "name": "This Land",
+                "why": "Indigenous politics and history.",
+                "pitch_angle": "We’re grounding podcast narratives in structured claims about power and land.",
+            },
+        ],
+    },
+    "economic_history": {
+        "experts": [
+            {
+                "name": "Bradford DeLong",
+                "type": "economist",
+                "why": "Long-run economic history and incentives.",
+                "angle": "Markets, coercion, and institutions in historical context.",
+                "best_fit": "Analytical episodes on systems, not just events.",
+                "outreach_hook": (
+                    "We’re linking episode claims to how economic incentives actually operated."
+                ),
+            },
+        ],
+        "podcasts": [
+            {
+                "name": "Planet Money",
+                "why": "Accessible economics storytelling.",
+                "pitch_angle": "We extract testable claims from episodes—economic angles are a natural fit.",
+            },
+        ],
+    },
+    "general_history": {
+        "experts": [
+            {
+                "name": "Public historian / university faculty (local)",
+                "type": "expert",
+                "why": "Credible voice for fact-checking and context on your episode’s era.",
+                "angle": "What the primary record supports vs popular retellings.",
+                "best_fit": "Credibility pass on a narrative-heavy episode.",
+                "outreach_hook": (
+                    "We’re stress-testing our episode’s claims against the historical record—"
+                    "would value your read."
+                ),
+            },
+        ],
+        "podcasts": [
+            {
+                "name": "Show in your niche with overlapping audience",
+                "why": "Faster wins than cold-contacting only major names.",
+                "pitch_angle": (
+                    "We structured this episode’s thesis and claims—happy to share a one-pager for a fit check."
+                ),
+            },
+        ],
+    },
+}
+
+
+def _outreach_targets_for_domain(domain: str) -> Dict[str, Any]:
+    """Return static expert + podcast outreach lists for a domain key (deal-flow layer)."""
+    block = _OUTREACH_BY_DOMAIN.get(domain) or _OUTREACH_BY_DOMAIN["general_history"]
+    return {
+        "domain_key": domain,
+        "domain_label": domain.replace("_", " ").title(),
+        "experts": [dict(e) for e in block.get("experts") or []],
+        "podcasts": [dict(p) for p in block.get("podcasts") or []],
+    }
+
+
+def _should_emit_guest_outreach_targets(
+    guest_recommendations: List[Any],
+    *,
+    guests_from_subject_fallback: bool,
+    claim_rows_for_subjects: List[Dict[str, Any]],
+) -> bool:
+    """
+    True when Tier-3 / subject-fallback guests warrant the outreach bundle.
+    Uses ``guests_from_subject_fallback`` (survives minor ``source`` string drift) plus a loose
+    ``tier3`` substring check on row sources.
+    """
+    if claim_rows_for_subjects and guests_from_subject_fallback:
+        return True
+    for g in guest_recommendations or []:
+        if not isinstance(g, dict):
+            continue
+        src = str(g.get("source") or "").lower()
+        if "tier3" in src:
+            return True
+    return False
+
+
+def _build_intelligent_guest_rows(
+    subjects: List[str],
+    claims: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Tier 3: map episode entities → domain → expert archetypes (sendable guest angles).
+    """
+    claim_rows = claims or []
+    domain = _infer_domain_from_entities(subjects)
+    archetypes = _DOMAIN_GUEST_MAP.get(domain) or _DOMAIN_GUEST_MAP["general_history"]
+    cid0 = ""
+    if claim_rows and isinstance(claim_rows[0], dict):
+        cid0 = str(claim_rows[0].get("id") or "")
+    rows: List[Dict[str, Any]] = []
+    for idx, (title, angle) in enumerate(archetypes[:5]):
+        rows.append(
+            {
+                "name": title,
+                "title": title,
+                "role": "subject_matter_expert",
+                "claim_id": cid0,
+                "angle": angle,
+                "topic_angle": domain.replace("_", " ").title(),
+                "relevance": max(5, 10 - idx),
+                "source": "subject_fallback_tier3",
+                "reason": "derived_from_entity_domain_mapping",
+                "entity_signals": ", ".join(subjects[:8]),
+            }
+        )
+    return rows
+
+
+def _subject_fallback_guest_rows_from_report_claims(
+    claims: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Build Tier-3 expert archetype rows from v3 claim text; empty if nothing extractable."""
+    if not claims:
+        return []
+    subj = _extract_subject_entities_from_claims(claims)
+    if not subj:
+        return []
+    return _build_intelligent_guest_rows(subj, claims)
+
+
 def workflow_report_from_v3_report(r3: Dict[str, Any]) -> Dict[str, Any]:
     """Map `episode_report_v3` `report_v3` dict into this module's workflow schema."""
     try:
@@ -1991,30 +2828,42 @@ def workflow_report_from_v3_report(r3: Dict[str, Any]) -> Dict[str, Any]:
                 )
 
     claims = [c for c in (r3.get("claims") or []) if isinstance(c, dict)]
+    # Subject / entity extraction may need atomic or evidence rows when top-level claims is empty.
+    claim_rows_for_subjects = claims or _workflow_claim_rows_for_subject_fallback(r3)
 
     guest_recommendations: List[Dict[str, Any]] = []
-    for g in r3.get("guests") or []:
-        if not isinstance(g, dict):
-            continue
-        tgt = _clean_claim_text(str(g.get("target_claim") or ""))
-        claim_id = None
-        for c in claims:
-            if _clean_claim_text(str(c.get("text") or "")) == tgt:
-                claim_id = str(c.get("id") or "")
-                break
-        if not claim_id and claims:
-            claim_id = str(claims[0].get("id") or "")
-        guest_recommendations.append(
-            {
-                "name": g.get("guest"),
-                "title": g.get("role"),
-                "role": g.get("role"),
-                "claim_id": claim_id or "",
-                "angle": g.get("why_this_episode"),
-                "topic_angle": g.get("why_this_episode"),
-                "relevance": 8,
-            }
-        )
+    guests_from_atomic_envelope = False
+    guests_from_subject_fallback = False
+    ap = r3.get("atomic_pipeline")
+    if isinstance(ap, dict) and ap:
+        ag = _workflow_guest_rows_from_atomic_envelope(ap)
+        if ag:
+            guest_recommendations = ag
+            guests_from_atomic_envelope = True
+
+    if not guest_recommendations:
+        for g in r3.get("guests") or []:
+            if not isinstance(g, dict):
+                continue
+            tgt = _clean_claim_text(str(g.get("target_claim") or ""))
+            claim_id = None
+            for c in claims:
+                if _clean_claim_text(str(c.get("text") or "")) == tgt:
+                    claim_id = str(c.get("id") or "")
+                    break
+            if not claim_id and claims:
+                claim_id = str(claims[0].get("id") or "")
+            guest_recommendations.append(
+                {
+                    "name": g.get("guest"),
+                    "title": g.get("role"),
+                    "role": g.get("role"),
+                    "claim_id": claim_id or "",
+                    "angle": g.get("why_this_episode"),
+                    "topic_angle": g.get("why_this_episode"),
+                    "relevance": 8,
+                }
+            )
 
     if not guest_recommendations:
         cr = r3.get("coach_report") or {}
@@ -2039,9 +2888,16 @@ def workflow_report_from_v3_report(r3: Dict[str, Any]) -> Dict[str, Any]:
             if len(guest_recommendations) >= 5:
                 break
     if not guest_recommendations:
+        sf = _subject_fallback_guest_rows_from_report_claims(claim_rows_for_subjects)
+        if sf:
+            guest_recommendations = sf
+            guests_from_subject_fallback = True
+    if not guest_recommendations:
         snap = r3.get("episode_snapshot") or {}
         topic = str(snap.get("primary_topic") or snap.get("title") or "this episode")[:120]
-        cid = str(claims[0].get("id")) if claims else ""
+        cid = str(claims[0].get("id")) if claims else (
+            str(claim_rows_for_subjects[0].get("id")) if claim_rows_for_subjects else ""
+        )
         if _guest_generation_required(r3):
             guest_recommendations = generate_guest_archetypes_from_issues(r3, cid or "c1")
         if not guest_recommendations:
@@ -2074,8 +2930,16 @@ def workflow_report_from_v3_report(r3: Dict[str, Any]) -> Dict[str, Any]:
                     "relevance": 6,
                 },
             ]
-    cid_fallback = str(claims[0].get("id")) if claims else "c1"
-    if _guest_rows_are_generic(guest_recommendations):
+    cid_fallback = (
+        str(claims[0].get("id"))
+        if claims
+        else (str(claim_rows_for_subjects[0].get("id")) if claim_rows_for_subjects else "c1")
+    )
+    if (
+        not guests_from_atomic_envelope
+        and not guests_from_subject_fallback
+        and _guest_rows_are_generic(guest_recommendations)
+    ):
         if _guest_generation_required(r3):
             arch = generate_guest_archetypes_from_issues(r3, cid_fallback)
             guest_recommendations = arch if len(arch) >= 2 else _topic_specific_guest_fallback(r3, cid_fallback)
@@ -2084,11 +2948,20 @@ def workflow_report_from_v3_report(r3: Dict[str, Any]) -> Dict[str, Any]:
     excluded_names = _extract_in_episode_names(r3)
     guest_recommendations = _filter_already_featured_guests(guest_recommendations, excluded_names)
     if not guest_recommendations:
+        sf = _subject_fallback_guest_rows_from_report_claims(claim_rows_for_subjects)
+        if sf:
+            guest_recommendations = sf
+            guests_from_subject_fallback = True
+    if not guest_recommendations:
         guest_recommendations = _filter_already_featured_guests(
             _topic_specific_guest_fallback(r3, cid_fallback),
             excluded_names,
         )
-    if len(guest_recommendations) < 4:
+    if (
+        not guests_from_atomic_envelope
+        and not guests_from_subject_fallback
+        and len(guest_recommendations) < 4
+    ):
         if not any(isinstance(g, dict) and g.get("guest_archetype") for g in guest_recommendations):
             extras = _filter_already_featured_guests(
                 _topic_specific_guest_fallback(r3, cid_fallback),
@@ -2131,14 +3004,35 @@ def workflow_report_from_v3_report(r3: Dict[str, Any]) -> Dict[str, Any]:
         "actionable_steps": list(aa.get("next_move") or []),
     }
 
+    # Final circuit breaker before serializing workflow JSON (nothing below may clear guests).
+    if not guest_recommendations and claim_rows_for_subjects:
+        tier3 = _subject_fallback_guest_rows_from_report_claims(claim_rows_for_subjects)
+        if tier3:
+            guest_recommendations = tier3
+            guests_from_subject_fallback = True
+
+    guest_outreach_targets: Optional[Dict[str, Any]] = None
+    if _should_emit_guest_outreach_targets(
+        guest_recommendations,
+        guests_from_subject_fallback=guests_from_subject_fallback,
+        claim_rows_for_subjects=claim_rows_for_subjects,
+    ):
+        subj_oo = _extract_subject_entities_from_claims(claim_rows_for_subjects)
+        dom = _infer_domain_from_entities(subj_oo) if subj_oo else "general_history"
+        guest_outreach_targets = _outreach_targets_for_domain(dom)
+
     out: Dict[str, Any] = {
         "highlights": highlights,
         "evidence_map": evidence_map,
         "follow_up_questions": follow_up,
+        "guests": guest_recommendations,
         "guest_recommendations": guest_recommendations,
         "segments": segments,
         "analytics": analytics,
+        "guests_from_subject_fallback": guests_from_subject_fallback,
     }
+    if guest_outreach_targets is not None:
+        out["guest_outreach_targets"] = guest_outreach_targets
     _sanitize_workflow_highlights(out)
     sm = r3.get("signal_mode")
     if sm:
@@ -2225,7 +3119,7 @@ def soapboxx_v3_workflow_local(
     **Default path:** v3 report + workflow JSON from `episode_report_v3`, then optional **AI enrichment**
     when `SOAPBOXX_OLLAMA_MODEL` is set (`SOAPBOXX_WORKFLOW_USE_AI=1` by default).
 
-    AI steps fill highlights, evidence_map, follow_up_questions, guest_recommendations, segments, analytics.
+    AI steps fill highlights, evidence_map, follow_up_questions, guests (legacy ``guest_recommendations`` alias), segments, analytics.
 
     Pass ``report_v3`` (and optional ``brief_warnings``) to reuse an already-built v3 report and avoid a
     second ``generate_episode_report_v3`` call (e.g. from ``FeedbackEngine.generate_network_brief_v3``).
@@ -2279,15 +3173,25 @@ def soapboxx_v3_workflow_local(
                 source_warnings.append(f"workflow_quality_gate: {gi}")
             if gate_ok:
                 body = enrich_workflow_report_with_ai(
-                    transcript or "", body, client=llm_client, episode_meta=enrich_meta
+                    transcript or "",
+                    body,
+                    client=llm_client,
+                    episode_meta=enrich_meta,
+                    report_v3=r3,
                 )
                 enrich_tier = "full"
             else:
                 body = enrich_workflow_report_minimal(
-                    transcript or "", body, client=llm_client, episode_meta=enrich_meta
+                    transcript or "",
+                    body,
+                    client=llm_client,
+                    episode_meta=enrich_meta,
+                    report_v3=r3,
                 )
                 enrich_tier = "minimal"
             mode = "local+ai"
+            if _atomic_structure_lock_from_report_v3(r3):
+                meta_out["atomic_structure_lock_applied"] = True
         except Exception as e:
             source_warnings.append(f"AI workflow enrichment failed: {e}")
             try:
@@ -2329,6 +3233,7 @@ def soapboxx_v3_workflow_local(
         from transcript_structure_extract import apply_rule_based_structure_bootstrap  # type: ignore
 
     apply_rule_based_structure_bootstrap(report, r3, transcript or "")
+    _prune_follow_up_questions_to_evidence_map(report)
     try:
         from .evaluation_pipeline import (
             build_evaluation_snapshot,
@@ -2562,12 +3467,13 @@ STRICT RULES:
 - Each question 14–28 words, complete sentences.
 - Forbidden unless tied to a named entity or mechanism from the claim/evidence/local context: “listeners”, “in today’s world”, “this claim”, “rhetoric”, “real life” as filler.
 - Do not copy the claim verbatim as the entire question; do not end with “...”.
+- Do not output "claim_id" — the pipeline assigns it to CLAIM ID above; only "question" and "question_type" per object.
 
-Output JSON array only:
+Output JSON array only (3 objects):
 [
-  {{"question":"...","question_type":"counter","claim_id":"{eid}"}},
-  {{"question":"...","question_type":"validation","claim_id":"{eid}"}},
-  {{"question":"...","question_type":"application","claim_id":"{eid}"}}
+  {{"question":"...","question_type":"counter"}},
+  {{"question":"...","question_type":"validation"}},
+  {{"question":"...","question_type":"application"}}
 ]
 """
         data = call_llm_json(prompt, max_tokens=900, temperature=0.2, client=client)
@@ -2575,8 +3481,10 @@ Output JSON array only:
             data = []
         for q in data:
             if isinstance(q, dict):
-                q.setdefault("claim_id", eid)
-                questions.append(q)
+                qq = dict(q)
+                # Local models often echo the wrong id; strict validation keys off evidence_map ids.
+                qq["claim_id"] = eid
+                questions.append(qq)
     return questions
 
 
@@ -2641,10 +3549,9 @@ Output JSON array only, same length as input.
         t = str(data[i].get("question") or "").strip()
         if t:
             new_q["question"] = t
-        if str(data[i].get("claim_id") or "") == str(q.get("claim_id") or ""):
-            new_q["claim_id"] = q.get("claim_id")
-        if str(data[i].get("question_type") or "") == str(q.get("question_type") or ""):
-            new_q["question_type"] = q.get("question_type")
+        # Never trust the rewriter for ids/types — SSOT is the pre-refine list (matches evidence_map).
+        new_q["claim_id"] = q.get("claim_id")
+        new_q["question_type"] = q.get("question_type")
         out.append(new_q)
     return out
 
@@ -2688,19 +3595,41 @@ STRICT RULES:
 - **Forbidden:** vague archetypes with no domain tie ("communications expert", "life coach", "motivational speaker", "business consultant") unless the transcript explicitly supports that niche.
 - **Required:** `topic_focus` = 3–10 words naming the **specific thread** this guest speaks to (must echo language or domain from title/transcript/quotes when possible).
 - `name`: credible role label **including domain** (e.g. "Former federal prosecutor (RICO / narcotics)" not "Legal expert").
-- `role`: short professional title aligned with that domain.
+- `title`: short professional title aligned with that domain.
 - `angle`: one sentence: what they add **to this episode's argument or story** (cite mechanism, institution, or stake from context).
-- Map `claim_id` to c1, c2, … when those ids exist; else c1.
+- Map `maps_to_claim_id` to c1, c2, … when those ids exist; else c1.
 - `relevance`: 0–10 (how on-topic for THIS episode).
 
-Output JSON array only:
-[
-  {{"name":"...","role":"...","claim_id":"c1","topic_focus":"...","angle":"...","relevance":9}}
-]
+Response contract (mandatory): reply with ONE JSON object with top-level keys "text" and "data" only.
+Put the payload below inside "data" as a JSON object (not a top-level array). "text" may be "" or a one-line summary.
+
+Inside "data" use exactly this shape (same guest list as v2 brief field name: ``guests``):
+{{
+  "guests": [
+    {{
+      "name": "string",
+      "title": "string",
+      "topic_focus": "string",
+      "angle": "string",
+      "maps_to_claim_id": "c1",
+      "relevance": 9
+    }}
+  ]
+}}
+
+Rules: 3–4 guests. "data" must be an object. Do NOT return a top-level JSON array.
 """
-    data = call_llm_json(prompt, max_tokens=1400, client=client)
-    if not isinstance(data, list):
-        data = (data.get("guest_recommendations") or []) if isinstance(data, dict) else []
+    raw = call_llm_json(prompt, max_tokens=1400, client=client)
+    rows_in: Any
+    if isinstance(raw, list):
+        rows_in = raw
+    elif isinstance(raw, dict):
+        rows_in = raw.get("guests") or raw.get("guest_recommendations") or []
+        if not isinstance(rows_in, list):
+            rows_in = []
+    else:
+        rows_in = []
+    data = rows_in
     out = [x for x in data if isinstance(x, dict)][:5]
     primary_cid = ""
     for e in evidence_map:
@@ -2708,6 +3637,15 @@ Output JSON array only:
             primary_cid = str(e.get("id") or "").strip()
             break
     for g in out:
+        cid = str(g.get("maps_to_claim_id") or g.get("claim_id") or "").strip()
+        if cid:
+            g["claim_id"] = cid
+        elif not str(g.get("claim_id") or "").strip():
+            g["claim_id"] = primary_cid or "c1"
+        role = str(g.get("role") or "").strip()
+        title = str(g.get("title") or "").strip()
+        if not role and title:
+            g["role"] = title
         tf = str(g.get("topic_focus") or "").strip()
         ang = str(g.get("angle") or "").strip()
         if tf and ang:
@@ -2718,8 +3656,6 @@ Output JSON array only:
             r = str(g.get("role") or "").strip()
             if r:
                 g["title"] = r
-        if not str(g.get("claim_id") or "").strip():
-            g["claim_id"] = primary_cid or "c1"
     return out
 
 
@@ -2877,11 +3813,11 @@ def soapboxx_v3_workflow_cloud(
         "highlights": highlights,
         "evidence_map": evidence_map,
         "follow_up_questions": questions,
-        "guest_recommendations": guests,
         "segments": segments,
         "analytics": analytics,
         "weak_claims": weak_claims,
     }
+    set_workflow_guest_rows(report, guests)
     attach_summary_and_score(report)
 
     if validate:
@@ -2920,6 +3856,8 @@ def soapboxx_v3_workflow(
 
 __all__ = [
     "WORKFLOW_SPEC_VERSION",
+    "workflow_guest_rows",
+    "set_workflow_guest_rows",
     "call_llm",
     "call_llm_json",
     "maybe_editorial_pass_unified_markdown",

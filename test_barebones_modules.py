@@ -4,6 +4,7 @@ Test Script for SoapBoxx Demo Barebones Modules
 Tests each module individually to ensure they work correctly
 """
 
+import json
 import sys
 import traceback
 from pathlib import Path
@@ -36,23 +37,26 @@ def test_feedback_engine():
     assert "feedback" in result, "Missing feedback in result"
     assert "scores" in result, "Missing scores in result"
     
-    # Verify metrics
+    # Verify metrics (dicts — JSON-serializable API boundary)
     metrics = result["metrics"]
-    assert metrics.word_count > 0, "Word count should be positive"
-    assert metrics.sentence_count > 0, "Sentence count should be positive"
-    
-    # Verify scores
+    assert isinstance(metrics, dict), "metrics should be a dict"
+    assert metrics["word_count"] > 0, "Word count should be positive"
+    assert metrics["sentence_count"] > 0, "Sentence count should be positive"
+
+    # Verify scores (validated shape in feedback_engine_barebones)
     scores = result["scores"]
-    # Check individual scores
-    assert 0 <= scores.clarity <= 10, "Clarity score should be 0-10"
-    assert 0 <= scores.engagement <= 10, "Engagement score should be 0-10"
-    assert 0 <= scores.structure <= 10, "Structure score should be 0-10"
-    assert 0 <= scores.energy <= 10, "Energy score should be 0-10"
-    assert 0 <= scores.professionalism <= 10, "Professionalism score should be 0-10"
-    assert 0 <= scores.overall_score <= 10, "Overall score should be 0-10"
-    
-    print(f"   📊 Analyzed text: {metrics.word_count} words, {metrics.sentence_count} sentences")
-    print(f"   ⭐ Overall score: {scores.overall_score}")
+    assert isinstance(scores, dict), "scores should be a dict"
+    assert 0 <= scores["clarity"] <= 10, "Clarity score should be 0-10"
+    assert 0 <= scores["engagement"] <= 10, "Engagement score should be 0-10"
+    assert 0 <= scores["structure"] <= 10, "Structure score should be 0-10"
+    assert 0 <= scores["energy"] <= 10, "Energy score should be 0-10"
+    assert 0 <= scores["professionalism"] <= 10, "Professionalism score should be 0-10"
+    assert 0 <= scores["overall_score"] <= 10, "Overall score should be 0-10"
+
+    json.dumps(result)
+
+    print(f"   📊 Analyzed text: {metrics['word_count']} words, {metrics['sentence_count']} sentences")
+    print(f"   ⭐ Overall score: {scores['overall_score']}")
     
     return True
 
