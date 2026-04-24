@@ -284,13 +284,27 @@ class FeedbackEngine:
             from soapboxx_v3_workflow import maybe_editorial_pass_unified_markdown
 
         wf_arg = wf if isinstance(wf, dict) else None
+        truth_gate = out.get("truth_mode_gate") if isinstance(out.get("truth_mode_gate"), dict) else {}
+        truth_mode = (os.getenv("SOAPBOXX_MODE") or "truth").strip().lower()
+        rr = (r3.get("report_readiness") or {}) if isinstance(r3, dict) else {}
+        rr_mode = str(rr.get("output_mode") or "").strip().lower()
+        r3_mode = str((r3.get("output_mode") if isinstance(r3, dict) else "") or "").strip().lower()
+        truth_blocked = (
+            str(truth_gate.get("mode") or "").strip().lower() == "truth"
+            and truth_gate.get("passed") is False
+        )
+        # Backstop: if mode is truth and report is diagnostic, block full strategist export even when
+        # older call paths did not attach ``truth_mode_gate``.
+        if not truth_blocked and truth_mode != "growth" and (rr_mode == "diagnostic" or r3_mode == "diagnostic"):
+            truth_blocked = True
         if isinstance(r3, dict):
             if wf_arg:
                 merge_workflow_followups_into_engagement(r3, wf_arg)
             out["episode_spine"] = build_episode_spine(r3, wf_arg)
-            out["markdown_v3"] = render_episode_report_v3_markdown(
-                r3, workflow_report=wf_arg
-            )
+            if not truth_blocked:
+                out["markdown_v3"] = render_episode_report_v3_markdown(
+                    r3, workflow_report=wf_arg
+                )
         try:
             from .episode_progress import (
                 attach_export_telemetry_to_metadata,
@@ -308,13 +322,18 @@ class FeedbackEngine:
             attach_export_telemetry_to_metadata(wm, out)
         else:
             attach_export_telemetry_to_metadata(out.get("meta") or {}, out)
-        out["markdown_export"] = render_unified_episode_export_markdown(out)
+        if truth_blocked:
+            out["markdown_export"] = str(out.get("markdown_v3") or "")
+        else:
+            out["markdown_export"] = render_unified_episode_export_markdown(out)
         wf_meta = (
             (out.get("workflow_report") or {}).get("metadata")
             if isinstance(out.get("workflow_report"), dict)
             else None
         )
-        if isinstance(wf_meta, dict) and wf_meta.get("export_status") in (
+        if truth_blocked:
+            ed_applied = False
+        elif isinstance(wf_meta, dict) and wf_meta.get("export_status") in (
             "insufficient_signal",
             "degraded",
         ):
@@ -337,6 +356,27 @@ class FeedbackEngine:
                 wm = wf2.get("metadata")
                 if isinstance(wm, dict):
                     wm["editorial_pass_applied"] = True
+        try:
+            from .episode_report_v3 import finalize_unified_markdown_export as _finalize_unified_md
+        except ImportError:
+            from episode_report_v3 import finalize_unified_markdown_export as _finalize_unified_md  # type: ignore
+
+        out["markdown_export"] = _finalize_unified_md(str(out.get("markdown_export") or ""))
+        wf3 = out.get("workflow_report")
+        if isinstance(wf3, dict):
+            wf3["markdown_export"] = out["markdown_export"]
+        try:
+            from .episode_report_v3 import dialin_production_warnings
+        except ImportError:
+            from episode_report_v3 import dialin_production_warnings  # type: ignore
+
+        dialin = dialin_production_warnings(out)
+        if dialin:
+            wlist = out.setdefault("warnings", [])
+            for line in dialin:
+                if line not in wlist:
+                    wlist.append(line)
+            out["dialin_checklist"] = dialin
         return out
 
     def _perform_ai_analysis(self, transcript: str, analysis_depth: str) -> Dict:

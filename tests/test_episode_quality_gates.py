@@ -48,6 +48,13 @@ class TestEpisodeQualityGates(unittest.TestCase):
         self.assertGreater(qg.claim_structure_score(good), 0.6)
         self.assertLess(qg.claim_structure_score(bad), 0.4)
 
+    def test_claim_structure_score_penalizes_hedge_and_filler_talk(self):
+        filler = (
+            "might get into some of the 1800s though, so I don't know. "
+            "You might want to get that out pretty soon."
+        )
+        self.assertLess(qg.claim_structure_score(filler), 0.35)
+
     def test_evaluate_v3_forces_diagnostic_on_religious_mismatch(self):
         brief = {
             "episode_snapshot": {

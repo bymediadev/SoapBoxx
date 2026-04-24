@@ -147,6 +147,14 @@ class EpisodeAnalysisThread(QThread):
                     or nb.get("markdown")
                     or ""
                 )
+                try:
+                    from episode_report_v3 import finalize_unified_markdown_export
+
+                    network_brief_md = finalize_unified_markdown_export(
+                        str(network_brief_md or "")
+                    )
+                except Exception:
+                    pass
                 network_brief_payload = nb
                 analysis = {
                     "listener_feedback": "Primary v3 Episode Report generated (see below).",

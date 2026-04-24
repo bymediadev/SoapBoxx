@@ -109,9 +109,21 @@ def extract_atomic_claims(transcript: str, *, max_claims: int = 48) -> List[Clai
     """
     out: List[Claim] = []
     n = 0
+    try:
+        from ..transcript_structure_extract import strip_youtube_caption_metadata
+    except ImportError:  # pragma: no cover
+        from transcript_structure_extract import strip_youtube_caption_metadata  # type: ignore
+    try:
+        from ..episode_quality_gates import claim_structure_score as _claim_shape_score
+    except ImportError:  # pragma: no cover
+        try:
+            from episode_quality_gates import claim_structure_score as _claim_shape_score  # type: ignore
+        except ImportError:
+            _claim_shape_score = None  # type: ignore[misc, assignment]
+
     for line in (transcript or "").splitlines():
         ts, rest = _parse_timestamp_line(line)
-        line_text = (rest or "").strip()
+        line_text = strip_youtube_caption_metadata((rest or "").strip())
         if not line_text:
             continue
         parts = [s.strip() for s in re.split(r"(?<=[.!?])\s+", line_text) if s.strip()]
@@ -119,6 +131,14 @@ def extract_atomic_claims(transcript: str, *, max_claims: int = 48) -> List[Clai
             parts = [line_text]
         for sent in parts:
             if len(sent.split()) < 5:
+                continue
+            if _claim_shape_score is not None and float(_claim_shape_score(sent)) < 0.40:
+                continue
+            try:
+                from ..episode_report_v3 import _is_broken_evidence_claim_line as _broken_claim_ln
+            except ImportError:  # pragma: no cover
+                from episode_report_v3 import _is_broken_evidence_claim_line as _broken_claim_ln  # type: ignore
+            if _broken_claim_ln(sent):
                 continue
             cat, conf, eb = _classify_sentence(sent)
             n += 1

@@ -77,20 +77,40 @@ def _collapse_ws(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "").strip())
 
 
+_RE_YT_CAPTION_KIND = re.compile(
+    r"Kind:\s*captions\s+Language:\s*\S+\s*",
+    re.IGNORECASE,
+)
+
+
+def strip_youtube_caption_metadata(text: str) -> str:
+    """
+    Remove YouTube ``Kind: captions Language: …`` tokens wherever they appear.
+
+    Captions sometimes repeat this header on every chunk; stripping keeps claims and
+    evidence from inheriting metadata as if it were spoken content.
+    """
+    t = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+    if not t.strip():
+        return t.strip()
+    out: List[str] = []
+    for ln in t.split("\n"):
+        s = ln.rstrip()
+        if not s.strip():
+            out.append("")
+            continue
+        s2 = _RE_YT_CAPTION_KIND.sub(" ", s)
+        s2 = re.sub(r"[ \t]{2,}", " ", s2).rstrip()
+        out.append(s2)
+    return "\n".join(out).rstrip()
+
+
 def clean_caption_transcript(raw: str) -> str:
     """
     Strip caption preambles / VTT-ish junk, merge lines, normalize spaces.
     Does not call the LLM.
     """
-    t = (raw or "").replace("\r\n", "\n").replace("\r", "\n")
-    # Drop common YouTube caption header
-    t = re.sub(
-        r"^Kind:\s*captions\s+Language:\s*\S+\s*",
-        "",
-        t,
-        count=1,
-        flags=re.IGNORECASE,
-    )
+    t = strip_youtube_caption_metadata(raw or "")
     # Speaker / VTT direction markers
     t = re.sub(r"&gt;&gt;|>>|‹‹|››", " ", t)
     t = re.sub(r"<[^>]+>", " ", t)
@@ -98,6 +118,10 @@ def clean_caption_transcript(raw: str) -> str:
     lines = []
     for ln in t.split("\n"):
         s = ln.strip()
+        if not s:
+            continue
+        s = _RE_YT_CAPTION_KIND.sub(" ", s).strip()
+        s = re.sub(r"[ \t]{2,}", " ", s).strip()
         if not s:
             continue
         if len(s.split()) < 2 and lines:
@@ -762,6 +786,7 @@ __all__ = [
     "caption_structure_bootstrap_enabled",
     "claim_dedupe_jaccard_threshold",
     "clean_caption_transcript",
+    "strip_youtube_caption_metadata",
     "contains_causal_or_directional_language",
     "has_contrast_structure",
     "jaccard_similarity",

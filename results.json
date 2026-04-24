@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "n_episodes": 2,
+    "n_labeled": 0,
+    "n_matched": 0,
+    "agreement": null
+  },
+  "rows": [
+    {
+      "id": "smoke_ok",
+      "source": "inline",
+      "ship_gate": "FAIL",
+      "ship_score": 0.3518,
+      "ship_score_weighted": 0.3518,
+      "label": null,
+      "alignment_score": 0.3518,
+      "alignment_top_k_mean": 0.5062,
+      "alignment_support_ratio": 0.0,
+      "alignment_std_dev": 0.0103,
+      "alignment_num_claims": 2,
+      "alignment_k": 2,
+      "alignment_n": 2,
+      "alignment_thesis": "Policy pressure leads public agencies to delay sensitive disclosures until after major elections in order to reduce political backlash and protect credibility in office."
+    },
+    {
+      "id": "smoke_tag",
+      "source": "inline",
+      "ship_gate": "FAIL",
+      "ship_score": 0.0,
+      "ship_score_weighted": 0.0,
+      "label": null,
+      "alignment_score": 0.0,
+      "alignment_top_k_mean": 0.0,
+      "alignment_support_ratio": 0.0,
+      "alignment_std_dev": 0.0,
+      "alignment_num_claims": 0,
+      "alignment_k": 0,
+      "alignment_n": 0,
+      "alignment_thesis": "A; B; C; D; E; F; G; H"
+    }
+  ]
+}

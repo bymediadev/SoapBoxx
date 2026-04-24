@@ -11,6 +11,13 @@ import soapboxx_v3_workflow as soapboxx_v3_workflow  # noqa: E402
 
 from soapboxx_v3_workflow import (  # noqa: E402
     WORKFLOW_SPEC_VERSION,
+    _align_missing_timestamps_with_cues,
+    _attach_unified_markdown_export,
+    _groq_api_key,
+    _llm_available,
+    _workflow_llm_backend,
+    _workflow_title_for_coach_strategy_guest,
+    _booking_oriented_guest_rows,
     _compute_structure_diagnostics,
     _editorial_pass_enabled,
     _derive_structure_state,
@@ -25,6 +32,94 @@ from soapboxx_v3_workflow import (  # noqa: E402
     workflow_report_from_v3_report,
 )
 from guest_generation_decision import build_guest_decision_trace  # noqa: E402
+
+
+class TestWorkflowLlmBackendRouting(unittest.TestCase):
+    def test_workflow_backend_forced_ollama(self):
+        with patch.dict(
+            os.environ,
+            {
+                "GROQ_API_KEY": "x",
+                "SOAPBOXX_OLLAMA_MODEL": "m",
+                "SOAPBOXX_WORKFLOW_LLM_BACKEND": "ollama",
+            },
+            clear=True,
+        ):
+            self.assertEqual(_workflow_llm_backend(), "ollama")
+            self.assertTrue(_llm_available())
+
+
+class TestCueTimestampAlignment(unittest.TestCase):
+    def test_aligns_missing_timestamps_from_cues(self):
+        rows = [
+            {
+                "id": "c1",
+                "claim": "AI change is accelerating quickly.",
+                "evidence": "AI change is accelerating quickly and founders need a weekly operating rhythm.",
+                "timestamp": None,
+            },
+            {
+                "id": "c2",
+                "claim": "Already timestamped row",
+                "evidence": "this row should remain untouched",
+                "timestamp": 12.4,
+            },
+        ]
+        cues = [
+            {
+                "timestamp": "00:01:21.900",
+                "start_sec": 81.9,
+                "text": "AI change is accelerating quickly and founders need a weekly operating rhythm.",
+            }
+        ]
+        n = _align_missing_timestamps_with_cues(rows, cues)
+        self.assertEqual(n, 1)
+        self.assertEqual(rows[0]["timestamp"], 81.9)
+        self.assertEqual(rows[1]["timestamp"], 12.4)
+
+    def test_workflow_backend_defaults_groq_when_key_present(self):
+        with patch.dict(
+            os.environ,
+            {
+                "GROQ_API_KEY": "test-key",
+                "SOAPBOXX_OLLAMA_MODEL": "",
+            },
+            clear=True,
+        ):
+            self.assertEqual(_workflow_llm_backend(), "groq")
+            self.assertTrue(_llm_available())
+            self.assertEqual(_groq_api_key(), "test-key")
+
+    def test_workflow_backend_ollama_without_groq(self):
+        with patch.dict(
+            os.environ,
+            {
+                "GROQ_API_KEY": "",
+                "SOAPBOXX_GROQ_API_KEY": "",
+                "SOAPBOXX_OLLAMA_MODEL": "llama3.1:8b",
+            },
+            clear=True,
+        ):
+            self.assertEqual(_workflow_llm_backend(), "ollama")
+            self.assertTrue(_llm_available())
+
+
+class TestCoachStrategyGuestTitles(unittest.TestCase):
+    def test_known_name_gets_professional_title_not_suggested(self):
+        self.assertEqual(
+            _workflow_title_for_coach_strategy_guest("Diane Ravitch"),
+            "Education policy historian",
+        )
+        self.assertEqual(
+            _workflow_title_for_coach_strategy_guest("Jonathan Kozol"),
+            "Author & public education advocate",
+        )
+
+    def test_unknown_full_name_gets_booking_target_label(self):
+        self.assertEqual(
+            _workflow_title_for_coach_strategy_guest("Alex Morgan"),
+            "Expert guest (booking target)",
+        )
 
 
 class TestCallLlmJsonEnvelope(unittest.TestCase):
@@ -91,6 +186,38 @@ class TestCallLlmJsonEnvelope(unittest.TestCase):
                 with self.assertRaises(ValueError) as ctx:
                     soapboxx_v3_workflow.call_llm_json("prompt", client=None)
                 self.assertIn("recognized keys", str(ctx.exception))
+
+
+class TestWorkflowGuestRowsFilter(unittest.TestCase):
+    def test_workflow_guest_rows_strips_episode_grounded_person(self):
+        wf = {
+            "guests": [
+                {
+                    "name": "Jesse James",
+                    "title": "Named in this episode (verbatim text)",
+                    "source": "episode_grounded_person",
+                    "claim_id": "c1",
+                    "relevance": 10,
+                }
+            ]
+        }
+        rows = workflow_guest_rows(wf)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].get("source"), "expert_placeholder_after_verbatim_filter")
+        self.assertNotIn("jesse", str(rows[0].get("name", "")).lower())
+
+    def test_booking_oriented_keeps_atomic_pipeline_rows(self):
+        rows = _booking_oriented_guest_rows(
+            [
+                {
+                    "name": "Historian — Topic",
+                    "source": "atomic_pipeline",
+                    "claim_id": "a1",
+                }
+            ]
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].get("source"), "atomic_pipeline")
 
 
 class TestWorkflowGuestAlias(unittest.TestCase):
@@ -348,6 +475,43 @@ class TestValidateJson(unittest.TestCase):
         self.assertNotIn("civil liberties", names)
         self.assertNotIn("criminal or civil litigator", names)
 
+    def test_workflow_analytics_drops_crime_storyline_when_title_signals_education(self):
+        r3 = {
+            "episode_snapshot": {
+                "title": "Brainwash Rockefeller School Psyop Special",
+                "creator": "H",
+                "genre": "Entertainment",
+                "primary_topic": "Criminal enterprise, law enforcement, and accountability",
+                "why_it_matters": "Listeners want clarity.",
+            },
+            "claims": [
+                {
+                    "id": "a1",
+                    "text": "School boards adopted vendor-driven testing regimes under visible federal pressure over a decade.",
+                }
+            ],
+            "clean_insights": [],
+            "evidence_mapping": [],
+            "engagement_questions": {},
+            "segments": [{"segment_title": "Open"}],
+            "analytics_actionable": {
+                "what_worked": [
+                    "Criminal enterprise, law enforcement, and accountability",
+                    "A distinct line about vendor incentives in school procurement is visible on the tape.",
+                ],
+                "what_failed": [],
+                "next_move": ["Cut one tangent per episode"],
+            },
+        }
+        wf = workflow_report_from_v3_report(r3)
+        sl = wf.get("analytics", {}).get("storylines") or []
+        joined = " ".join(str(x).lower() for x in sl)
+        self.assertNotIn("criminal enterprise", joined)
+        self.assertTrue(
+            "vendor" in joined or "school" in joined or "through-line" in joined,
+            msg=joined,
+        )
+
     def test_workflow_guests_passthrough_atomic_envelope_when_v3_guests_empty(self):
         """Atomic SSOT must reach workflow even if v3 ``guests`` list is empty (mapping drift)."""
         r3 = {
@@ -394,11 +558,16 @@ class TestValidateJson(unittest.TestCase):
         gr = workflow_guest_rows(wf)
         self.assertGreaterEqual(len(gr), 1)
         self.assertEqual(gr[0].get("source"), "atomic_pipeline")
-        self.assertIn("Historian", str(gr[0].get("name") or ""))
+        nm = str(gr[0].get("name") or "")
+        self.assertTrue(
+            any(x in nm for x in ("Jill", "David", "Pekka", "Tom", "Bradford", "Paul", "Anne", "Michael")),
+            msg=nm,
+        )
+        self.assertNotIn("Historian —", nm)
         self.assertEqual(str(gr[0].get("claim_id") or ""), "a1")
 
     def test_workflow_guests_subject_fallback_when_atomic_envelope_empty(self):
-        """When atomic_pipeline exists but graph guests are empty, derive guests from claim entities."""
+        """When atomic graph guests are empty, map claim entities → domain expert archetypes (not tape names)."""
         r3 = {
             "clean_insights": [],
             "evidence_mapping": [],
@@ -430,11 +599,15 @@ class TestValidateJson(unittest.TestCase):
         self.assertGreaterEqual(len(gr), 1)
         self.assertTrue(wf.get("guests_from_subject_fallback"))
         self.assertEqual(gr[0].get("source"), "subject_fallback_tier3")
-        self.assertEqual(gr[0].get("reason"), "derived_from_entity_domain_mapping")
-        self.assertEqual(gr[0].get("name"), "True Crime Historian")
+        names_flat = " ".join(str(g.get("name") or "") for g in gr if isinstance(g, dict))
+        self.assertTrue(
+            any(x in names_flat for x in ("Tom Clavin", "T.J. Stiles", "Michael Wallis", "Anne F. Hyde")),
+            msg=names_flat,
+        )
+        for bad in ("Robert Wright", "Billy", "Jesse Evans", "Jim Miller"):
+            self.assertNotIn(bad, names_flat)
         sig = str(gr[0].get("entity_signals") or "")
-        self.assertIn("Jesse", sig)
-        self.assertIn("Western Author", str(gr[1].get("name") or ""))
+        self.assertTrue(sig)  # claim entities inform domain mapping, not guest `name`
         oo = wf.get("guest_outreach_targets") or {}
         self.assertEqual(oo.get("domain_key"), "outlaw_history")
         experts = oo.get("experts") or []
@@ -507,6 +680,8 @@ class TestValidateJson(unittest.TestCase):
         self.assertGreaterEqual(len(gr), 1)
         self.assertTrue(wf.get("guests_from_subject_fallback"))
         self.assertEqual(gr[0].get("source"), "subject_fallback_tier3")
+        nm0 = str(gr[0].get("name") or "")
+        self.assertTrue(any(x in nm0 for x in ("Tom Clavin", "T.J. Stiles", "Michael Wallis", "Anne F. Hyde")), msg=nm0)
 
     def test_subject_fallback_uses_evidence_mapping_when_top_level_claims_empty(self):
         """UI may show evidence rows while ``claims`` is empty — guests must still extract entities."""
@@ -535,6 +710,11 @@ class TestValidateJson(unittest.TestCase):
         self.assertGreaterEqual(len(gr), 1)
         self.assertTrue(wf.get("guests_from_subject_fallback"))
         self.assertEqual(gr[0].get("source"), "subject_fallback_tier3")
+        names_flat = " ".join(str(g.get("name") or "") for g in gr if isinstance(g, dict))
+        self.assertTrue(
+            any(x in names_flat for x in ("Tom Clavin", "T.J. Stiles", "Michael Wallis", "Anne F. Hyde")),
+            msg=names_flat,
+        )
 
     def test_workflow_guests_nested_claim_text_does_not_crash(self):
         """Structured or nested ``text`` fields must not break ``.replace`` / extraction."""
@@ -559,6 +739,11 @@ class TestValidateJson(unittest.TestCase):
         self.assertGreaterEqual(len(gr), 1)
         self.assertTrue(wf.get("guests_from_subject_fallback"))
         self.assertEqual(gr[0].get("source"), "subject_fallback_tier3")
+        names_flat = " ".join(str(g.get("name") or "") for g in gr if isinstance(g, dict))
+        self.assertTrue(
+            any(x in names_flat for x in ("Tom Clavin", "T.J. Stiles", "Michael Wallis", "Anne F. Hyde")),
+            msg=names_flat,
+        )
 
 
 class TestV3RealityChecksInWorkflow(unittest.TestCase):
@@ -629,6 +814,9 @@ class TestV3RealityChecksInWorkflow(unittest.TestCase):
         chk = (wf.get("metadata") or {}).get("v3_reality_check") or {}
         self.assertIn("passed", chk)
         self.assertIn("rules_source", chk)
+        self.assertIn("report_v3_output_mode", chk)
+        self.assertIn("diagnostic_reasons", chk)
+        self.assertIn("good_clean_insight_lines", chk)
         self.assertTrue(chk.get("passed"), msg=str(chk.get("failures")))
 
 
@@ -716,6 +904,51 @@ class TestEditorialPassToggle(unittest.TestCase):
                 os.environ["SOAPBOXX_OLLAMA_MODEL"] = old_m
             else:
                 os.environ.pop("SOAPBOXX_OLLAMA_MODEL", None)
+
+
+class TestAttachUnifiedMarkdownExport(unittest.TestCase):
+    def test_diagnostic_mode_uses_coach_markdown_not_empty_bundle_v3(self):
+        """Regression: bundle has no markdown_v3; diagnostic must still emit markdown_export."""
+        r3 = {
+            "episode_snapshot": {
+                "title": "Brainwash!",
+                "creator": "Julian Dorey",
+                "genre": "Education",
+                "primary_topic": "School systems",
+            },
+            "output_mode": "diagnostic",
+            "report_readiness": {"output_mode": "diagnostic"},
+        }
+        report: dict = {"metadata": {"title": "Brainwash!"}, "highlights": [], "evidence_map": []}
+        with patch.dict(os.environ, {"SOAPBOXX_MODE": "truth"}, clear=False):
+            with patch("episode_progress.prepare_bundle_for_export", lambda bundle: None):
+                with patch(
+                    "episode_progress.attach_export_telemetry_to_metadata",
+                    lambda meta, bundle: None,
+                ):
+                    with patch(
+                        "episode_progress.persist_episode_progress_after_export",
+                        lambda bundle: None,
+                    ):
+                        with patch(
+                            "episode_report_v3.render_episode_report_v3_markdown",
+                            return_value="# Coach-only export\n",
+                        ) as coach:
+                            with patch(
+                                "episode_report_v3.render_unified_episode_export_markdown"
+                            ) as unified:
+                                _attach_unified_markdown_export(
+                                    report,
+                                    r3,
+                                    {
+                                        "title": "Brainwash!",
+                                        "creator": "Julian Dorey",
+                                        "genre": "Education",
+                                    },
+                                )
+            unified.assert_not_called()
+            coach.assert_called_once()
+            self.assertEqual(report["markdown_export"], "# Coach-only export\n")
 
 
 if __name__ == "__main__":

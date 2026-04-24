@@ -3,7 +3,7 @@ import io
 import os
 import tempfile
 import time
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 import requests
@@ -50,6 +50,16 @@ except ImportError:
     print(
         "Warning: Whisper package not available. Install with: pip install openai-whisper"
     )
+
+
+def _whisper_use_fp16() -> bool:
+    """Whisper defaults to fp16; on CPU that emits a UserWarning. Only enable on CUDA."""
+    try:
+        import torch
+
+        return bool(torch.cuda.is_available())
+    except Exception:
+        return False
 
 
 class Transcriber:
@@ -390,7 +400,8 @@ class Transcriber:
 
             try:
                 # Transcribe using local Whisper model
-                result = self.local_model.transcribe(temp_path)
+                _kw: Any = {"fp16": _whisper_use_fp16()}
+                result = self.local_model.transcribe(temp_path, **_kw)
                 return result.get("text", "").strip()
             except Exception as e:
                 # If direct transcription fails, try converting the audio first
@@ -405,7 +416,8 @@ class Transcriber:
                     audio.export(converted_path, format="wav")
 
                     # Transcribe the converted audio
-                    result = self.local_model.transcribe(converted_path)
+                    _kw = {"fp16": _whisper_use_fp16()}
+                    result = self.local_model.transcribe(converted_path, **_kw)
 
                     # Clean up converted file
                     if os.path.exists(converted_path):

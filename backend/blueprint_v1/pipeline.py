@@ -33,6 +33,19 @@ from .schemas import (
     ThesisBlock,
 )
 
+try:
+    from ..episode_report_v3 import (
+        _strategist_network_lines_from_insights,
+        _strategist_punchline_from_signal,
+        _strategist_tension_from_claims,
+    )
+except ImportError:  # pragma: no cover
+    from episode_report_v3 import (  # type: ignore
+        _strategist_network_lines_from_insights,
+        _strategist_punchline_from_signal,
+        _strategist_tension_from_claims,
+    )
+
 
 def _excerpt(transcript: str, cap: int = 14_000) -> str:
     t = (transcript or "").strip()
@@ -360,7 +373,14 @@ def _apply_mode_profile(
     if not anchors:
         moments = _moment_anchors_from_transcript(inp.transcript, max_items=3)
         for i, claim in enumerate(key_claims[:3]):
-            anchor = moments[i] if i < len(moments) else "In a central exchange, the episode repeats a point without escalating stakes."
+            anchor = (
+                moments[i]
+                if i < len(moments)
+                else (
+                    "No verbatim clip was paired for this claim in the blueprint pass — "
+                    "attach a transcript quote before sharing."
+                )
+            )
             anchors.append({"claim": claim, "anchor": anchor})
     core["evidence_anchors"] = anchors[:3]
     out["core_breakdown"] = core
@@ -422,7 +442,10 @@ def _fallback_strategist_report(
     for i, cl in enumerate(key_claims[:3]):
         anchor = str(raw_anchors[i] if i < len(raw_anchors) else "").strip()
         if not anchor:
-            anchor = "In the early exchange, the host repeats the same point without escalating the argument."
+            anchor = (
+                "No verbatim clip was paired for this claim in the blueprint pass — "
+                "attach a transcript quote before sharing."
+            )
         evidence_anchors.append({"claim": str(cl).strip(), "anchor": anchor})
     working = _slice_non_empty(
         [synthesis.strength] + list(narrative.key_moments),
@@ -494,9 +517,48 @@ def _fallback_strategist_report(
         "Force a midpoint challenge that tests the core claim under pressure.",
         "End with one concrete listener behavior change and metric.",
     ]
-    punchline = (
-        "This episode underperforms due to weak positioning and lack of clear takeaway, but can be significantly improved with stronger framing, sharper questions, and more structured delivery."
+    snap_pb: Dict[str, Any] = {
+        "title": inp.title or "",
+        "primary_topic": (inp.topics[0] if inp.topics else "") or "",
+    }
+    kc_str = [str(x).strip() for x in key_claims if str(x).strip()]
+    weaknesses_fb: List[str] = []
+    for x in list(analytical.missing_pieces) + [str(synthesis.gap or ""), str(synthesis.friction_point or "")]:
+        xs = str(x).strip()
+        if xs and xs not in weaknesses_fb:
+            weaknesses_fb.append(xs)
+    fill_w = [
+        "The episode resets topics before one claim is defended.",
+        "No speaker pressure-tests the central claim once it appears.",
+        "The close ends without one explicit listener action.",
+    ]
+    while len(weaknesses_fb) < 3:
+        weaknesses_fb.append(fill_w[len(weaknesses_fb)])
+    wfb = weaknesses_fb[:3]
+    punchline = _strategist_punchline_from_signal(snap_pb, kc_str, wfb)
+    tension_position = _strategist_tension_from_claims(str(thesis_obj.thesis or "").strip(), kc_str)
+    highlights_fb = [str(synthesis.strength or "").strip()] + [
+        str(m).strip() for m in narrative.key_moments if str(m).strip()
+    ]
+    highlights_fb = [h for h in highlights_fb if h][:8]
+    network_level_insight = _strategist_network_lines_from_insights(
+        highlights_fb, wfb, str(thesis_obj.thesis or "").strip()
     )
+    et_short = str(snap_pb.get("title") or snap_pb.get("primary_topic") or "this episode")[:90]
+    one_line_fix = (
+        f"Rebuild the open so listeners hear the spine claim for \"{et_short}\" in 60 seconds, "
+        f"then cut beats that do not test it."
+    )
+    conv_topic = str(snap_pb.get("primary_topic") or snap_pb.get("title") or "the stakes")[:90]
+    conviction_statement = (
+        f"The episode lands when listeners can repeat one sentence about {conv_topic}."
+    )
+    show_title = str(snap_pb.get("title") or "this show")[:80]
+    network_rollout_line = (
+        f"Apply the same spine discipline across \"{show_title}\": one defended claim per episode "
+        f"before growth packaging."
+    )
+    where_under = wfb[1] if len(wfb) > 1 else wfb[0]
     return {
         "punchline_header": punchline,
         "core_problem": core_problem,
@@ -510,10 +572,7 @@ def _fallback_strategist_report(
             "thesis": thesis_obj.thesis,
             "key_claims": key_claims,
             "evidence_anchors": evidence_anchors,
-            "tension_position": {
-                "implicit_argument": f"This episode treats this as true: {key_claims[0] if key_claims else thesis_obj.thesis}",
-                "stronger_position": f"But the stronger position is this: {thesis_obj.thesis}",
-            },
+            "tension_position": tension_position,
         },
         "what_working": working,
         "what_missing": missing,
@@ -536,17 +595,12 @@ def _fallback_strategist_report(
         "guest_content_opportunities": guests[:3],
         "strategic_value_for_network": {
             "what_improving_unlocks": "Stronger retention, cleaner clip packaging, and higher repeatability across episodes.",
-            "where_it_underperforms": "The current structure leaves growth on the table by delaying tension and under-defining the listener takeaway.",
+            "where_it_underperforms": where_under,
         },
-        "network_level_insight": [
-            "Weak positioning across shows",
-            "Lack of shareable moments",
-            "Structural engagement issues",
-            "High-upside opportunities",
-        ],
-        "network_rollout_line": "If we applied this across your network, we would identify which shows are underperforming, which episodes are most shareable, and where audience growth is being lost.",
-        "one_line_fix": "If this episode were reframed around a clear argument and structured for tension, it would become significantly more engaging and shareable.",
-        "conviction_statement": "This episode avoids the hard argument, and that avoidance is the main reason it underperforms.",
+        "network_level_insight": network_level_insight,
+        "network_rollout_line": network_rollout_line,
+        "one_line_fix": one_line_fix,
+        "conviction_statement": conviction_statement,
     }
 
 
@@ -603,7 +657,10 @@ def _build_strategist_report(
                 anchors_out.append({"claim": cl, "anchor": an})
     if not anchors_out:
         key_claims = [str(x).strip() for x in (cb.get("key_claims") or []) if str(x).strip()][:3]
-        fallback_anchor = "In the episode's central exchange, the same point is repeated without a concrete counterexample."
+        fallback_anchor = (
+            "No verbatim clip was paired for this claim in the blueprint pass — "
+            "attach a transcript quote before sharing."
+        )
         for cl in key_claims:
             anchors_out.append({"claim": cl, "anchor": fallback_anchor})
     cb["evidence_anchors"] = anchors_out[:3]

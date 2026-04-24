@@ -241,13 +241,62 @@ def coherence_anchor(title: str, creator: str, genre: str, primary_topic: str) -
     return jaccard_tokens(anchor, primary_topic)
 
 
-def fallback_primary_topic(snap: Dict[str, Any], claims: Sequence[Dict[str, Any]]) -> str:
+def _claim_line_is_intro_filler(text: str) -> bool:
+    """Warm-up / banter that should not become ``primary_topic`` (avoids title-echo theses)."""
+    t = (text or "").strip()
+    if not t:
+        return True
+    low = re.sub(r"\s+", " ", t.lower())
+    if len(t) < 20:
+        return True
+    markers = (
+        "welcome to the podcast",
+        "hey everybody",
+        "thanks for doing this",
+        "first of all, thanks",
+        "i appreciate you coming",
+        "some of the things that i wanna talk about",
+        "how to navigate the stressful",
+    )
+    return any(m in low for m in markers)
+
+
+def _first_substantive_claim_for_topic(claims: Sequence[Dict[str, Any]]) -> str:
+    for c in claims or []:
+        if not isinstance(c, dict):
+            continue
+        t = str(c.get("text") or "").strip()
+        if _claim_line_is_intro_filler(t):
+            continue
+        if len(t) >= 36:
+            return t
+    return ""
+
+
+def fallback_primary_topic(
+    snap: Dict[str, Any],
+    claims: Sequence[Dict[str, Any]],
+    *,
+    prefer: str = "auto",
+) -> str:
+    """
+    ``prefer``:
+    - **auto** — prefer a substantive on-mic claim over echoing the YouTube title (better cold intake).
+    - **title** — prefer title (used when we *repair* a wrong-domain or low-coherence primary_topic so identity snaps back to the show).
+    """
+    mode = (prefer or "auto").strip().lower()
     title = str(snap.get("title") or "").strip()
+    if mode == "title" and title and len(title) > 6:
+        return title[:200]
+    # auto: claim-first
+    sub = _first_substantive_claim_for_topic(claims)
+    if sub:
+        return (sub[:200] + "…") if len(sub) > 200 else sub
     if title and len(title) > 6:
         return title[:200]
     if claims:
         t = str(claims[0].get("text") or "").strip()
-        if len(t) > 24:
+        if len(t) > 24 and not _claim_line_is_intro_filler(t):
             return (t[:140] + "…") if len(t) > 140 else t
     return "Episode themes (from transcript)"
 
@@ -316,8 +365,18 @@ def clamp_narrative_bullets_to_identity(
 
     if not kept:
         if pt:
-            kept = [f"The through-line for listeners: {pt}."]
-            warnings.append("Narrative replaced with primary_topic fallback (identity alignment).")
+            # Avoid a narrative line that is only the title re-labeled (kills real thesis work downstream).
+            if title and jaccard_tokens(pt, title) >= 0.78:
+                kept = [
+                    "Commit the episode to one falsifiable claim about the guest's core domain—provable on mic, "
+                    "not implied only by the episode title."
+                ]
+                warnings.append(
+                    "Narrative: primary_topic matched title; used argumentative fallback instead of title echo."
+                )
+            else:
+                kept = [f"The through-line for listeners: {pt}."]
+                warnings.append("Narrative replaced with primary_topic fallback (identity alignment).")
         elif title:
             short = title[:200] + ("…" if len(title) > 200 else "")
             kept = [f"This episode follows the arc suggested by the title: {short}"]
@@ -350,7 +409,7 @@ def repair_primary_topic_if_needed(
 
     if religious_framing_mismatch(pt, title, genre):
         old = pt
-        snap["primary_topic"] = fallback_primary_topic(snap, claims)
+        snap["primary_topic"] = fallback_primary_topic(snap, claims, prefer="title")
         notes.append(
             f"primary_topic looked misaligned with title/genre ({old[:80]}…) — reset to title-led framing."
         )
@@ -360,7 +419,7 @@ def repair_primary_topic_if_needed(
         coh = coherence_anchor(title, creator, genre, pt)
         if coh < coherence_min:
             old = pt
-            snap["primary_topic"] = fallback_primary_topic(snap, claims)
+            snap["primary_topic"] = fallback_primary_topic(snap, claims, prefer="title")
             notes.append(
                 f"primary_topic had low overlap with title/show ({coh:.2f}) — replaced “{old[:70]}…” with title-led topic."
             )
@@ -390,6 +449,17 @@ def claim_structure_score(text: str) -> float:
     low = t.lower()
     if re.search(r"\b(didn't think|if you guys|that day but|none of\.|hands and knees)\b", low):
         score -= 0.3
+    if re.search(
+        r"\b(i don't know|don’t know|you might want|get that out|pretty soon|"
+        r"cuz like|dude, you're|you're the guy|i like history here)\b",
+        low,
+    ):
+        score -= 0.45
+    if re.search(
+        r"\b(i think the\s*,|you a little worried|yeah,\s*yeah,\s*yeah|,\s*no,\s*not too much)\b",
+        low,
+    ):
+        score -= 0.55
     return max(0.0, min(1.0, score))
 
 
@@ -471,7 +541,8 @@ def evaluate_v3_quality_gates(
         notes.append("Quality gate: religious/spiritual framing on a non-religious title/genre — review-first recommended.")
         force_diagnostic = True
 
-    if len(title) >= 10 and pt and coh_val is not None and coh_val < 0.05:
+    # Require a stronger title↔topic mismatch than near-zero noise before withholding full packaging.
+    if len(title) >= 10 and pt and coh_val is not None and coh_val < 0.03:
         notes.append(
             f"Quality gate: primary topic weakly overlaps title/show (score {coh_val:.2f}) — verify framing before clips."
         )

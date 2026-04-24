@@ -1,0 +1,15 @@
+{
+  "description": "Batch eval for scripts/eval_ship_gate_batch.py — paths relative to repo root unless absolute.",
+  "episodes": [
+    {
+      "id": "example_good_01",
+      "brief": "path/to/saved_brief_good.json",
+      "label": "PASS"
+    },
+    {
+      "id": "example_bad_01",
+      "brief": "path/to/saved_brief_bad.json",
+      "label": "FAIL"
+    }
+  ]
+}

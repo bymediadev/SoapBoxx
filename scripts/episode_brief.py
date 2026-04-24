@@ -170,6 +170,14 @@ def main() -> int:
             or result.get("markdown")
             or ""
         )
+        # Defensive: some UIs / older bundles surface ``markdown_v3`` or stale strings that never
+        # went through :func:`finalize_unified_markdown_export`. Always normalize v3 markdown here.
+        try:
+            from episode_report_v3 import finalize_unified_markdown_export
+
+            full_md = finalize_unified_markdown_export(str(full_md or ""))
+        except Exception:
+            pass
         md = full_md
         if args.lead_audit:
             from lead_audit_render import render_lead_audit_markdown
@@ -192,7 +200,9 @@ def main() -> int:
         _d = os.path.dirname(out_path)
         if _d:
             os.makedirs(_d, exist_ok=True)
-        with open(out_path, "w", encoding="utf-8") as f:
+        # Use UTF-8 with BOM for markdown files so Windows PowerShell `Get-Content`
+        # auto-detects encoding and does not display mojibake (e.g. "â€”").
+        with open(out_path, "w", encoding="utf-8-sig") as f:
             f.write(md)
         print(f"Wrote {out_path}")
     else:
@@ -213,7 +223,13 @@ def main() -> int:
             or result.get("markdown")
             or ""
         )
-        with open(fmp, "w", encoding="utf-8") as f:
+        try:
+            from episode_report_v3 import finalize_unified_markdown_export
+
+            full_md = finalize_unified_markdown_export(str(full_md or ""))
+        except Exception:
+            pass
+        with open(fmp, "w", encoding="utf-8-sig") as f:
             f.write(full_md)
         print(f"Wrote {fmp}")
 

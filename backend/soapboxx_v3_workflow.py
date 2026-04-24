@@ -25,18 +25,23 @@ is set after a successful enrich pass when that lock was active.
 - Each successful run adds ``markdown_export`` (unified numbered markdown) to the workflow JSON for scripts/CI — not wired to the PyQt main window.
 - Follow-up questions (when AI is on) use **claim + evidence + local transcript window + episode meta**, plus an optional second **batch sharpen** pass. Set ``SOAPBOXX_WORKFLOW_SHARPEN_FU=0`` to disable only the sharpen pass (saves one LLM call).
 - **Quality gate:** if the transcript is below ``SOAPBOXX_WORKFLOW_MIN_WORDS`` (default 200), or line-level uniqueness falls below ``SOAPBOXX_WORKFLOW_MIN_LINE_UNIQUENESS`` (default 0.22), multi-step enrichment is skipped in favor of **one** ``enrich_workflow_report_minimal`` call. Set ``SOAPBOXX_WORKFLOW_SKIP_GATE=1`` to always run full enrichment.
-- **Reality check (v3):** after ``report_v3`` is built, ``soapboxx_v3_workflow_local`` runs ``report_reality_checks.validate_reality_golden`` using ``backend/data/v3_reality_expected.json`` by default. Set ``SOAPBOXX_V3_REALITY_RULES`` to a JSON path to override; ``SOAPBOXX_V3_REALITY_CHECK=0`` to skip. Results are stored on ``metadata.v3_reality_check`` (``failures`` vs non-blocking ``degraded_notes``) and echoed into ``metadata.source_warnings``.
+- **Reality check (v3):** after ``report_v3`` is built, ``soapboxx_v3_workflow_local`` runs ``report_reality_checks.validate_reality_golden`` using ``backend/data/v3_reality_expected.json`` by default. Set ``SOAPBOXX_V3_REALITY_RULES`` to a JSON path to override; ``SOAPBOXX_V3_REALITY_CHECK=0`` to skip. Results are stored on ``metadata.v3_reality_check`` (``failures``, ``would_ship`` / ``ship_blockers``, ``degraded_notes``, plus ``report_v3_output_mode``, ``signal_mode``, ``readiness_band``, ``diagnostic_reasons``, ``good_clean_insight_lines``) and echoed into ``metadata.source_warnings``.
 
 **Alternate:** ``use_cloud_llm=True`` — AI-only pipeline (`soapboxx_v3_workflow_cloud`), no v3 coach merge.
 
-**LLM:** ``SOAPBOXX_OLLAMA_MODEL`` + ``OLLAMA_HOST`` (default http://127.0.0.1:11434) — Ollama only.
-Responses are normalized to a strict envelope ``{"text": str, "data": object}`` (shared with
-``episode_intelligence``). ``call_llm_json`` requires non-empty ``data`` unless
-``SOAPBOXX_LLM_ENVELOPE_TEXT_FALLBACK=0`` for strict ``data``-only mode (default allows ``text``). Set ``SOAPBOXX_LLM_VALIDATE_WORKFLOW_DATA=1`` to require at least
-one known workflow key on parsed JSON (see ``llm_data_contracts``). Ollama uses JSON mode. Optional: ``SOAPBOXX_OLLAMA_NUM_CTX`` / ``OLLAMA_NUM_CTX`` (context),
-``SOAPBOXX_OLLAMA_TOP_P``. **Editorial pass** on unified markdown: ``maybe_editorial_pass_unified_markdown`` — on by
-default when a model is set (disable with ``SOAPBOXX_EDITORIAL_PASS=0``). CLI applies it when writing JSON;
-``generate_network_brief_v3`` applies it to the final ``markdown_export`` and syncs ``workflow_report``.
+**LLM (workflow + editorial pass):** ``call_llm`` uses **Ollama** (``SOAPBOXX_OLLAMA_MODEL`` + ``OLLAMA_HOST``)
+or **Groq** (``GROQ_API_KEY`` / ``SOAPBOXX_GROQ_API_KEY``) when ``SOAPBOXX_WORKFLOW_LLM_BACKEND=groq`` —
+**default is ``groq`` if a Groq key is set**, else Ollama. (Episode **brief** / strict contract in
+``episode_intelligence`` remains **Ollama**.) Responses are normalized to a strict envelope
+``{"text": str, "data": object}`` (shared with ``episode_intelligence``). ``call_llm_json`` requires
+non-empty ``data`` unless ``SOAPBOXX_LLM_ENVELOPE_TEXT_FALLBACK=1`` to allow parsing JSON from ``text``
+(default is ``data``-only). Set ``SOAPBOXX_LLM_VALIDATE_WORKFLOW_DATA=1`` to require at least
+one known workflow key on parsed JSON (see ``llm_data_contracts``). Ollama uses JSON mode; Groq uses
+``response_format=json_object``. Optional: ``SOAPBOXX_OLLAMA_NUM_CTX`` / ``OLLAMA_NUM_CTX`` (context),
+``SOAPBOXX_OLLAMA_TOP_P``; for Groq set ``SOAPBOXX_GROQ_WORKFLOW_MODEL`` (default
+``llama-3.1-8b-instant``). **Editorial pass** on unified markdown: ``maybe_editorial_pass_unified_markdown``
+— on by default when an LLM is available (disable with ``SOAPBOXX_EDITORIAL_PASS=0``). CLI applies it when
+writing JSON; ``generate_network_brief_v3`` applies it to the final ``markdown_export`` and syncs ``workflow_report``.
 """
 
 from __future__ import annotations
@@ -48,7 +53,7 @@ import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, FrozenSet, List, Optional, Set, Tuple
 
 try:
     from tenacity import retry, stop_after_attempt, wait_exponential
@@ -105,12 +110,136 @@ REQUIRED_QUESTION_TYPES = frozenset({"counter", "validation", "application"})
 # Structured workflow JSON is v3; distinct from the v2 compact brief JSON in episode_intelligence.
 WORKFLOW_SPEC_VERSION = "3"
 
+# Drop LLM “placeholder experts” (job labels with no name) from booking-oriented exports.
+_GENERIC_GUEST_NAME_BLOCKLIST = frozenset(
+    {
+        "historian",
+        "skeptical expert",
+        "domain expert",
+        "domain practitioner",
+        "communications expert",
+        "life coach",
+        "business consultant",
+        "motivational speaker",
+        "expert",
+        "researcher",
+        "author",
+    }
+)
+_GENERIC_SINGLE_TOKEN_NAMES = frozenset(
+    {
+        "historian",
+        "skeptic",
+        "expert",
+        "researcher",
+        "journalist",
+        "scientist",
+        "author",
+    }
+)
+
+
+def _align_guest_ids_to_evidence_map(
+    evidence_map: List[Dict[str, Any]], guests: List[Dict[str, Any]]
+) -> None:
+    """
+    Map ``c1``/``c2``-style ids from the brief LLM to real evidence row ids (often ``a1``, ``a6``).
+    """
+    eids: List[str] = []
+    for e in evidence_map or []:
+        if not isinstance(e, dict):
+            continue
+        eid = str(e.get("id") or "").strip()
+        if eid and eid not in eids:
+            eids.append(eid)
+    if not eids or not guests:
+        return
+
+    def _remap_one(raw: str) -> str:
+        s = (raw or "").strip()
+        if not s:
+            return eids[0]
+        if s in eids:
+            return s
+        low = s.lower()
+        if low.startswith("c") and low[1:].isdigit():
+            idx = int(low[1:]) - 1
+            if 0 <= idx < len(eids):
+                return eids[idx]
+        return eids[0]
+
+    for g in guests:
+        if not isinstance(g, dict):
+            continue
+        nxt = _remap_one(str(g.get("maps_to_claim_id") or g.get("claim_id") or ""))
+        g["maps_to_claim_id"] = nxt
+        g["claim_id"] = nxt
+
+
+def _guest_name_is_plausible_booking(g: Dict[str, Any]) -> bool:
+    n = str(g.get("name") or "").strip()
+    if len(n) < 3:
+        return False
+    low = n.lower()
+    if low in _GENERIC_GUEST_NAME_BLOCKLIST:
+        return False
+    if " " not in n and low in _GENERIC_SINGLE_TOKEN_NAMES:
+        return False
+    return True
+
+
+def _booking_oriented_guest_rows(rows: List[Any]) -> List[Any]:
+    """
+    Drop transcript-figure rows (``episode_grounded_person`` / “named in episode verbatim”) from any
+    list returned to UIs or markdown — those are **story subjects**, not outreach targets.
+
+    Stale workflow JSON from older builds may still contain those rows; filtering here fixes exports
+    without requiring a full re-run.
+    """
+    if not rows:
+        return rows
+    out: List[Any] = []
+    for g in rows:
+        if not isinstance(g, dict):
+            out.append(g)
+            continue
+        src = str(g.get("source") or "").strip()
+        if src == "episode_grounded_person":
+            continue
+        title_l = str(g.get("title") or "").lower()
+        if "named in this episode" in title_l and "verbatim" in title_l:
+            continue
+        out.append(g)
+    if out:
+        return out
+    cid0 = ""
+    if rows and isinstance(rows[0], dict):
+        cid0 = str((rows[0] or {}).get("claim_id") or "").strip()
+    return [
+        {
+            "name": "Subject-matter historian or investigative journalist",
+            "title": "Bookable expert (replaces transcript-name placeholders)",
+            "role": "Expert",
+            "claim_id": cid0 or "c1",
+            "angle": (
+                "Prior rows only named people *in* the story — add an outside expert who can "
+                "contextualize or fact-check the same themes."
+            ),
+            "topic_angle": "Outreach-oriented guest angle",
+            "relevance": 7,
+            "source": "expert_placeholder_after_verbatim_filter",
+        }
+    ]
+
 
 def workflow_guest_rows(workflow: Optional[Dict[str, Any]]) -> List[Any]:
     """Return the workflow guest list: prefer ``guests``, then legacy ``guest_recommendations``.
 
     If both keys hold lists but they are **not** the same object (alias drift), re-bind via
     :func:`set_workflow_guest_rows` using canonical ``guests`` when non-empty, else legacy rows.
+
+    Returned rows omit **verbatim transcript figures** (``episode_grounded_person``) so JSON and
+    markdown match “bookable expert” intent.
     """
     if not isinstance(workflow, dict):
         return []
@@ -127,11 +256,11 @@ def workflow_guest_rows(workflow: Optional[Dict[str, Any]]) -> List[Any]:
                 "workflow_guest_rows: healing guests/guest_recommendations alias drift (different list ids)"
             )
         set_workflow_guest_rows(workflow, source)
-        return workflow["guests"]
+        return _booking_oriented_guest_rows(workflow["guests"])
     if isinstance(g, list):
-        return g
+        return _booking_oriented_guest_rows(g)
     if isinstance(gr, list):
-        return gr
+        return _booking_oriented_guest_rows(gr)
     return []
 
 
@@ -155,21 +284,29 @@ def _safe_claim_text(claim: Any) -> str:
     Normalize any claim-shaped value to a plain string for ``.split()`` / ``.replace()`` / matching.
     Handles str, dicts with text/raw_statement/claim (including nested dicts), and other scalars.
     """
+    try:
+        from .transcript_structure_extract import strip_youtube_caption_metadata as _strip_cap
+    except ImportError:  # pragma: no cover
+        from transcript_structure_extract import strip_youtube_caption_metadata as _strip_cap  # type: ignore
+
+    def _fin(s: str) -> str:
+        return _strip_cap((s or "").strip()).strip()
+
     if claim is None:
         return ""
     if isinstance(claim, str):
-        return claim
+        return _fin(claim)
     if isinstance(claim, dict):
         for key in ("text", "raw_statement", "claim"):
             v = claim.get(key)
             if isinstance(v, str) and v.strip():
-                return v
+                return _fin(v)
             if isinstance(v, dict):
                 inner = _safe_claim_text(v)
                 if inner.strip():
                     return inner
         return ""
-    return str(claim)
+    return _fin(str(claim))
 
 
 def _workflow_claim_rows_for_subject_fallback(r3: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -287,6 +424,25 @@ def _run_v3_reality_check_into_meta(
     tx = transcript or ""
     fails, degraded_notes = rrc.validate_reality_golden(r3, tx, rules)
     ship_ok, ship_fails = rrc.would_ship_v3(r3, tx)
+    rr = r3.get("report_readiness") if isinstance(r3.get("report_readiness"), dict) else {}
+    dr = rr.get("diagnostic_reasons")
+    if isinstance(dr, list):
+        diagnostic_reasons = [str(x).strip() for x in dr if str(x).strip()]
+    else:
+        diagnostic_reasons = [str(dr).strip()] if dr and str(dr).strip() else []
+    good_highlight_ct = 0
+    try:
+        try:
+            from .episode_report_v3 import is_low_signal_insight_line as _low_sig_hl
+        except ImportError:
+            from episode_report_v3 import is_low_signal_insight_line as _low_sig_hl  # type: ignore
+    except ImportError:
+        _low_sig_hl = None  # type: ignore[misc, assignment]
+    if _low_sig_hl:
+        for ln in r3.get("clean_insights") or []:
+            s = str(ln).strip()
+            if s and not _low_sig_hl(s):
+                good_highlight_ct += 1
     meta_out["v3_reality_check"] = {
         "passed": len(fails) == 0,
         "failures": fails,
@@ -294,6 +450,12 @@ def _run_v3_reality_check_into_meta(
         "would_ship": ship_ok,
         "ship_blockers": ship_fails,
         "rules_source": rules_label,
+        # Why ``output_mode`` may be diagnostic — mirrors ``report_v3`` without opening nested JSON.
+        "report_v3_output_mode": str(r3.get("output_mode") or ""),
+        "signal_mode": str(r3.get("signal_mode") or ""),
+        "readiness_band": str(rr.get("band") or ""),
+        "diagnostic_reasons": diagnostic_reasons,
+        "good_clean_insight_lines": good_highlight_ct,
     }
     # One-line summaries in source_warnings — full detail lives in metadata.v3_reality_check.
     if fails:
@@ -362,6 +524,70 @@ def _model_name() -> str:
     return os.getenv("SOAPBOXX_OLLAMA_MODEL", "ollama").strip() or "ollama"
 
 
+def _groq_api_key() -> str:
+    return os.getenv("SOAPBOXX_GROQ_API_KEY", "").strip() or os.getenv("GROQ_API_KEY", "").strip()
+
+
+def _workflow_llm_backend() -> str:
+    """
+    ``ollama`` | ``groq``. Default: Groq when a Groq key is set (faster/cleaner JSON for workflow
+    enrichment), else Ollama. Brief generation stays on Ollama in ``episode_intelligence`` regardless.
+    """
+    forced = os.getenv("SOAPBOXX_WORKFLOW_LLM_BACKEND", "").strip().lower()
+    if forced in ("ollama", "groq"):
+        return forced
+    if _groq_api_key():
+        return "groq"
+    return "ollama"
+
+
+def _groq_chat(
+    prompt: str,
+    *,
+    max_tokens: int = 2000,
+    temperature: float = 0.2,
+    system: str = "",
+    json_format: bool = False,  # unused; OpenAI client always returns JSON when requested
+    stage: str = "workflow.llm",
+) -> Dict[str, Any]:
+    """Groq OpenAI-compatible API — same envelope contract as Ollama path."""
+    _ = json_format
+    api_key = _groq_api_key()
+    if not api_key:
+        raise RuntimeError(
+            "SOAPBOXX_WORKFLOW_LLM_BACKEND=groq (or default when GROQ_API_KEY is set) requires "
+            "GROQ_API_KEY or SOAPBOXX_GROQ_API_KEY."
+        )
+    model = os.getenv("SOAPBOXX_GROQ_WORKFLOW_MODEL", "").strip() or "llama-3.1-8b-instant"
+    base = os.getenv("SOAPBOXX_GROQ_BASE_URL", "https://api.groq.com/openai/v1").strip().rstrip("/")
+    try:
+        from openai import OpenAI
+    except ImportError as e:  # pragma: no cover - optional dep
+        raise RuntimeError("Install the 'openai' package for Groq workflow LLM support.") from e
+    base_sys = (system or "").strip()
+    full_sys = (
+        (base_sys + "\n\n" + LLM_ENVELOPE_SYSTEM_SUFFIX)
+        if base_sys
+        else LLM_ENVELOPE_SYSTEM_SUFFIX
+    )
+    client = OpenAI(api_key=api_key, base_url=f"{base}/")
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": full_sys},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        raw = (resp.choices[0].message.content or "").strip()
+    except Exception as e:
+        raise RuntimeError(f"Groq workflow LLM failed ({stage}): {e}") from e
+    return coerce_ollama_message_to_envelope(raw)
+
+
 def _ollama_chat(
     prompt: str,
     *,
@@ -399,6 +625,12 @@ def _ollama_chat(
     if _tp:
         try:
             ollama_opts["top_p"] = float(_tp)
+        except ValueError:
+            pass
+    _seed = os.getenv("SOAPBOXX_OLLAMA_SEED", "").strip()
+    if _seed:
+        try:
+            ollama_opts["seed"] = int(_seed)
         except ValueError:
             pass
     payload: Dict[str, Any] = {
@@ -444,10 +676,25 @@ def call_llm(
     json_format: bool = False,
     stage: str = "workflow.llm",
 ) -> Dict[str, Any]:
-    """Local Ollama only. Set ``SOAPBOXX_OLLAMA_MODEL``; ``client`` is ignored (compat)."""
+    """
+    Workflow / editorial LLM. Backend: ``SOAPBOXX_WORKFLOW_LLM_BACKEND`` = ``ollama`` | ``groq``;
+    if unset, **Groq is used when** ``GROQ_API_KEY`` (or ``SOAPBOXX_GROQ_API_KEY``) is set, else Ollama.
+    ``client`` is ignored (compat). Episode brief extraction remains Ollama in ``episode_intelligence``.
+    """
+    _ = client
+    if _workflow_llm_backend() == "groq":
+        return _groq_chat(
+            prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            system=system,
+            json_format=json_format,
+            stage=stage,
+        )
     if not os.getenv("SOAPBOXX_OLLAMA_MODEL", "").strip():
         raise RuntimeError(
-            "SOAPBOXX_OLLAMA_MODEL is not set — workflow LLM calls require a local Ollama model."
+            "Workflow LLM: set SOAPBOXX_OLLAMA_MODEL for Ollama, or configure GROQ_API_KEY and "
+            "SOAPBOXX_WORKFLOW_LLM_BACKEND=groq (default backend is groq when a Groq key is present)."
         )
     return _ollama_chat(
         prompt,
@@ -740,14 +987,131 @@ def _filter_grounded_evidence_map(
     return rows
 
 
-def _sanitize_evidence_map_claims(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _ts_missing(v: Any) -> bool:
+    if v is None:
+        return True
+    s = str(v).strip().lower()
+    return s in {"", "n/a", "na", "none", "null", "—", "-"}
+
+
+def _cue_tokens(text: str) -> set:
+    return {t for t in re.findall(r"[a-z']+", (text or "").lower()) if len(t) > 2}
+
+
+def _cue_overlap(a: str, b: str) -> float:
+    sa, sb = _cue_tokens(a), _cue_tokens(b)
+    if not sa or not sb:
+        return 0.0
+    return len(sa & sb) / float(max(len(sa), len(sb), 1))
+
+
+def _normalize_transcript_cues(raw: Any) -> List[Dict[str, Any]]:
+    cues: List[Dict[str, Any]] = []
+    if not isinstance(raw, list):
+        return cues
+    for row in raw[:6000]:
+        if not isinstance(row, dict):
+            continue
+        txt = str(row.get("text") or "").strip()
+        if len(txt) < 10:
+            continue
+        ts = row.get("timestamp")
+        start_sec = row.get("start_sec")
+        if start_sec is None:
+            try:
+                start_sec = float(str(ts).strip().rstrip("s"))
+            except Exception:
+                start_sec = None
+        cues.append({"text": txt, "timestamp": ts, "start_sec": start_sec})
+    return cues
+
+
+def _align_missing_timestamps_with_cues(rows: Any, cues: List[Dict[str, Any]]) -> int:
+    """Fill missing evidence timestamps using transcript cue overlap; returns rows updated."""
+    if not isinstance(rows, list) or not cues:
+        return 0
+    updated = 0
+    overlap_floor = 0.10
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if not _ts_missing(row.get("timestamp")):
+            continue
+        probe = str(row.get("evidence") or row.get("claim") or "").strip()
+        if len(probe) < 10:
+            continue
+        best = None
+        best_sc = 0.0
+        for cue in cues:
+            ct = str(cue.get("text") or "")
+            if len(ct) < 10:
+                continue
+            sc = _cue_overlap(probe, ct)
+            if sc > best_sc:
+                best_sc = sc
+                best = cue
+        if best is None or best_sc < overlap_floor:
+            continue
+        start = best.get("start_sec")
+        if isinstance(start, (int, float)):
+            row["timestamp"] = round(float(start), 1)
+            updated += 1
+            continue
+        ts = str(best.get("timestamp") or "").strip()
+        if ts:
+            row["timestamp"] = ts
+            updated += 1
+    return updated
+
+
+def _education_spine_score(claim_text: str) -> int:
+    low = (claim_text or "").lower()
+    score = 0
+    for k in (
+        "rockefeller",
+        "foundation",
+        "school board",
+        "schooling",
+        "curriculum",
+        "standardized",
+        "soviet",
+        "prussia",
+        "prussian",
+        "centralization",
+        "decentralization",
+        "education system",
+        "district",
+    ):
+        if k in low:
+            score += 2
+    if "school" in low or "education" in low:
+        score += 1
+    return score
+
+
+def _sanitize_evidence_map_claims(
+    rows: List[Dict[str, Any]],
+    *,
+    spine_hint: str = "",
+) -> List[Dict[str, Any]]:
     """
     Remove truncated ASR claim lines and duplicate beats (same claim text, different ids).
+    When ``spine_hint`` looks like an education episode, drop obvious tangents and sort on-theme rows first.
     """
     try:
-        from .episode_report_v3 import _dedupe_repeated_sentences, _is_broken_evidence_claim_line
+        from .episode_report_v3 import (
+            _claim_conflicts_spine_hint,
+            _dedupe_repeated_sentences,
+            _is_broken_evidence_claim_line,
+            _strategist_mic_line_is_praise_or_meta,
+        )
     except ImportError:
-        from episode_report_v3 import _dedupe_repeated_sentences, _is_broken_evidence_claim_line
+        from episode_report_v3 import (
+            _claim_conflicts_spine_hint,
+            _dedupe_repeated_sentences,
+            _is_broken_evidence_claim_line,
+            _strategist_mic_line_is_praise_or_meta,
+        )
 
     seen = set()
     out: List[Dict[str, Any]] = []
@@ -756,6 +1120,10 @@ def _sanitize_evidence_map_claims(rows: List[Dict[str, Any]]) -> List[Dict[str, 
             continue
         cl = str(r.get("claim") or "").strip()
         if not cl or _is_broken_evidence_claim_line(cl):
+            continue
+        if _strategist_mic_line_is_praise_or_meta(cl):
+            continue
+        if spine_hint and _claim_conflicts_spine_hint(cl, spine_hint):
             continue
         key = re.sub(r"[^a-z0-9]+", " ", cl.lower()).strip()[:140]
         if key in seen:
@@ -766,6 +1134,19 @@ def _sanitize_evidence_map_claims(rows: List[Dict[str, Any]]) -> List[Dict[str, 
         if ev:
             rr["evidence"] = _dedupe_repeated_sentences(ev)
         out.append(rr)
+    low_spine = (spine_hint or "").lower()
+    if any(
+        k in low_spine
+        for k in (
+            "rockefeller",
+            "school",
+            "education",
+            "brainwash",
+            "psyop",
+            "curriculum",
+        )
+    ):
+        out.sort(key=lambda row: -_education_spine_score(str(row.get("claim") or "")))
     return out
 
 
@@ -878,6 +1259,8 @@ def _workflow_quality_gate_full_enrichment(
 
 
 def _llm_available() -> bool:
+    if _workflow_llm_backend() == "groq" and _groq_api_key():
+        return True
     return bool(os.getenv("SOAPBOXX_OLLAMA_MODEL", "").strip())
 
 
@@ -903,7 +1286,8 @@ def maybe_editorial_pass_unified_markdown(
 ) -> Tuple[str, bool]:
     """
     One editorial pass: tighten wording, fix obvious ASR artifacts, dedupe redundant bullets.
-    Requires Ollama. Returns ``(markdown, applied)``; on failure returns original markdown.
+    Uses workflow LLM (Groq or Ollama; see :func:`call_llm`). Returns ``(markdown, applied)``;
+    on failure returns original markdown.
     """
     if not _editorial_pass_enabled() or not (markdown or "").strip():
         return markdown, False
@@ -952,7 +1336,11 @@ Episode title (context): {title or "(untitled)"}
         out = (env.get("text") or "").strip()
         if len(out) < min(400, len(markdown) // 4) and len(markdown) > 800:
             return markdown, False
-        return out, True
+        try:
+            from .episode_report_v3 import finalize_unified_markdown_export
+        except ImportError:  # pragma: no cover
+            from episode_report_v3 import finalize_unified_markdown_export  # type: ignore
+        return finalize_unified_markdown_export(out), True
     except Exception:
         return markdown, False
 
@@ -1172,13 +1560,31 @@ def enrich_workflow_report_with_ai(
         out["follow_up_questions"] = baseline_fuq
 
     if not lock:
+        allow = _grounded_guest_name_allowlist_for_workflow(report_v3, transcript or "")
         guests = generate_guest_recommendations(
             em,
             client=client,
             highlights=out.get("highlights") or [],
             episode_meta=episode_meta,
             transcript=transcript or "",
+            grounded_name_allowlist=allow if allow else None,
         )
+        if allow and not guests:
+            guests = generate_guest_recommendations(
+                em,
+                client=client,
+                highlights=out.get("highlights") or [],
+                episode_meta=episode_meta,
+                transcript=transcript or "",
+                grounded_name_allowlist=None,
+            )
+        if not guests and report_v3 and isinstance(report_v3, dict):
+            cid_fb = ""
+            for e in em:
+                if isinstance(e, dict) and str(e.get("id") or "").strip():
+                    cid_fb = str(e.get("id") or "").strip()
+                    break
+            guests = generate_guest_archetypes_from_issues(report_v3, cid_fb or "c1", max_archetypes=4)
         if guests:
             for g in guests:
                 if not isinstance(g, dict):
@@ -1317,14 +1723,20 @@ def _attach_unified_markdown_export(
 ) -> None:
     """Add `markdown_export` for CLI/integrations; not used by the desktop main window."""
     try:
-        from .episode_report_v3 import render_unified_episode_export_markdown
+        from .episode_report_v3 import (
+            render_episode_report_v3_markdown,
+            render_unified_episode_export_markdown,
+        )
         from .episode_progress import (
             attach_export_telemetry_to_metadata,
             persist_episode_progress_after_export,
             prepare_bundle_for_export,
         )
     except ImportError:
-        from episode_report_v3 import render_unified_episode_export_markdown
+        from episode_report_v3 import (  # type: ignore
+            render_episode_report_v3_markdown,
+            render_unified_episode_export_markdown,
+        )
         from episode_progress import (  # type: ignore
             attach_export_telemetry_to_metadata,
             persist_episode_progress_after_export,
@@ -1344,7 +1756,31 @@ def _attach_unified_markdown_export(
     }
     prepare_bundle_for_export(bundle)
     attach_export_telemetry_to_metadata(m, bundle)
-    report["markdown_export"] = render_unified_episode_export_markdown(bundle)
+    r3 = bundle.get("report_v3") if isinstance(bundle.get("report_v3"), dict) else {}
+    tg = r3.get("truth_mode_gate") if isinstance(r3.get("truth_mode_gate"), dict) else {}
+    truth_mode = (os.getenv("SOAPBOXX_MODE") or "truth").strip().lower()
+    rr = r3.get("report_readiness") if isinstance(r3.get("report_readiness"), dict) else {}
+    rr_mode = str(rr.get("output_mode") or "").strip().lower()
+    r3_mode = str(r3.get("output_mode") or "").strip().lower()
+    truth_blocked = (
+        str(tg.get("mode") or "").strip().lower() == "truth"
+        and tg.get("passed") is False
+    )
+    if not truth_blocked and truth_mode != "growth" and (rr_mode == "diagnostic" or r3_mode == "diagnostic"):
+        truth_blocked = True
+    if truth_blocked:
+        # Bundle from the workflow path never includes ``markdown_v3`` (that lives on
+        # ``generate_episode_report_v3`` output). Without a fallback this branch produced an
+        # empty ``markdown_export`` and Local Workflow never wrote ``episode_report_unified.md``.
+        md_diag = str(bundle.get("markdown_v3") or "").strip()
+        if not md_diag and r3:
+            try:
+                md_diag = render_episode_report_v3_markdown(r3)
+            except Exception:
+                md_diag = ""
+        report["markdown_export"] = md_diag
+    else:
+        report["markdown_export"] = render_unified_episode_export_markdown(bundle)
     persist_episode_progress_after_export(bundle)
 
 
@@ -1468,12 +1904,20 @@ def _prune_follow_up_questions_to_evidence_map(report: Dict[str, Any]) -> None:
     report["follow_up_questions"] = pruned
 
 
-def _sanitize_workflow_highlights(report: Dict[str, Any]) -> None:
+def _sanitize_workflow_highlights(report: Dict[str, Any], spine_hint: str = "") -> None:
     """Remove lyric/outro/caption-style lines from workflow highlights (mutates ``report``)."""
     try:
-        from .episode_report_v3 import _is_garbled_insight_line, is_low_signal_insight_line
+        from .episode_report_v3 import (
+            _appendix_surface_line_keeps,
+            _is_garbled_insight_line,
+            is_low_signal_insight_line,
+        )
     except ImportError:
-        from episode_report_v3 import _is_garbled_insight_line, is_low_signal_insight_line
+        from episode_report_v3 import (
+            _appendix_surface_line_keeps,
+            _is_garbled_insight_line,
+            is_low_signal_insight_line,
+        )
 
     hl = report.get("highlights") or []
     if not isinstance(hl, list) or not hl:
@@ -1484,15 +1928,17 @@ def _sanitize_workflow_highlights(report: Dict[str, Any]) -> None:
         if not isinstance(h, dict):
             continue
         ins = str(h.get("insight") or "").strip()
-        if (
-            ins
-            and not is_low_signal_insight_line(ins)
-            and not _is_garbled_insight_line(ins)
-        ):
-            n += 1
-            hh = dict(h)
-            hh["id"] = f"h{n}"
-            kept.append(hh)
+        if not ins or _is_garbled_insight_line(ins):
+            continue
+        if spine_hint and len(spine_hint.strip()) >= 12:
+            if not _appendix_surface_line_keeps(ins, spine_hint):
+                continue
+        elif is_low_signal_insight_line(ins):
+            continue
+        n += 1
+        hh = dict(h)
+        hh["id"] = f"h{n}"
+        kept.append(hh)
     report["highlights"] = kept[:5]
 
 
@@ -1616,13 +2062,8 @@ def generate_guest_archetypes_from_issues(
     max_archetypes: int = 3,
 ) -> List[Dict[str, Any]]:
     """
-    Deterministic “who fixes your weakness” guest types — no real names, no scraping.
-
-    Uses coach/readiness/clean_insights text plus ``primary_topic`` / ``genre`` to pick 2–3
-    archetypes, each with **why**, **what to look for**, and **what it fixes** (stored in
-    standard workflow keys + ``what_it_fixes`` for rich Markdown). The **primary** row also
-    gets ``commitment_line``, ``next_episode_move`` (one concrete recording/next-episode step),
-    and sequence labels.
+    Issue-driven coaching archetypes, then **real public names** from the outreach pool overlaid on
+    ``name`` / ``title`` so exports show bookable people while keeping why/look_for/fixes text.
     """
     snap = r3.get("episode_snapshot") if isinstance(r3.get("episode_snapshot"), dict) else {}
     topic = str(snap.get("primary_topic") or snap.get("title") or "this episode").strip()
@@ -1860,6 +2301,25 @@ def generate_guest_archetypes_from_issues(
         out[0] = dict(out[0])
         out[0]["commitment_line"] = _primary_commitment_line(out[0])
         out[0]["next_episode_move"] = _next_episode_move_for_kind(str(out[0].get("archetype_kind") or ""))
+    # Replace archetype-only labels in `name` with real public figures (keep coaching fields).
+    snap_os = r3.get("episode_snapshot") if isinstance(r3.get("episode_snapshot"), dict) else {}
+    claims_os = [c for c in (r3.get("claims") or []) if isinstance(c, dict)]
+    subs_os = _extract_subject_entities_from_claims(claims_os)
+    if not subs_os:
+        for key in ("primary_topic", "title", "creator"):
+            v = str(snap_os.get(key) or "").strip()
+            if v:
+                subs_os = [v]
+                break
+    dom_os = _infer_domain_from_entities(subs_os) if subs_os else "general_history"
+    pool_os = _extended_outreach_pool(str(dom_os), claim_id, need=max(len(out), 3))
+    if pool_os:
+        for idx, row in enumerate(out):
+            src = pool_os[idx % len(pool_os)]
+            d = dict(row)
+            d["name"] = str(src.get("name") or d.get("name") or "").strip()
+            d["title"] = str(src.get("title") or d.get("title") or "").strip()
+            out[idx] = d
     return out
 
 
@@ -2044,6 +2504,71 @@ def _topic_specific_guest_fallback(r3: Dict[str, Any], claim_id: str) -> List[Di
     if any(
         k in topic_text
         for k in (
+            "neuroscientist",
+            "neuroscience",
+            "huberman",
+            "brain plasticity",
+            "neuroplasticity",
+            "circadian",
+            "dopamine",
+            "brain function",
+            "brain regeneration",
+            "sensory system",
+            "andrew huberman",
+        )
+    ):
+        tshort = (primary_topic or title or "this conversation")[:140]
+        return [
+            {
+                "name": "Dr. Robert Sapolsky",
+                "title": "Neuroendocrinologist & stress / behavior science communicator",
+                "role": "Neuroscience / behavior",
+                "claim_id": claim_id,
+                "angle": f"Pressures how strong 'brain change' and behavior claims can be from mechanisms—stress, habits, and plasticity in humans ({tshort[:72]}).",
+                "topic_angle": "Mechanism, effect sizes, and common misconceptions",
+                "relevance": 10,
+            },
+            {
+                "name": "Dr. Matthew Walker",
+                "title": "Sleep scientist & author (Why We Sleep)",
+                "role": "Sleep / circadian",
+                "claim_id": claim_id,
+                "angle": "When the episode links brain function to sleep, performance, and recovery—separates settled science from pop framing.",
+                "topic_angle": "Sleep, circadian timing, and cognitive outcomes",
+                "relevance": 10,
+            },
+            {
+                "name": "Dr. Lisa Feldman Barrett",
+                "title": "Psychologist & affective / brain science (constructed emotion framework)",
+                "role": "Affective / cognitive neuroscience (communication)",
+                "claim_id": claim_id,
+                "angle": "Guards against over-simple 'brain area does X' stories—how concepts and context shape what brains do on mic.",
+                "topic_angle": "Constructs, language, and brain evidence",
+                "relevance": 9,
+            },
+            {
+                "name": "Science editor or health desk journalist",
+                "title": "Editing / science communication",
+                "role": "Science communication",
+                "claim_id": claim_id,
+                "angle": f"Tightens what can be said responsibly about neuroscience and behavior for a general audience around: {tshort[:90]}.",
+                "topic_angle": "Clarity, hedging, and defensibility",
+                "relevance": 8,
+            },
+            {
+                "name": "Editorial producer / story editor",
+                "title": "Structure",
+                "role": "Editorial",
+                "claim_id": claim_id,
+                "angle": "Forces one thesis and one verification arc so clips map to a checkable through-line.",
+                "topic_angle": "Packaging and defensibility",
+                "relevance": 7,
+            },
+        ]
+
+    if any(
+        k in topic_text
+        for k in (
             "burnout",
             "lonely",
             "loneliness",
@@ -2102,44 +2627,43 @@ def _topic_specific_guest_fallback(r3: Dict[str, Any], claim_id: str) -> List[Di
             },
         ]
 
+    subs_for_domain: List[str] = []
+    for x in (title, primary_topic):
+        xs = str(x or "").strip()
+        if xs:
+            subs_for_domain.append(xs)
+    for c in (r3.get("claims") or [])[:6]:
+        if isinstance(c, dict):
+            t = str(c.get("text") or "").strip()
+            if len(t) >= 16:
+                subs_for_domain.append(t[:260])
+    domain = _infer_domain_from_entities(subs_for_domain) if subs_for_domain else "general_history"
+    named = _extended_outreach_pool(domain, claim_id, need=5)
+    if named:
+        for idx, row in enumerate(named):
+            row.setdefault("source", "topic_fallback_named_pool")
+            row.setdefault("relevance", max(5, 10 - idx))
+        return named[:5]
+    fallback_named = _guest_rows_from_outreach_domain("general_history", claim_id, limit=5)
+    if fallback_named:
+        for idx, row in enumerate(fallback_named):
+            row.setdefault("source", "topic_fallback_named_pool")
+            row.setdefault("relevance", max(5, 10 - idx))
+        return fallback_named[:5]
     topic = primary_topic or title or "this episode"
-    # Genre-agnostic expert *roles* — avoids mismatched celebrity names when topic classification is thin.
     return [
-        {
-            "name": "Skeptical domain practitioner",
-            "title": "Practitioner interview",
-            "role": "Domain practice",
-            "claim_id": claim_id,
-            "angle": f"Pressure-tests the strongest on-mic claims about: {topic[:120]} with field experience and failure modes.",
-            "topic_angle": "Execution reality vs. story",
-            "relevance": 8,
-        },
-        {
-            "name": "Researcher or analyst (primary sources)",
-            "title": "Evidence",
-            "role": "Evidence",
-            "claim_id": claim_id,
-            "angle": "Separates verified facts, contested interpretations, and missing data the episode should flag.",
-            "topic_angle": "Verification and uncertainty",
-            "relevance": 8,
-        },
-        {
-            "name": "Contrarian voice (steel-manned)",
-            "title": "Debate segment",
-            "role": "Counter-case",
-            "claim_id": claim_id,
-            "angle": "States the strongest opposing case without caricature — useful for a dedicated tension segment.",
-            "topic_angle": "Best counterargument on the table",
-            "relevance": 7,
-        },
         {
             "name": "Editorial producer / story editor",
             "title": "Structure",
             "role": "Structure",
             "claim_id": claim_id,
-            "angle": "Tightens thesis, clip strategy, and segment order so listeners leave with one memorable through-line.",
+            "angle": (
+                f"Tightens thesis and clip strategy for: {topic[:120]} "
+                "so listeners leave with one memorable through-line."
+            ),
             "topic_angle": "Clarity and packaging",
             "relevance": 6,
+            "source": "topic_fallback_last_resort",
         },
     ]
 
@@ -2234,24 +2758,387 @@ def _dedupe_guest_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
-def _workflow_guest_rows_from_atomic_envelope(ap: Dict[str, Any]) -> List[Dict[str, Any]]:
+# --- Episode-grounded individuals (verbatim from title / claims / evidence only; no invented names) ---
+
+_ORGANIZATION_TAIL_MARKERS: Tuple[str, ...] = (
+    " university",
+    " institute",
+    " foundation",
+    " corporation",
+    " department",
+    " administration",
+    " agency",
+    " committee",
+    " commission",
+    " podcast",
+    " network",
+    " party",
+    " government",
+    " senate",
+    " congress",
+    " times",
+    " post",
+    " journal",
+    " review",
+)
+
+_NON_PERSON_SUBSTRINGS: Tuple[str, ...] = (
+    "policy",
+    "policies",
+    "timeline",
+    "treaty",
+    "battle",
+    "federal",
+    "federal ",
+    " state ",
+    "states ",
+    "government",
+    "congress",
+    "senate",
+    "removal",
+    "removal ",
+    "thesis",
+    "argument",
+    "episode",
+    "narrative",
+    "incentive",
+    "market ",
+    "economy",
+)
+
+_SINGLE_TOKEN_NON_PERSON: FrozenSet[str] = frozenset(
+    {
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+        "january",
+        "february",
+        "march",
+        "april",
+        "may",
+        "june",
+        "july",
+        "august",
+        "september",
+        "october",
+        "november",
+        "december",
+        "american",
+        "western",
+        "eastern",
+        "northern",
+        "southern",
+        "european",
+        "christian",
+        "muslim",
+        "jewish",
+        "republican",
+        "democratic",
+        "democrat",
+        "republicans",
+        "democrats",
+        "today",
+        "tomorrow",
+        "yesterday",
+        "federal",
+        "policy",
+        "removal",
+        "timelines",
+        "test",
+        "quote",
+        "guest",
+        "host",
+        "episode",
+        "transcript",
+    }
+)
+
+
+def _likely_organization_span(span: str) -> bool:
+    s = (span or "").strip().lower()
+    if not s:
+        return True
+    return any(marker in s for marker in _ORGANIZATION_TAIL_MARKERS)
+
+
+def _looks_like_person_span(span: str) -> bool:
+    span = (span or "").strip()
+    if not span or _likely_organization_span(span):
+        return False
+    low = span.lower()
+    if any(tok in low for tok in _NON_PERSON_SUBSTRINGS):
+        return False
+    parts = span.split()
+    if len(parts) >= 2:
+        return all(p and p[0].isupper() for p in parts)
+    if len(parts) == 1:
+        p0 = parts[0]
+        if len(p0) < 3 or not p0[0].isupper():
+            return False
+        return p0.lower() not in _SINGLE_TOKEN_NON_PERSON
+    return False
+
+
+def _title_guest_name_candidates(snap: Dict[str, Any]) -> List[str]:
+    """Names explicitly signaled in episode title (podcast guest patterns)."""
+    title = str(snap.get("title") or "").strip()
+    if not title:
+        return []
+    out: List[str] = []
+    for pat in (
+        r"\(\s*with\s+([^)]+)\)",
+        r"\bwith\s+([A-Z][A-Za-z.\-']+(?:\s+[A-Z][A-Za-z.\-']+){1,4})",
+    ):
+        for m in re.findall(pat, title, flags=re.IGNORECASE):
+            cand = str(m).strip(" -:;,.")
+            if cand and _looks_like_person_span(cand):
+                out.append(cand)
+    for seg in re.split(r"\s+[-–—]\s+", title):
+        seg = seg.strip()
+        if not seg:
+            continue
+        seg = re.sub(r"^#?\d+\s*", "", seg).strip()
+        m = re.match(r"^([A-Z][a-z]+(?:\s+[A-Z][a-z'.-]+){1,4})$", seg)
+        if m:
+            cand = m.group(1).strip()
+            if cand and _looks_like_person_span(cand):
+                out.append(cand)
+    dedup: List[str] = []
+    seen: Set[str] = set()
+    for n in out:
+        k = _normalize_person_name(n)
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        dedup.append(n.strip())
+    return dedup[:6]
+
+
+def _merged_person_spans_from_plain_text(text: str) -> List[str]:
+    if not (text or "").strip():
+        return []
+    words: List[str] = []
+    for raw in text.replace(",", " ").split():
+        w = _normalize_subject_token(raw)
+        if w:
+            words.append(w)
+    merged = _merge_capitalized_spans(words)
+    out: List[str] = []
+    for span in merged:
+        if _looks_like_person_span(span):
+            out.append(span.strip())
+    return out
+
+
+def _pick_claim_id_for_name(name: str, claim_rows: List[Dict[str, Any]]) -> str:
+    nl = (name or "").lower()
+    best = ""
+    for c in claim_rows or []:
+        if not isinstance(c, dict):
+            continue
+        cid = str(c.get("id") or "")
+        t = _safe_claim_text(c).lower()
+        if nl and nl in t and cid:
+            return cid
+    if claim_rows and isinstance(claim_rows[0], dict):
+        return str(claim_rows[0].get("id") or "")
+    return ""
+
+
+def _snippet_for_name_in_text(name: str, text: str, max_len: int = 200) -> str:
+    if not name or not text:
+        return ""
+    low = text.lower()
+    idx = low.find(name.lower())
+    if idx < 0:
+        return (text[:max_len] + ("…" if len(text) > max_len else "")).strip()
+    start = max(0, idx - 40)
+    end = min(len(text), idx + len(name) + 80)
+    sn = text[start:end].strip()
+    if start > 0:
+        sn = "…" + sn
+    if end < len(text):
+        sn = sn + "…"
+    if len(sn) > max_len:
+        sn = sn[: max_len - 1] + "…"
+    return sn
+
+
+def _guest_rows_from_episode_grounded_individuals(
+    r3: Dict[str, Any],
+    claim_rows_for_subjects: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Real people **only** when their names appear verbatim in title, claims, or evidence quotes.
+    Does not fabricate individuals to pad the guest table.
+    """
+    snap = r3.get("episode_snapshot") if isinstance(r3.get("episode_snapshot"), dict) else {}
+    ordered_names: List[str] = []
+    seen_n: Set[str] = set()
+
+    def _add_name(n: str) -> None:
+        n = (n or "").strip()
+        if not n or not _looks_like_person_span(n):
+            return
+        k = _normalize_person_name(n)
+        if not k or k in seen_n:
+            return
+        seen_n.add(k)
+        ordered_names.append(n)
+
+    for n in _title_guest_name_candidates(snap):
+        _add_name(n)
+
+    text_blobs: List[str] = []
+    for c in claim_rows_for_subjects or []:
+        t = _safe_claim_text(c)
+        if t.strip():
+            text_blobs.append(t)
+    for row in r3.get("evidence_mapping") or []:
+        if not isinstance(row, dict):
+            continue
+        ev = str(row.get("evidence") or "").strip()
+        if ev:
+            text_blobs.append(ev)
+        cl = str(row.get("claim") or "").strip()
+        if cl:
+            text_blobs.append(cl)
+
+    for blob in text_blobs:
+        for span in _merged_person_spans_from_plain_text(blob):
+            _add_name(span)
+
+    rows: List[Dict[str, Any]] = []
+    for name in ordered_names[:6]:
+        claim_id = _pick_claim_id_for_name(name, claim_rows_for_subjects)
+        angle_src = ""
+        for blob in text_blobs:
+            if name.lower() in blob.lower():
+                angle_src = blob
+                break
+        angle = _snippet_for_name_in_text(name, angle_src or (text_blobs[0] if text_blobs else ""))
+        rows.append(
+            {
+                "name": name,
+                "title": "Named in this episode (verbatim text)",
+                "role": "Episode figure",
+                "claim_id": claim_id,
+                "angle": angle or "Appears in episode title or structured claims / pull quotes.",
+                "topic_angle": "Grounded in episode text — not a model-invented person.",
+                "relevance": 10,
+                "source": "episode_grounded_person",
+            }
+        )
+    return rows
+
+
+def _merge_grounded_guest_rows_first(
+    grounded: List[Dict[str, Any]],
+    other: List[Dict[str, Any]],
+    *,
+    max_rows: int = 8,
+) -> List[Dict[str, Any]]:
+    """Prefer verbatim people; keep other rows only for non-overlapping names."""
+    if not grounded:
+        return other
+    gn = {_normalize_person_name(str(g.get("name") or "")) for g in grounded if str(g.get("name") or "").strip()}
+    keep_other: List[Dict[str, Any]] = []
+    for row in other or []:
+        if not isinstance(row, dict):
+            continue
+        nm = _normalize_person_name(str(row.get("name") or ""))
+        if nm and nm in gn:
+            continue
+        keep_other.append(row)
+    return (list(grounded) + keep_other)[:max_rows]
+
+
+def _report_v3_claim_rows_for_grounding(r3: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if not r3 or not isinstance(r3, dict):
+        return []
+    cr = [c for c in (r3.get("claims") or []) if isinstance(c, dict)]
+    if cr:
+        return cr
+    ap = r3.get("atomic_pipeline")
+    if isinstance(ap, dict):
+        return [c for c in (ap.get("claims") or []) if isinstance(c, dict)]
+    return []
+
+
+def _grounded_guest_name_allowlist_for_workflow(
+    report_v3: Optional[Dict[str, Any]],
+    transcript: str,
+) -> List[str]:
+    """
+    Verbatim people for LLM guest allowlists: v3 title/claims/evidence plus capitalized spans
+    from transcript (conservative heuristics — no invented names).
+    """
+    names: List[str] = []
+    seen: Set[str] = set()
+
+    def _add(n: str) -> None:
+        n = (n or "").strip()
+        if not n or not _looks_like_person_span(n):
+            return
+        k = _normalize_person_name(n)
+        if not k or k in seen:
+            return
+        seen.add(k)
+        names.append(n)
+
+    if report_v3 and isinstance(report_v3, dict):
+        crs = _report_v3_claim_rows_for_grounding(report_v3)
+        for g in _guest_rows_from_episode_grounded_individuals(report_v3, crs):
+            if isinstance(g, dict):
+                _add(str(g.get("name") or ""))
+
+    for span in _merged_person_spans_from_plain_text((transcript or "")[:1_200_000]):
+        _add(span)
+        if len(names) >= 24:
+            break
+    return names[:24]
+
+
+def _workflow_guest_rows_from_atomic_envelope(
+    ap: Dict[str, Any],
+    episode_snapshot: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
     """
     Build workflow guest rows (``guests`` / ``guest_recommendations``) directly from the v3 report's ``atomic_pipeline``
     (envelope JSON). Decoupled from v3 ``guests`` list and from legacy generic-guest heuristics
     so atomic graph output is not lost when claim/label text does not round-trip through v3 rows.
     Each row sets ``source`` = ``atomic_pipeline`` for downstream debugging.
+
+    ``name`` prefers **real public figures** from the static outreach pool; atomic role/topic stays in ``angle``.
     """
     raw = ap.get("guest_recommendations") or []
     if not isinstance(raw, list) or not raw:
         return []
     claims = [c for c in (ap.get("claims") or []) if isinstance(c, dict)]
     claim_by_id = {str(c.get("id")): c for c in claims if c.get("id")}
+    primary_cid = next(iter(claim_by_id.keys()), "a1") if claim_by_id else "a1"
+    subs = _extract_subject_entities_from_claims(claims)
+    snap = episode_snapshot if isinstance(episode_snapshot, dict) else {}
+    if not subs:
+        for key in ("primary_topic", "title", "creator"):
+            v = str(snap.get(key) or "").strip()
+            if v:
+                subs = [v]
+                break
+    domain = _infer_domain_from_entities(subs) if subs else "general_history"
+    outreach_named = _guest_rows_from_outreach_domain(str(domain), str(primary_cid), limit=8)
+    name_pool = [str(r.get("name") or "").strip() for r in outreach_named if str(r.get("name") or "").strip()]
     tg = ap.get("topic_graph") if isinstance(ap.get("topic_graph"), dict) else {}
     nodes = tg.get("nodes") if isinstance(tg.get("nodes"), list) else []
     topic_by_id = {
         str(n.get("topic_id")): n for n in nodes if isinstance(n, dict) and n.get("topic_id")
     }
     out: List[Dict[str, Any]] = []
+    j = 0
     for g in raw:
         if not isinstance(g, dict):
             continue
@@ -2277,12 +3164,18 @@ def _workflow_guest_rows_from_atomic_envelope(ap: Dict[str, Any]) -> List[Dict[s
         why = str(reason.get("primary_angle") or "").strip()
         if not why:
             why = str(reason.get("what_they_would_challenge") or "").strip()
+        role_ctx = f"{title_g} — {label[:120]}"
+        display_name = name_pool[j % len(name_pool)] if name_pool else f"{title_g} — {label[:120]}"
+        angle_text = why or _clean_claim_text(target_claim)[:240]
+        if name_pool and role_ctx:
+            angle_text = f"{angle_text} (Atomic angle: {role_ctx})" if angle_text else f"Atomic angle: {role_ctx}"
         claim_id = ""
         ecids = topic.get("evidence_claim_ids") or []
         if ecids:
-            claim_id = str(ecids[0])
+            claim_id = str(ecids[j % len(ecids)])
         elif claim_by_id:
-            claim_id = str(next(iter(claim_by_id.keys())))
+            klist = list(claim_by_id.keys())
+            claim_id = str(klist[j % len(klist)])
         try:
             rs = float(g.get("relevance_score") or 0.0)
         except (TypeError, ValueError):
@@ -2290,16 +3183,17 @@ def _workflow_guest_rows_from_atomic_envelope(ap: Dict[str, Any]) -> List[Dict[s
         rel = int(min(10, max(5, round(5 + rs * 5))))
         out.append(
             {
-                "name": f"{title_g} — {label[:120]}",
+                "name": display_name,
                 "title": gt,
                 "role": gt,
                 "claim_id": claim_id,
-                "angle": why or _clean_claim_text(target_claim)[:240],
-                "topic_angle": why or _clean_claim_text(target_claim)[:240],
+                "angle": angle_text,
+                "topic_angle": angle_text,
                 "relevance": rel,
                 "source": "atomic_pipeline",
             }
         )
+        j += 1
     return out[:6]
 
 
@@ -2487,6 +3381,48 @@ def _extract_subject_entities_from_claims(claims: List[Any]) -> List[str]:
 def _infer_domain_from_entities(entities: List[str]) -> str:
     """Map extracted entity names to a coarse subject domain (rule-based, no LLM)."""
     blob = " ".join(entities).lower()
+    if any(
+        k in blob
+        for k in (
+            "neuroscientist",
+            "neuroscience",
+            "neuroplasticity",
+            "brain plasticity",
+            "huberman",
+            "andrew huberman",
+            "circadian",
+            "dopamine",
+            "cortisol",
+            "optogenetics",
+            "synapse",
+            "hippocampus",
+            "amygdala",
+            "prefrontal",
+            "sensory system",
+            "physiology",
+            "brain regeneration",
+        )
+    ):
+        return "neuroscience_health"
+    if any(
+        k in blob
+        for k in (
+            "rockefeller",
+            "carnegie",
+            "foundation",
+            "education system",
+            "school system",
+            "curriculum",
+            "standardized",
+            "common core",
+            "pedagogy",
+            "charter school",
+            "department of education",
+            "brainwash",
+            "psyop",
+        )
+    ):
+        return "education_policy"
     if any(k in blob for k in ("billy", "jesse", "outlaw", "miller", "killer")):
         return "outlaw_history"
     if any(k in blob for k in ("lawman", "sheriff", "deputy", "marshal", "posse")):
@@ -2664,17 +3600,105 @@ _OUTREACH_BY_DOMAIN: Dict[str, Dict[str, List[Dict[str, str]]]] = {
             },
         ],
     },
+    "neuroscience_health": {
+        "experts": [
+            {
+                "name": "Robert Sapolsky",
+                "type": "neuroscientist / primatologist",
+                "why": "Stress, behavior, and how brain narratives get oversimplified in public talk.",
+                "angle": "Separates mechanistic strength from pop-brain storylines.",
+                "best_fit": "Neuroscience and behavior longforms where listeners may over-trust a simple mechanism.",
+                "outreach_hook": (
+                    "We extracted testable brain/behavior claims and want a mechanism-literate read—not vibes."
+                ),
+            },
+            {
+                "name": "Matthew Walker",
+                "type": "sleep scientist",
+                "why": "Sleep, circadian timing, and how performance claims should be qualified.",
+                "angle": "Prevents 'sleep = magic bullet' overclaims; grounds outcomes in what is well-supported.",
+                "best_fit": "Episodes linking brain health, recovery, and daily routines.",
+                "outreach_hook": "We want sleep-science defensibility for claims listeners will repeat in clips.",
+            },
+            {
+                "name": "Lisa Feldman Barrett",
+                "type": "psychologist / cognitive neuroscience (emotion)",
+                "why": "How language and context shape 'brain' explanations for broad audiences.",
+                "angle": "Catches over-simple 'this brain region does that' public narratives.",
+                "best_fit": "Episodes that mix emotion, mind, and neuroscience storytelling.",
+                "outreach_hook": "We want an accuracy pass on how brain claims are phrased for a general show.",
+            },
+        ],
+        "podcasts": [
+            {
+                "name": "Huberman Lab",
+                "why": "Deep-dive science communication for a broad audience.",
+                "pitch_angle": "We’re structuring claims the way serious science comm episodes should be stress-tested.",
+            },
+        ],
+    },
+    "education_policy": {
+        "experts": [
+            {
+                "name": "Diane Ravitch",
+                "type": "historian",
+                "why": "U.S. education policy, reform narratives, and what evidence actually supports.",
+                "angle": "Separates reform rhetoric from classroom and institutional reality.",
+                "best_fit": "Episodes debating school systems, standards, and incentives.",
+                "outreach_hook": (
+                    "We’re stress-testing claims about who shaped schools and what the record shows."
+                ),
+            },
+            {
+                "name": "Jonathan Kozol",
+                "type": "author",
+                "why": "Inequality, schooling, and how policy lands in real districts.",
+                "angle": "Grounds abstract ‘systems’ talk in lived outcomes.",
+                "best_fit": "Human-impact framing for education episodes.",
+                "outreach_hook": (
+                    "We want someone who can connect policy claims to what happens in classrooms."
+                ),
+            },
+            {
+                "name": "E.D. Hirsch Jr.",
+                "type": "education scholar",
+                "why": "Curriculum, cultural literacy, and what ‘standards’ actually change.",
+                "angle": "Tests whether the episode’s causal story about schooling holds up.",
+                "best_fit": "Curriculum- and standards-heavy episodes.",
+                "outreach_hook": (
+                    "We’re validating how curriculum and incentives interact in the claims we extracted."
+                ),
+            },
+        ],
+        "podcasts": [
+            {
+                "name": "Have You Heard",
+                "why": "Education policy and research for a general audience.",
+                "pitch_angle": "We structured claims about schooling—looking for policy-literate crossover.",
+            },
+        ],
+    },
     "general_history": {
         "experts": [
             {
-                "name": "Public historian / university faculty (local)",
-                "type": "expert",
-                "why": "Credible voice for fact-checking and context on your episode’s era.",
-                "angle": "What the primary record supports vs popular retellings.",
+                "name": "Jill Lepore",
+                "type": "historian",
+                "why": "American political and cultural history; narrative craft for serious audiences.",
+                "angle": "Separates myth from record and sharpens how claims are framed.",
                 "best_fit": "Credibility pass on a narrative-heavy episode.",
                 "outreach_hook": (
                     "We’re stress-testing our episode’s claims against the historical record—"
                     "would value your read."
+                ),
+            },
+            {
+                "name": "David W. Blight",
+                "type": "historian",
+                "why": "U.S. history, memory, and how public stories form around events.",
+                "angle": "Pressure-tests emotional beats against documented context.",
+                "best_fit": "Episodes where the story risks outpacing the evidence.",
+                "outreach_hook": (
+                    "We want a historian’s eye on whether our through-line matches how the field reads the sources."
                 ),
             },
         ],
@@ -2689,6 +3713,124 @@ _OUTREACH_BY_DOMAIN: Dict[str, Dict[str, List[Dict[str, str]]]] = {
         ],
     },
 }
+
+
+def _looks_like_specific_person_name(name: str) -> bool:
+    """Reject generic outreach placeholders; accept Firstname Lastname–style public figures."""
+    s = (name or "").strip()
+    if len(s) < 4:
+        return False
+    low = s.lower()
+    if any(
+        x in low
+        for x in (
+            "public historian",
+            "university faculty",
+            "faculty (local)",
+            "/ university",
+            "hypothetical",
+            "placeholder",
+            "podcast in your niche",
+            "show in your niche",
+        )
+    ):
+        return False
+    role_only = {
+        "historian",
+        "criminologist",
+        "anthropologist",
+        "economist",
+        "author",
+        "expert",
+        "journalist",
+        "researcher",
+        "psychologist",
+        "sociologist",
+    }
+    if low in role_only:
+        return False
+    parts = [p.strip(" .,\"'") for p in re.split(r"[\s,]+", s) if p.strip(" .,\"'\t")]
+    alpha = [p for p in parts if any(c.isalpha() for c in p)]
+    return len(alpha) >= 2
+
+
+def _guest_rows_from_outreach_domain(domain: str, claim_id: str, *, limit: int = 6) -> List[Dict[str, Any]]:
+    """Bookable rows backed by the static outreach pool (real names, not job-title-only labels)."""
+    block = _OUTREACH_BY_DOMAIN.get(domain) or _OUTREACH_BY_DOMAIN.get("general_history") or {}
+    experts = list(block.get("experts") or [])
+    rows: List[Dict[str, Any]] = []
+    for idx, ex in enumerate(experts[:limit]):
+        nm = str(ex.get("name") or "").strip()
+        if not _looks_like_specific_person_name(nm):
+            continue
+        typ = str(ex.get("type") or "expert").strip()
+        why = str(ex.get("why") or "").strip()
+        ang = str(ex.get("angle") or "").strip()
+        bf = str(ex.get("best_fit") or "").strip()
+        rows.append(
+            {
+                "name": nm,
+                "title": typ.title() if typ else "Expert",
+                "role": "subject_matter_expert",
+                "claim_id": claim_id,
+                "angle": why or ang,
+                "topic_angle": bf or ang or why or domain.replace("_", " ").title(),
+                "relevance": max(5, 10 - idx),
+                "source": "subject_fallback_tier3",
+                "reason": "named_public_figure_outreach_pool",
+            }
+        )
+    return rows
+
+
+def _extended_outreach_pool(domain: str, claim_id: str, *, need: int) -> List[Dict[str, Any]]:
+    """Enough distinct real names for overlaying archetype rows (falls back across domains)."""
+    seen: Set[str] = set()
+    out: List[Dict[str, Any]] = []
+    for dom in (
+        domain,
+        "neuroscience_health",
+        "education_policy",
+        "general_history",
+        "outlaw_history",
+        "economic_history",
+    ):
+        for r in _guest_rows_from_outreach_domain(str(dom), claim_id, limit=need):
+            nm = str(r.get("name") or "").strip()
+            if nm and nm not in seen:
+                seen.add(nm)
+                out.append(r)
+            if len(out) >= need:
+                return out
+    return out
+
+
+def _named_guest_rows_for_topic_r3(r3: Dict[str, Any], claim_id: str, *, need: int = 5) -> List[Dict[str, Any]]:
+    """
+    Bookable **named** rows for padding guest recommendations (avoids generic role-only archetypes).
+    """
+    snap = r3.get("episode_snapshot") or {}
+    title = str(snap.get("title") or "").strip()
+    primary_topic = str(snap.get("primary_topic") or "").strip()
+    subs: List[str] = []
+    for x in (title, primary_topic):
+        if x:
+            subs.append(x)
+    for c in (r3.get("claims") or [])[:8]:
+        if isinstance(c, dict):
+            t = str(c.get("text") or "").strip()
+            if len(t) >= 12:
+                subs.append(t[:280])
+    for ins in (r3.get("clean_insights") or [])[:5]:
+        s = str(ins).strip()
+        if len(s) >= 12:
+            subs.append(s[:280])
+    domain = _infer_domain_from_entities(subs) if subs else "general_history"
+    rows = _extended_outreach_pool(domain, claim_id, need=max(need, 4))
+    for i, r in enumerate(rows):
+        r.setdefault("source", "named_outreach_pad")
+        r.setdefault("relevance", max(5, 10 - i))
+    return rows[:need]
 
 
 def _outreach_targets_for_domain(domain: str) -> Dict[str, Any]:
@@ -2715,6 +3857,10 @@ def _should_emit_guest_outreach_targets(
     """
     if claim_rows_for_subjects and guests_from_subject_fallback:
         return True
+    if claim_rows_for_subjects:
+        for g in guest_recommendations or []:
+            if isinstance(g, dict) and str(g.get("source") or "") == "episode_grounded_person":
+                return True
     for g in guest_recommendations or []:
         if not isinstance(g, dict):
             continue
@@ -2729,14 +3875,24 @@ def _build_intelligent_guest_rows(
     claims: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Tier 3: map episode entities → domain → expert archetypes (sendable guest angles).
+    Tier 3: map episode entities → domain → **named** public figures from the outreach pool.
+
+    Falls back to role-only rows only when no vetted names exist for the domain.
     """
     claim_rows = claims or []
     domain = _infer_domain_from_entities(subjects)
-    archetypes = _DOMAIN_GUEST_MAP.get(domain) or _DOMAIN_GUEST_MAP["general_history"]
     cid0 = ""
     if claim_rows and isinstance(claim_rows[0], dict):
         cid0 = str(claim_rows[0].get("id") or "")
+    sig = ", ".join(subjects[:8])
+    main = _guest_rows_from_outreach_domain(domain, cid0, limit=6)
+    for row in main:
+        row.setdefault("entity_signals", sig)
+        row.setdefault("reason", "named_public_figure_outreach_pool")
+    if main:
+        return main
+
+    archetypes = _DOMAIN_GUEST_MAP.get(domain) or _DOMAIN_GUEST_MAP["general_history"]
     rows: List[Dict[str, Any]] = []
     for idx, (title, angle) in enumerate(archetypes[:5]):
         rows.append(
@@ -2750,22 +3906,66 @@ def _build_intelligent_guest_rows(
                 "relevance": max(5, 10 - idx),
                 "source": "subject_fallback_tier3",
                 "reason": "derived_from_entity_domain_mapping",
-                "entity_signals": ", ".join(subjects[:8]),
+                "entity_signals": sig,
             }
         )
     return rows
 
 
 def _subject_fallback_guest_rows_from_report_claims(
+    r3: Dict[str, Any],
     claims: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """Build Tier-3 expert archetype rows from v3 claim text; empty if nothing extractable."""
+    """
+    Prefer **bookable expert angles** (domain archetypes from claim entities), not transcript figures.
+
+    Verbatim people from the tape stay out of the primary guest table; use archetypes / issues-based
+    rows so hosts see historians, analysts, and producers — not Jesse James as a suggested guest.
+    """
     if not claims:
         return []
     subj = _extract_subject_entities_from_claims(claims)
-    if not subj:
-        return []
-    return _build_intelligent_guest_rows(subj, claims)
+    if subj:
+        built = _build_intelligent_guest_rows(subj, claims)
+        if built:
+            return built
+    cid = str(claims[0].get("id") or "c1")
+    arch = generate_guest_archetypes_from_issues(r3, cid, max_archetypes=4)
+    if arch:
+        return arch
+    return _topic_specific_guest_fallback(r3, cid)
+
+
+_BOOKING_TITLE_BY_GUEST_NAME: Dict[str, str] = {
+    "diane ravitch": "Education policy historian",
+    "jonathan kozol": "Author & public education advocate",
+    "e.d. hirsch jr.": "Education scholar (cultural literacy)",
+    "e.d. hirsch": "Education scholar (cultural literacy)",
+    "jill lepore": "Historian & essayist",
+    "david w. blight": "Historian (American slavery & memory)",
+    "katy milkman": "Behavioral scientist",
+    "diane f. halpern": "Psychologist (critical thinking)",
+}
+
+
+def _workflow_title_for_coach_strategy_guest(name: str) -> str:
+    """
+    ``coach_report.guest_strategy`` rows use ``guest_type`` as the display name and historically
+    set ``title`` to the meaningless word *Suggested* for the workflow table. Map known public
+    figures to a real booking title; otherwise use a neutral professional label.
+    """
+    nm = (name or "").strip()
+    if not nm:
+        return "Expert guest"
+    key = re.sub(r"\s+", " ", nm.lower()).strip()
+    if key in _BOOKING_TITLE_BY_GUEST_NAME:
+        return _BOOKING_TITLE_BY_GUEST_NAME[key]
+    parts = nm.split()
+    if len(parts) >= 2 and parts[0][0:1].isupper():
+        return "Expert guest (booking target)"
+    if len(parts) == 1 and nm[0:1].isupper() and len(nm) > 3:
+        return "Expert guest"
+    return nm[:56] + ("…" if len(nm) > 56 else "")
 
 
 def workflow_report_from_v3_report(r3: Dict[str, Any]) -> Dict[str, Any]:
@@ -2805,7 +4005,6 @@ def workflow_report_from_v3_report(r3: Dict[str, Any]) -> Dict[str, Any]:
                 "strength": row.get("strength", 7),
             }
         )
-    evidence_map = _sanitize_evidence_map_claims(evidence_map)
 
     follow_up: List[Dict[str, Any]] = []
     eng = r3.get("engagement_questions") or {}
@@ -2828,6 +4027,34 @@ def workflow_report_from_v3_report(r3: Dict[str, Any]) -> Dict[str, Any]:
                 )
 
     claims = [c for c in (r3.get("claims") or []) if isinstance(c, dict)]
+    snap = dict(r3.get("episode_snapshot") or {})
+    try:
+        from .episode_intelligence import (
+            _primary_topic_is_crime_news_template,
+            _refine_genre_from_title,
+            _sanitize_episode_snapshot,
+            _title_signals_education_or_institutions_history,
+            override_primary_topic_with_storyline,
+        )
+    except ImportError:
+        from episode_intelligence import (
+            _primary_topic_is_crime_news_template,
+            _refine_genre_from_title,
+            _sanitize_episode_snapshot,
+            _title_signals_education_or_institutions_history,
+            override_primary_topic_with_storyline,
+        )
+
+    _sanitize_episode_snapshot(snap, claims)
+    # Belt & braces: refine genre on the workflow snapshot too so downstream renderers never
+    # echo a stale "Entertainment" label when the title clearly signals education / politics / etc.
+    snap["genre"] = _refine_genre_from_title(
+        str(snap.get("title") or ""), str(snap.get("genre") or "")
+    )
+    evidence_map = _sanitize_evidence_map_claims(
+        evidence_map,
+        spine_hint=f"{snap.get('title') or ''} {snap.get('primary_topic') or ''}".strip(),
+    )
     # Subject / entity extraction may need atomic or evidence rows when top-level claims is empty.
     claim_rows_for_subjects = claims or _workflow_claim_rows_for_subject_fallback(r3)
 
@@ -2836,7 +4063,10 @@ def workflow_report_from_v3_report(r3: Dict[str, Any]) -> Dict[str, Any]:
     guests_from_subject_fallback = False
     ap = r3.get("atomic_pipeline")
     if isinstance(ap, dict) and ap:
-        ag = _workflow_guest_rows_from_atomic_envelope(ap)
+        ag = _workflow_guest_rows_from_atomic_envelope(
+            ap,
+            r3.get("episode_snapshot") if isinstance(r3.get("episode_snapshot"), dict) else None,
+        )
         if ag:
             guest_recommendations = ag
             guests_from_atomic_envelope = True
@@ -2877,7 +4107,7 @@ def workflow_report_from_v3_report(r3: Dict[str, Any]) -> Dict[str, Any]:
             guest_recommendations.append(
                 {
                     "name": gt,
-                    "title": "Suggested",
+                    "title": _workflow_title_for_coach_strategy_guest(gt),
                     "role": gt,
                     "claim_id": cid_gs,
                     "angle": adds,
@@ -2888,7 +4118,7 @@ def workflow_report_from_v3_report(r3: Dict[str, Any]) -> Dict[str, Any]:
             if len(guest_recommendations) >= 5:
                 break
     if not guest_recommendations:
-        sf = _subject_fallback_guest_rows_from_report_claims(claim_rows_for_subjects)
+        sf = _subject_fallback_guest_rows_from_report_claims(r3, claim_rows_for_subjects)
         if sf:
             guest_recommendations = sf
             guests_from_subject_fallback = True
@@ -2948,7 +4178,7 @@ def workflow_report_from_v3_report(r3: Dict[str, Any]) -> Dict[str, Any]:
     excluded_names = _extract_in_episode_names(r3)
     guest_recommendations = _filter_already_featured_guests(guest_recommendations, excluded_names)
     if not guest_recommendations:
-        sf = _subject_fallback_guest_rows_from_report_claims(claim_rows_for_subjects)
+        sf = _subject_fallback_guest_rows_from_report_claims(r3, claim_rows_for_subjects)
         if sf:
             guest_recommendations = sf
             guests_from_subject_fallback = True
@@ -2964,7 +4194,7 @@ def workflow_report_from_v3_report(r3: Dict[str, Any]) -> Dict[str, Any]:
     ):
         if not any(isinstance(g, dict) and g.get("guest_archetype") for g in guest_recommendations):
             extras = _filter_already_featured_guests(
-                _topic_specific_guest_fallback(r3, cid_fallback),
+                _named_guest_rows_for_topic_r3(r3, cid_fallback, need=5),
                 excluded_names,
             )
             guest_recommendations = _dedupe_guest_rows(guest_recommendations + extras)
@@ -2998,15 +4228,40 @@ def workflow_report_from_v3_report(r3: Dict[str, Any]) -> Dict[str, Any]:
         )
 
     aa = r3.get("analytics_actionable") or {}
+    storylines = [str(x).strip() for x in (aa.get("what_worked") or []) if str(x).strip()]
+    title_s = str(snap.get("title") or "").strip()
+    if title_s and _title_signals_education_or_institutions_history(title_s):
+        storylines = [x for x in storylines if not _primary_topic_is_crime_news_template(x)]
+    if not storylines:
+        pt_line = str(snap.get("primary_topic") or "").strip()
+        if pt_line and not _primary_topic_is_crime_news_template(pt_line):
+            storylines = [pt_line[:280]]
+        elif title_s and len(title_s) > 12:
+            storylines = [f"Through-line (from title/theme): {title_s[:220]}"]
     analytics = {
-        "storylines": list(aa.get("what_worked") or []),
+        "storylines": storylines[:5],
         "topic_signals": list(aa.get("what_failed") or []),
         "actionable_steps": list(aa.get("next_move") or []),
     }
 
+    # Second-pass primary_topic override now that analytics.storylines is available.
+    # Without this, the top-of-report "Core Narrative" can still show a stale crime-beat template
+    # (or the raw clickbait title) even though analytics correctly extracted the real thesis.
+    override_primary_topic_with_storyline(
+        snap,
+        storylines=analytics.get("storylines"),
+        narrative=(r3.get("narrative") if isinstance(r3.get("narrative"), list) else None),
+    )
+    # Propagate the sanitized + storyline-overridden snap back to r3 so the appendix / downstream
+    # renderers read the corrected primary_topic rather than the raw brief snapshot.
+    if isinstance(r3.get("episode_snapshot"), dict):
+        r3["episode_snapshot"]["primary_topic"] = snap.get("primary_topic")
+        if snap.get("why_it_matters"):
+            r3["episode_snapshot"]["why_it_matters"] = snap.get("why_it_matters")
+
     # Final circuit breaker before serializing workflow JSON (nothing below may clear guests).
     if not guest_recommendations and claim_rows_for_subjects:
-        tier3 = _subject_fallback_guest_rows_from_report_claims(claim_rows_for_subjects)
+        tier3 = _subject_fallback_guest_rows_from_report_claims(r3, claim_rows_for_subjects)
         if tier3:
             guest_recommendations = tier3
             guests_from_subject_fallback = True
@@ -3033,7 +4288,10 @@ def workflow_report_from_v3_report(r3: Dict[str, Any]) -> Dict[str, Any]:
     }
     if guest_outreach_targets is not None:
         out["guest_outreach_targets"] = guest_outreach_targets
-    _sanitize_workflow_highlights(out)
+    _sanitize_workflow_highlights(
+        out,
+        spine_hint=f"{snap.get('title') or ''} {snap.get('primary_topic') or ''}".strip(),
+    )
     sm = r3.get("signal_mode")
     if sm:
         out["signal_mode"] = sm
@@ -3129,7 +4387,12 @@ def soapboxx_v3_workflow_local(
     except ImportError:
         from episode_report_v3 import generate_episode_report_v3
 
-    meta = {k: str(v) for k, v in metadata.items() if v is not None}
+    transcript_cues = _normalize_transcript_cues(metadata.get("transcript_cues"))
+    meta = {
+        k: str(v)
+        for k, v in metadata.items()
+        if v is not None and k != "transcript_cues"
+    }
     if report_v3 is not None:
         r3 = report_v3
         source_warnings: List[str] = list(brief_warnings or [])
@@ -3289,6 +4552,20 @@ def soapboxx_v3_workflow_local(
     report["weak_claims"] = weak_claims or _detect_weak_claims_local(
         report.get("evidence_map") or []
     )
+    if transcript_cues:
+        fixed_r3 = _align_missing_timestamps_with_cues(
+            r3.get("evidence_mapping"),
+            transcript_cues,
+        )
+        fixed_report = _align_missing_timestamps_with_cues(
+            report.get("evidence_map"),
+            transcript_cues,
+        )
+        fixed = fixed_r3 + fixed_report
+        if fixed > 0:
+            source_warnings.append(
+                f"Aligned {fixed} evidence row timestamp(s) from transcript cues."
+            )
     attach_summary_and_score(report)
 
     if validate:
@@ -3563,6 +4840,7 @@ def generate_guest_recommendations(
     highlights: Optional[List[Dict[str, Any]]] = None,
     episode_meta: Optional[Dict[str, Any]] = None,
     transcript: str = "",
+    grounded_name_allowlist: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     claims = [str(e.get("claim")) for e in evidence_map if isinstance(e, dict) and e.get("claim")]
     quotes = [
@@ -3578,8 +4856,31 @@ def generate_guest_recommendations(
     ]
     claims_blob = claims if claims else ["(none — infer from TOPIC ANCHOR + transcript sample)"]
     anchor = _guest_topic_anchor_block(episode_meta, transcript or "")
+    allow = [str(x).strip() for x in (grounded_name_allowlist or []) if str(x).strip()]
+    allow_json = json.dumps(allow[:24], ensure_ascii=False)
+    booking_name_policy = """
+- **`name` (booking target):** A **real, publicly known** figure — format **Firstname Lastname** (or a
+  widely recognized public name such as **Pekka Hämäläinen**). Prefer authors, journalists, academics,
+  or practitioners **you know from verifiable public biography** in the episode’s domain. **Do not**
+  fabricate plausible-sounding fake people.
+- **`title`:** Their credential or role (e.g. "Professor of History, Yale"; "Staff writer, The Atlantic").
+- **Forbidden in `name`:** generic job labels alone ("Historian", "Skeptical expert", "Domain practitioner"),
+  pure archetypes, or bracket-only role descriptions.
+"""
+    if allow:
+        name_rules = f"""
+EPISODE_FIGURES_MENTIONED (verbatim strings from the transcript — **do not** use as guest `name`):
+{allow_json}
+- Those strings are **subjects inside the story**, not outreach targets. Recommend **outside** experts
+  (real named figures) who could contextualize, fact-check, or debate the same themes.
+{booking_name_policy}
+- `topic_focus` and `angle` must tie each expert to THIS episode's claims and stakes.
+"""
+    else:
+        name_rules = booking_name_policy
+    count_rule = "Return 3–4 guests when you can do so without inventing names; fewer is acceptable when the allowlist is short." if allow else "Return 3–4 guests."
     prompt = f"""
-TASK: Suggest 3–4 guests who are **topic-specific to THIS episode only** — not generic podcast guests.
+TASK: Suggest guests who are **topic-specific to THIS episode only** — not generic podcast guests.
 
 {anchor}{ctx}PULL-QUOTE LABELS (one line each — tie guests to these beats):
 {json.dumps(claims_blob[:14], ensure_ascii=False)}
@@ -3594,8 +4895,8 @@ STRICT RULES:
 - Each guest must address a **named sub-topic** that appears in the episode title, transcript sample, or quotes (e.g. industry, legal regime, geography, named conflict — not "leadership" unless the episode is about leadership).
 - **Forbidden:** vague archetypes with no domain tie ("communications expert", "life coach", "motivational speaker", "business consultant") unless the transcript explicitly supports that niche.
 - **Required:** `topic_focus` = 3–10 words naming the **specific thread** this guest speaks to (must echo language or domain from title/transcript/quotes when possible).
-- `name`: credible role label **including domain** (e.g. "Former federal prosecutor (RICO / narcotics)" not "Legal expert").
-- `title`: short professional title aligned with that domain.
+{name_rules}
+- `title`: short professional title aligned with that domain (or "Featured voice" when the best fit is a role label, not a named booking).
 - `angle`: one sentence: what they add **to this episode's argument or story** (cite mechanism, institution, or stake from context).
 - Map `maps_to_claim_id` to c1, c2, … when those ids exist; else c1.
 - `relevance`: 0–10 (how on-topic for THIS episode).
@@ -3617,7 +4918,7 @@ Inside "data" use exactly this shape (same guest list as v2 brief field name: ``
   ]
 }}
 
-Rules: 3–4 guests. "data" must be an object. Do NOT return a top-level JSON array.
+Rules: {count_rule} "data" must be an object. Do NOT return a top-level JSON array.
 """
     raw = call_llm_json(prompt, max_tokens=1400, client=client)
     rows_in: Any
@@ -3656,7 +4957,8 @@ Rules: 3–4 guests. "data" must be an object. Do NOT return a top-level JSON ar
             r = str(g.get("role") or "").strip()
             if r:
                 g["title"] = r
-    return out
+    _align_guest_ids_to_evidence_map(evidence_map, out)
+    return [g for g in out if _guest_name_is_plausible_booking(g)] or out
 
 
 def generate_segments(
@@ -3778,7 +5080,8 @@ def soapboxx_v3_workflow_cloud(
         evidence_map = generate_anchor_evidence_map(transcript, client=client, episode_meta=meta)
     evidence_map = _ensure_evidence_map_ids(evidence_map)
     evidence_map = _filter_grounded_evidence_map(transcript or "", evidence_map)
-    evidence_map = _sanitize_evidence_map_claims(evidence_map)
+    spine_h = f"{str(meta.get('title') or '')} {str(meta.get('primary_topic') or '')}".strip()
+    evidence_map = _sanitize_evidence_map_claims(evidence_map, spine_hint=spine_h)
     evidence_map = _ensure_evidence_map_nonempty(transcript or "", evidence_map)
     questions = generate_follow_up_questions(
         evidence_map,
@@ -3794,13 +5097,24 @@ def soapboxx_v3_workflow_cloud(
             client=client,
             episode_meta=meta,
         )
+    allow_cloud = _grounded_guest_name_allowlist_for_workflow(None, transcript or "")
     guests = generate_guest_recommendations(
         evidence_map,
         client=client,
         highlights=highlights,
         episode_meta=meta,
         transcript=transcript or "",
+        grounded_name_allowlist=allow_cloud if allow_cloud else None,
     )
+    if allow_cloud and not guests and evidence_map:
+        guests = generate_guest_recommendations(
+            evidence_map,
+            client=client,
+            highlights=highlights,
+            episode_meta=meta,
+            transcript=transcript or "",
+            grounded_name_allowlist=None,
+        )
     segments = generate_segments(evidence_map, highlights, client=client)
     analytics = generate_analytics(transcript, evidence_map, client=client, episode_meta=meta)
     weak_claims = detect_weak_claims(evidence_map, client=client)
@@ -3937,6 +5251,16 @@ if __name__ == "__main__":
         om = out.get("metadata")
         if isinstance(om, dict):
             om["editorial_pass_applied"] = True
+    # Belt & braces: workflow CLI historically wrote JSON right after editorial pass; always run
+    # the same export sanitizer the FeedbackEngine path uses so local runs match ``episode_brief``.
+    try:
+        from .episode_report_v3 import finalize_unified_markdown_export
+    except ImportError:  # pragma: no cover
+        from episode_report_v3 import finalize_unified_markdown_export  # type: ignore
+
+    out["markdown_export"] = finalize_unified_markdown_export(
+        str(out.get("markdown_export") or "")
+    )
     payload = json.dumps(out, indent=2, ensure_ascii=False)
     if args.output:
         outp = os.path.abspath(args.output)

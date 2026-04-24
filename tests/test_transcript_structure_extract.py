@@ -20,6 +20,16 @@ class TestTranscriptStructureExtract(unittest.TestCase):
         self.assertNotIn("Kind:", c)
         self.assertIn("Hi there", c)
 
+    def test_strip_youtube_caption_metadata_repeated_chunks(self) -> None:
+        raw = (
+            "Kind: captions Language: en When most people think about the Old West.\n"
+            "Kind: captions Language: en For every famous gunslinger there were dozens more."
+        )
+        s = tse.strip_youtube_caption_metadata(raw)
+        self.assertNotIn("Kind:", s)
+        self.assertIn("Old West", s)
+        self.assertIn("gunslinger", s)
+
     def test_build_rows_two_grounded_minimum(self) -> None:
         # Two substantive sentences with a hint phrase
         raw = (

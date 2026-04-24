@@ -1,0 +1,2160 @@
+{
+  "report_v3": {
+    "workflow_version": "3",
+    "signal_mode": "HIGH_SIGNAL",
+    "dual_lens": {
+      "episode_lens_type": "ANALYTICAL",
+      "confidence": 95,
+      "weights": {
+        "narrative": 0.2,
+        "analytical": 0.8
+      },
+      "prompt_injection": "This episode has been classified as: ANALYTICAL\n\nOptimization rules:\n\nIf ANALYTICAL:\n- Prioritize claims, arguments, and structured reasoning\n- Emphasize verification, counterarguments, and logic\n\nIf NARRATIVE:\n- Prioritize storytelling, interpersonal dynamics, and emotional context\n- Focus on memory, perception, and human tension\n- Avoid over-emphasizing claim verification or formal argumentation\n\nIf HYBRID:\n- Balance storytelling with analysis\n- Extract both narrative meaning and actionable insights\n\nCRITICAL:\n- Do not force analytical structure onto narrative content.\n- Do not ignore insights just because content is conversational.",
+      "normalized_input": {
+        "title": "Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+        "summary": "Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+        "transcript": "[00:00:10] Host: We went down this centralized path where everything in society was moving more and more towards centralization. Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.\n\n[00:02:00] Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well. The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.\n\n[00:05:30] Host: The Rockefeller family's influence on the education system is more pervasive than most people assume. It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.\n\n[00:08:00] Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight. Parents suddenly saw the curriculum stack and the incentives behind it.\n\n[00:11:00] Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens. The Rockefeller foundation and related networks stayed heavily invested in education policy narratives.\n\n[00:14:00] Guest: School choice is one counter-pressure people talk about. Studies are cited on both sides. The honest frame is: choice changes incentives, but it is not a magic wand if the underlying standards stay centralized.\n\n[00:17:00] Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a reminder that whoever controls curriculum controls the future a generation later.\n\n[00:20:00] Guest: Iron Company guards and the Colorado National Guard show up in history books as corporate and state violence against workers. The point for this episode is how centralized institutions align when their interests feel threatened.\n\n[00:23:00] Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases. Listeners should verify what applies in their district rather than assuming a national uniform rule.\n\n[00:26:00] Guest: If you are just a speck in a standardized system, the political question is how you rebuild agency without pretending the system does not exist.\n\n[00:29:00] Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities.",
+        "entities": [],
+        "topics": [
+          "Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+          "Entertainment"
+        ],
+        "tone_signals": [],
+        "structure_signals": [
+          "claim_count:19",
+          "narrative_bullet_count:0",
+          "transcript_word_count:415"
+        ]
+      },
+      "narrative_lens": {
+        "lens": "narrative",
+        "core_story": "Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410 Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410 Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+        "stakes": [],
+        "dynamics": [
+          "Theme 1: The show is treating this as actionable for the listener, not background noise.",
+          "Theme 2: The show is treating this as actionable for the listener, not background noise.",
+          "Theme 3: The show is treating this as actionable for the listener, not background noise."
+        ],
+        "memory_and_perception": [],
+        "open_loops": [
+          "What would a domain expert challenge about 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.'?",
+          "What concrete evidence would confirm or disprove 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.' this month?",
+          "What one change should a listener make tomorrow based on 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.'?"
+        ],
+        "clip_hooks_narrative": []
+      },
+      "analytical_lens": {
+        "lens": "analytical",
+        "thesis_candidate": "Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+        "claims": [
+          {
+            "text": "Host: We went down this centralized path where everything in society was moving more and more towards centralization.",
+            "kind": "interpretation",
+            "support": "Aligned to brief claim row.",
+            "falsifier": "Disconfirming evidence, expert pushback, or missing mechanism."
+          },
+          {
+            "text": "Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.",
+            "kind": "interpretation",
+            "support": "Aligned to brief claim row.",
+            "falsifier": "Disconfirming evidence, expert pushback, or missing mechanism."
+          },
+          {
+            "text": "Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.",
+            "kind": "interpretation",
+            "support": "Aligned to brief claim row.",
+            "falsifier": "Disconfirming evidence, expert pushback, or missing mechanism."
+          },
+          {
+            "text": "The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.",
+            "kind": "interpretation",
+            "support": "Aligned to brief claim row.",
+            "falsifier": "Disconfirming evidence, expert pushback, or missing mechanism."
+          },
+          {
+            "text": "Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.",
+            "kind": "interpretation",
+            "support": "Aligned to brief claim row.",
+            "falsifier": "Disconfirming evidence, expert pushback, or missing mechanism."
+          },
+          {
+            "text": "It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.",
+            "kind": "interpretation",
+            "support": "Aligned to brief claim row.",
+            "falsifier": "Disconfirming evidence, expert pushback, or missing mechanism."
+          },
+          {
+            "text": "Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.",
+            "kind": "interpretation",
+            "support": "Aligned to brief claim row.",
+            "falsifier": "Disconfirming evidence, expert pushback, or missing mechanism."
+          },
+          {
+            "text": "Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens.",
+            "kind": "interpretation",
+            "support": "Aligned to brief claim row.",
+            "falsifier": "Disconfirming evidence, expert pushback, or missing mechanism."
+          }
+        ],
+        "incentives_and_stakes": [],
+        "logic_gaps": [],
+        "verification_moves": [],
+        "clip_hooks_analytical": []
+      },
+      "synthesis": {
+        "lens": "synthesis",
+        "episode_type_used": "ANALYTICAL",
+        "weights_used": {
+          "narrative": 0.2,
+          "analytical": 0.8
+        },
+        "core_positioning": "Lead with argument integrity and verification moves (80% analytical weight); use narrative only as audience context (20%). Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+        "collision_notes": [
+          "Sparse brief hooks for both lenses — expand transcript grounding before packaging."
+        ],
+        "differentiation_line": "Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+        "execution_bias": {
+          "clips": "Weight clips toward claims, contradictions, and verification moments.",
+          "actions": "Weight next actions toward fact-checks, expert validation, and structured follow-ups."
+        },
+        "risk_flags": []
+      },
+      "engine_prompts": {
+        "narrative": "You are the Narrative Lens for a podcast intelligence system.\n\nYou receive a single normalized input object (shared across all engines). Treat it as\nthe only source of truth; do not invent entities or topics not grounded there.\n\nShape (fields may be empty arrays when unknown):\n{{\n  \"title\": \"...\",\n  \"summary\": \"...\",\n  \"transcript\": \"...\",\n  \"entities\": [],\n  \"topics\": [],\n  \"tone_signals\": [],\n  \"structure_signals\": []\n}}\n\nYour job:\n- Surface story, dynamics, memory, stakes, and human tension.\n- Name who is involved and how relationships or roles shift (when inferable from input).\n- Call out beats: setup, turn, resolution or open loop — even if implicit.\n- Prefer concrete scene language over abstract labels.\n\nHard rules:\n- Do not fabricate events absent from transcript/summary; you may infer *dynamics* only\n  when strongly supported by repeated themes or explicit speaker intent.\n- Do not optimize for \"sounding smart\"; optimize for clarity of what happened emotionally\n  and interpersonally.\n- If the input is thin, say what is thin and what is still fair to infer (one short line).\n\nOutput (JSON only, no markdown fences):\n{\n  \"lens\": \"narrative\",\n  \"core_story\": \"2–4 sentences\",\n  \"stakes\": [\"max 4 bullets\"],\n  \"dynamics\": [\"max 5 bullets: relationships, power, vulnerability, conflict, alliance\"],\n  \"memory_and_perception\": [\"max 4 bullets: how speakers frame past, identity, blame, hope\"],\n  \"open_loops\": [\"max 3 unresolved tensions or unanswered questions grounded in input\"],\n  \"clip_hooks_narrative\": [\"max 3: moment types worth cutting for story — not raw timestamps unless given\"]\n}",
+        "analytical": "You are the Analytical Lens for a podcast intelligence system.\n\nYou receive a single normalized input object (shared across all engines). Treat it as\nthe only source of truth; do not invent entities or topics not grounded there.\n\nShape (fields may be empty arrays when unknown):\n{{\n  \"title\": \"...\",\n  \"summary\": \"...\",\n  \"transcript\": \"...\",\n  \"entities\": [],\n  \"topics\": [],\n  \"tone_signals\": [],\n  \"structure_signals\": []\n}}\n\nYour job:\n- Extract defensible claims, incentives, mechanisms, and what would falsify them.\n- Separate evidence-supported assertions from belief or interpretation (tag each).\n- Surface counterarguments, missing proof, and logical leaps.\n\nHard rules:\n- Every non-trivial claim must tie to something in transcript/summary (paraphrase is fine).\n- Prefer \"what we can say\" over \"nice sounding thesis\".\n- If evidence is anecdotal only, say so explicitly.\n\nOutput (JSON only, no markdown fences):\n{\n  \"lens\": \"analytical\",\n  \"thesis_candidate\": \"one sentence: the strongest arguable through-line (may be qualified)\",\n  \"claims\": [\n    {\n      \"text\": \"one sentence\",\n      \"kind\": \"fact|interpretation|belief\",\n      \"support\": \"brief: what in the input backs this (or 'thin / anecdotal only')\",\n      \"falsifier\": \"what would prove this wrong or incomplete\"\n    }\n  ],\n  \"incentives_and_stakes\": [\"max 4 bullets: who benefits, what is being sold, reputational risk\"],\n  \"logic_gaps\": [\"max 4: leaps, missing premises, correlation vs causation, etc.\"],\n  \"verification_moves\": [\"max 4 concrete checks: data, expert, document, counter-interview\"],\n  \"clip_hooks_analytical\": [\"max 3: contradiction, strong claim, or methodological tension worth cutting\"]\n}",
+        "synthesis": "You are the Synthesis Layer. You receive:\n1) The same normalized input object (source of truth)\n2) JSON output from the Narrative Lens\n3) JSON output from the Analytical Lens\n4) Episode classification: NARRATIVE | ANALYTICAL | HYBRID\n5) Weights: narrative_weight and analytical_weight (0–1, sum to 1)\n\nYou receive a single normalized input object (shared across all engines). Treat it as\nthe only source of truth; do not invent entities or topics not grounded there.\n\nShape (fields may be empty arrays when unknown):\n{{\n  \"title\": \"...\",\n  \"summary\": \"...\",\n  \"transcript\": \"...\",\n  \"entities\": [],\n  \"topics\": [],\n  \"tone_signals\": [],\n  \"structure_signals\": []\n}}\n\nYour job:\n- Do NOT duplicate long lists from the two lenses; reference them by theme.\n- Produce collisions: where story framing and evidence/logic agree or disagree.\n- State one clear \"so what\" for a creator or editor (what to do with this episode).\n\nWeighting:\n- Core positioning and execution guidance should reflect the dominant lens without\n  silencing the secondary lens.\n- If classification is NARRATIVE: lead with human/story implications; analytical as guardrails.\n- If ANALYTICAL: lead with argument integrity; narrative as context for why audiences care.\n- If HYBRID: explicit 50/50 balance in the synthesis paragraphs.\n\nHard rules:\n- If the analytical lens says evidence is thin, the synthesis must not pretend certainty.\n- If the narrative lens flags open loops, the synthesis should not \"close\" them without support.\n- No generic praise; every sentence should earn its place.\n\nOutput (JSON only, no markdown fences):\n{\n  \"lens\": \"synthesis\",\n  \"episode_type_used\": \"NARRATIVE|ANALYTICAL|HYBRID\",\n  \"weights_used\": { \"narrative\": 0.0, \"analytical\": 0.0 },\n  \"core_positioning\": \"2–3 sentences; dominant-lens voice\",\n  \"collision_notes\": [\n    \"max 4: each states agreement or tension between narrative and analytical reads\"\n  ],\n  \"differentiation_line\": \"one sentence: the sharpest honest positioning line for marketing or packaging\",\n  \"execution_bias\": {\n    \"clips\": \"one line: lean narrative-heavy vs analytical-heavy and why\",\n    \"actions\": \"one line: lean narrative-heavy vs analytical-heavy and why\"\n  },\n  \"risk_flags\": [\"max 3: misframing risks if grounding is weak\"]\n}"
+      }
+    },
+    "coach_report": {
+      "signal_mode": "HIGH_SIGNAL",
+      "output_mode": "full",
+      "episode_diagnosis": {
+        "mode": "HIGH_SIGNAL",
+        "body": [
+          "**Thesis (one sentence):** Brainwash!",
+          "**Retention:** One thesis → one repeatable idea for clips and shares."
+        ]
+      },
+      "thesis_quality": null,
+      "episode_thesis": "Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+      "personalized_intro": "*For **Julian Dorey**'s show - **Education / Society** format - tailored to this episode:*",
+      "contrarian_hook": {
+        "title": "The angle listeners might miss",
+        "body": "The edit points at: Claims that lack timestamped or third-party verification. — the hidden angle is often **who benefits** if listeners stay emotional but never name the rule, sponsor, or metric. Say that actor once, on mic."
+      },
+      "uncomfortable_insight": {
+        "title": "Where the argument breaks under pressure",
+        "body": "The pressure point is: Claims that lack timestamped or third-party verification. If your thesis is “Brainwash!”, ask what would make you *wrong* on mic — not just what would make you sound fair. Someone scanning only the title may expect a harder verdict on “Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor ” than the conversation actually delivers."
+      },
+      "claim_stakes": [
+        "**[a1]** Host: We went down this centralized path where everything in society was moving more and more towards centralization. — *On mic:* What one change should a listener make tomorrow based on 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.'?",
+        "**[a2]** Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people. — *On mic:* What one change should a listener make tomorrow based on 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.'?",
+        "**[a3]** Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well. — *On mic:* What one change should a listener make tomorrow based on 'Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and school…",
+        "**[a4]** The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind. — *On mic:* What one change should a listener make tomorrow based on 'The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.'?",
+        "**[a5]** Host: The Rockefeller family's influence on the education system is more pervasive than most people assume. — *On mic:* What one change should a listener make tomorrow based on 'Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.'?"
+      ],
+      "themes": [
+        {
+          "label": "Theme 1",
+          "discussed": "Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        },
+        {
+          "label": "Theme 2",
+          "discussed": "Host: We went down this centralized path where everything in society was moving more and more towards centralization.",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        },
+        {
+          "label": "Theme 3",
+          "discussed": "Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        },
+        {
+          "label": "Theme 4",
+          "discussed": "The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        }
+      ],
+      "what_worked": [
+        "Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410"
+      ],
+      "where_it_breaks": {
+        "issues": [
+          "Claims that lack timestamped or third-party verification."
+        ],
+        "rule": "Every segment must point back to the thesis; if it doesn't, it's a different episode."
+      },
+      "opportunities": {
+        "spinoff_title": "Deeper on: Host: We went down this centralized path where everythin…",
+        "spinoff_structure": "(1) State the single problem. (2) One framework or story. (3) One listener action. (4) What you'll measure.",
+        "clip_moments": [
+          "Anchor clips to the episode thesis: Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410"
+        ],
+        "segment_idea": "Add a tight \"Thesis line\" block that forces one conclusion before you move topics - fixes drift without new gear."
+      },
+      "follow_up_questions": [
+        "What would a domain expert challenge about 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.'?",
+        "What concrete evidence would confirm or disprove 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.' this month?",
+        "What one change should a listener make tomorrow based on 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.'?",
+        "What would a domain expert challenge about 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.'?",
+        "What concrete evidence would confirm or disprove 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.' this month?",
+        "What one change should a listener make tomorrow based on 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.'?"
+      ],
+      "guest_strategy": {
+        "intro": "Expert guests (specific authority) - bring verification, edge cases, and citations tied to your thesis.",
+        "guests": [
+          {
+            "guest_type": "Diane Ravitch",
+            "adds": "U.S. education policy and reform narratives — stress-tests institutional claims with evidence."
+          }
+        ]
+      },
+      "segment_upgrade": "**Single-ladder close (90s):** (1) One-sentence thesis. (2) One example or number. (3) One behavior change. Fixes \"outline without payoff\" in a high_signal episode.",
+      "immediate_fix_plan": [
+        "Pressure-test the strongest claim with one dedicated segment next episode.",
+        "Say your thesis out loud in the cold open; if you can't, rewrite before you record.",
+        "Cut one competing topic and schedule it as a separate episode."
+      ],
+      "bottom_line": {
+        "good": "There is raw material and intent - enough to coach.",
+        "must_change": "Tighten evidence and conclusion around the lead claim.",
+        "if_fixed": "Retention, clips, and referrals rise when listeners can repeat your idea in one sentence."
+      },
+      "meta": {
+        "title": "Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+        "transcript_words": 391
+      }
+    },
+    "episode_snapshot": {
+      "title": "Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+      "creator": "Julian Dorey",
+      "genre": "Education / Society",
+      "primary_topic": "Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+      "why_it_matters": ""
+    },
+    "narrative_reconstruction": {
+      "core_thesis": "Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+      "supporting_mechanism": "Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+      "practical_translation": "Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+      "reconstructed": true
+    },
+    "clean_insights": [
+      "Host: We went down this centralized path where everything in society was moving more and more towards centralization.",
+      "Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.",
+      "The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.",
+      "It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.",
+      "Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight."
+    ],
+    "evidence_mapping": [
+      {
+        "id": "a1",
+        "timestamp": 10.0,
+        "claim": "Host: We went down this centralized path where everything in society was moving more and more towards centralization.",
+        "function": "anecdote",
+        "usage": "Use as a story beat to humanize the argument.",
+        "evidence": "Host: We went down this centralized path where everything in society was moving more and more towards centralization.",
+        "confidence": 1.0,
+        "source_type": "direct_statement",
+        "type": "interpretive"
+      },
+      {
+        "id": "a2",
+        "timestamp": 10.0,
+        "claim": "Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.",
+        "function": "supports_argument",
+        "usage": "Use as a framing claim for the episode thesis.",
+        "evidence": "Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.",
+        "confidence": 1.0,
+        "source_type": "direct_statement",
+        "type": "interpretive"
+      },
+      {
+        "id": "a3",
+        "timestamp": 120.0,
+        "claim": "Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.",
+        "function": "anecdote",
+        "usage": "Use as a story beat to humanize the argument.",
+        "evidence": "Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good.",
+        "confidence": 1.0,
+        "source_type": "direct_statement",
+        "type": "interpretive"
+      },
+      {
+        "id": "a4",
+        "timestamp": 120.0,
+        "claim": "The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.",
+        "function": "supports_argument",
+        "usage": "Use as a framing claim for the episode thesis.",
+        "evidence": "The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.",
+        "confidence": 1.0,
+        "source_type": "direct_statement",
+        "type": "interpretive"
+      },
+      {
+        "id": "a5",
+        "timestamp": 330.0,
+        "claim": "Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.",
+        "function": "supports_argument",
+        "usage": "Use as a framing claim for the episode thesis.",
+        "evidence": "Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.",
+        "confidence": 1.0,
+        "source_type": "direct_statement",
+        "type": "interpretive"
+      },
+      {
+        "id": "a6",
+        "timestamp": 330.0,
+        "claim": "It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.",
+        "function": "anecdote",
+        "usage": "Use as a story beat to humanize the argument.",
+        "evidence": "It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.",
+        "confidence": 1.0,
+        "source_type": "direct_statement",
+        "type": "interpretive"
+      },
+      {
+        "id": "a7",
+        "timestamp": 480.0,
+        "claim": "Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.",
+        "function": "anecdote",
+        "usage": "Use as a story beat to humanize the argument.",
+        "evidence": "Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.",
+        "confidence": 1.0,
+        "source_type": "direct_statement",
+        "type": "interpretive"
+      },
+      {
+        "id": "a8",
+        "timestamp": 660.0,
+        "claim": "Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens.",
+        "function": "mechanism",
+        "usage": "Use as a teaching segment that explains cause-and-effect.",
+        "evidence": "Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens.",
+        "confidence": 1.0,
+        "source_type": "direct_statement",
+        "type": "interpretive"
+      },
+      {
+        "id": "a9",
+        "timestamp": 840.0,
+        "claim": "The honest frame is: choice changes incentives, but it is not a magic wand if the underlying standards stay centralized.",
+        "function": "supports_argument",
+        "usage": "Use as a framing claim for the episode thesis.",
+        "evidence": "The honest frame is: choice changes incentives, but it is not a magic wand if the underlying standards stay centralized.",
+        "confidence": 1.0,
+        "source_type": "direct_statement",
+        "type": "interpretive"
+      },
+      {
+        "id": "a10",
+        "timestamp": 1020.0,
+        "claim": "Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a reminder that whoever controls curriculum controls the future a generation later.",
+        "function": "supports_argument",
+        "usage": "Use as a framing claim for the episode thesis.",
+        "evidence": "Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a.",
+        "confidence": 1.0,
+        "source_type": "direct_statement",
+        "type": "interpretive"
+      },
+      {
+        "id": "a11",
+        "timestamp": 1200.0,
+        "claim": "Guest: Iron Company guards and the Colorado National Guard show up in history books as corporate and state violence against workers.",
+        "function": "anecdote",
+        "usage": "Use as a story beat to humanize the argument.",
+        "evidence": "Guest: Iron Company guards and the Colorado National Guard show up in history books as corporate and state violence against workers.",
+        "confidence": 1.0,
+        "source_type": "direct_statement",
+        "type": "interpretive"
+      },
+      {
+        "id": "a12",
+        "timestamp": 1200.0,
+        "claim": "The point for this episode is how centralized institutions align when their interests feel threatened.",
+        "function": "supports_argument",
+        "usage": "Use as a framing claim for the episode thesis.",
+        "evidence": "The point for this episode is how centralized institutions align when their interests feel threatened.",
+        "confidence": 1.0,
+        "source_type": "direct_statement",
+        "type": "interpretive"
+      },
+      {
+        "id": "a13",
+        "timestamp": 1380.0,
+        "claim": "Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases.",
+        "function": "supports_argument",
+        "usage": "Use as a framing claim for the episode thesis.",
+        "evidence": "Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases.",
+        "confidence": 1.0,
+        "source_type": "direct_statement",
+        "type": "interpretive"
+      },
+      {
+        "id": "a14",
+        "timestamp": 1380.0,
+        "claim": "Listeners should verify what applies in their district rather than assuming a national uniform rule.",
+        "function": "supports_argument",
+        "usage": "Use as a framing claim for the episode thesis.",
+        "evidence": "Listeners should verify what applies in their district rather than assuming a national uniform rule.",
+        "confidence": 1.0,
+        "source_type": "direct_statement",
+        "type": "interpretive"
+      },
+      {
+        "id": "a15",
+        "timestamp": 1560.0,
+        "claim": "Guest: If you are just a speck in a standardized system, the political question is how you rebuild agency without pretending the system does not exist.",
+        "function": "supports_argument",
+        "usage": "Use as a framing claim for the episode thesis.",
+        "evidence": "Guest: If you are just a speck in a standardized system, the political question is how you rebuild agency without pretending the system does.",
+        "confidence": 1.0,
+        "source_type": "direct_statement",
+        "type": "interpretive"
+      },
+      {
+        "id": "a16",
+        "timestamp": 1740.0,
+        "claim": "Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities.",
+        "function": "supports_argument",
+        "usage": "Use as a framing claim for the episode thesis.",
+        "evidence": "Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities.",
+        "confidence": 1.0,
+        "source_type": "direct_statement",
+        "type": "interpretive"
+      },
+      {
+        "id": "a17",
+        "timestamp": 660.0,
+        "claim": "The Rockefeller foundation and related networks stayed heavily invested in education policy narratives.",
+        "function": "supports_argument",
+        "usage": "Use as a framing claim for the episode thesis.",
+        "evidence": "The Rockefeller foundation and related networks stayed heavily invested in education policy narratives.",
+        "confidence": 1.0,
+        "source_type": "direct_statement",
+        "type": "interpretive"
+      },
+      {
+        "id": "a18",
+        "timestamp": 840.0,
+        "claim": "Guest: School choice is one counter-pressure people talk about.",
+        "function": "supports_argument",
+        "usage": "Use as a framing claim for the episode thesis.",
+        "evidence": "Guest: School choice is one counter-pressure people talk about.",
+        "confidence": 1.0,
+        "source_type": "direct_statement",
+        "type": "interpretive"
+      },
+      {
+        "id": "a19",
+        "timestamp": 840.0,
+        "claim": "Studies are cited on both sides.",
+        "function": "supports_argument",
+        "usage": "Use as a framing claim for the episode thesis.",
+        "evidence": "Studies are cited on both sides.",
+        "confidence": 1.0,
+        "source_type": "direct_statement",
+        "type": "interpretive"
+      }
+    ],
+    "strategies": [
+      {
+        "insight": "Host: We went down this centralized path where everything in society was moving more and more towards centralization.",
+        "application": "Convert this into one weekly test: Host: We went down this centralized path where everything in society was moving more and more to…",
+        "content_angle": "Use this as a segment hook, then pressure-test it with one counterexample."
+      },
+      {
+        "insight": "Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.",
+        "application": "Convert this into one weekly test: Power, media, authority, schooling — when those drift together it rarely ends well for ordinary …",
+        "content_angle": "Use this as a segment hook, then pressure-test it with one counterexample."
+      },
+      {
+        "insight": "The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.",
+        "application": "Convert this into one weekly test: The Prussian model of schooling was imported into the United States with industrial-scale discip…",
+        "content_angle": "Use this as a segment hook, then pressure-test it with one counterexample."
+      },
+      {
+        "insight": "It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.",
+        "application": "Convert this into one weekly test: It is not a cartoon villain story; it is about funding flows, standards, and what gets treated a…",
+        "content_angle": "Use this as a segment hook, then pressure-test it with one counterexample."
+      },
+      {
+        "insight": "Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.",
+        "application": "Convert this into one weekly test: Guest: We see especially with education, during COVID, how disastrous it was when schooling beca…",
+        "content_angle": "Use this as a segment hook, then pressure-test it with one counterexample."
+      }
+    ],
+    "engagement_questions": {
+      "a1": {
+        "failure_case": "When does 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.' fail, even if the intent is right?",
+        "constraint": "What real-world constraint blocks 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.' despite effort?",
+        "contrarian": "What would a domain expert challenge about 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.'?",
+        "application": "What one change should a listener make tomorrow based on 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.'?",
+        "counterpunch": "What would a domain expert challenge about 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.'?",
+        "validation": "What concrete evidence would confirm or disprove 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.' this month?"
+      },
+      "a2": {
+        "failure_case": "When does 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.' fail, even if the intent is right?",
+        "constraint": "What real-world constraint blocks 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.' despite effort?",
+        "contrarian": "What would a domain expert challenge about 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.'?",
+        "application": "What one change should a listener make tomorrow based on 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.'?",
+        "counterpunch": "What would a domain expert challenge about 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.'?",
+        "validation": "What concrete evidence would confirm or disprove 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.' this month?"
+      },
+      "a3": {
+        "failure_case": "When does 'Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.' fail, even if the intent is right?",
+        "constraint": "What real-world constraint blocks 'Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.' despite effort?",
+        "contrarian": "What would a domain expert challenge about 'Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.'?",
+        "application": "What one change should a listener make tomorrow based on 'Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.'?",
+        "counterpunch": "What would a domain expert challenge about 'Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.'?",
+        "validation": "What concrete evidence would confirm or disprove 'Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.' this month?"
+      },
+      "a4": {
+        "failure_case": "When does 'The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.' fail, even if the intent is right?",
+        "constraint": "What real-world constraint blocks 'The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.' despite effort?",
+        "contrarian": "What would a domain expert challenge about 'The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.'?",
+        "application": "What one change should a listener make tomorrow based on 'The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.'?",
+        "counterpunch": "What would a domain expert challenge about 'The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.'?",
+        "validation": "What concrete evidence would confirm or disprove 'The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.' this month?"
+      },
+      "a5": {
+        "failure_case": "When does 'Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.' fail, even if the intent is right?",
+        "constraint": "What real-world constraint blocks 'Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.' despite effort?",
+        "contrarian": "What would a domain expert challenge about 'Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.'?",
+        "application": "What one change should a listener make tomorrow based on 'Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.'?",
+        "counterpunch": "What would a domain expert challenge about 'Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.'?",
+        "validation": "What concrete evidence would confirm or disprove 'Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.' this month?"
+      },
+      "a6": {
+        "failure_case": "When does 'It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.' fail, even if the intent is right?",
+        "constraint": "What real-world constraint blocks 'It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.' despite effort?",
+        "contrarian": "What would a domain expert challenge about 'It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.'?",
+        "application": "What one change should a listener make tomorrow based on 'It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.'?",
+        "counterpunch": "What would a domain expert challenge about 'It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.'?",
+        "validation": "What concrete evidence would confirm or disprove 'It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.' this month?"
+      },
+      "a7": {
+        "failure_case": "When does 'Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.' fail, even if the intent is right?",
+        "constraint": "What real-world constraint blocks 'Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.' despite effort?",
+        "contrarian": "What would a domain expert challenge about 'Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.'?",
+        "application": "What one change should a listener make tomorrow based on 'Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.'?",
+        "counterpunch": "What would a domain expert challenge about 'Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.'?",
+        "validation": "What concrete evidence would confirm or disprove 'Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.' this month?"
+      },
+      "a8": {
+        "failure_case": "When does 'Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens.' fail, even if the intent is right?",
+        "constraint": "What real-world constraint blocks 'Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens.' despite effort?",
+        "contrarian": "What would a domain expert challenge about 'Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens.'?",
+        "application": "What one change should a listener make tomorrow based on 'Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens.'?",
+        "counterpunch": "What would a domain expert challenge about 'Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens.'?",
+        "validation": "What concrete evidence would confirm or disprove 'Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens.' this month?"
+      },
+      "a9": {
+        "failure_case": "When does 'The honest frame is: choice changes incentives, but it is not a magic wand if the underlying standards stay centralized.' fail, even if the intent is right?",
+        "constraint": "What real-world constraint blocks 'The honest frame is: choice changes incentives, but it is not a magic wand if the underlying standards stay centralized.' despite effort?",
+        "contrarian": "What would a domain expert challenge about 'The honest frame is: choice changes incentives, but it is not a magic wand if the underlying standards stay centralized.'?",
+        "application": "What one change should a listener make tomorrow based on 'The honest frame is: choice changes incentives, but it is not a magic wand if the underlying standards stay centralized.'?",
+        "counterpunch": "What would a domain expert challenge about 'The honest frame is: choice changes incentives, but it is not a magic wand if the underlying standards stay centralized.'?",
+        "validation": "What concrete evidence would confirm or disprove 'The honest frame is: choice changes incentives, but it is not a magic wand if the underlying standards stay centralized.' this month?"
+      },
+      "a10": {
+        "failure_case": "When does 'Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a reminder that whoever controls curriculum controls the future a generation later.' fail, even if the intent is right?",
+        "constraint": "What real-world constraint blocks 'Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a reminder that whoever controls curriculum controls the future a generation later.' despite effort?",
+        "contrarian": "What would a domain expert challenge about 'Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a reminder that whoever controls curriculum controls the future a generation later.'?",
+        "application": "What one change should a listener make tomorrow based on 'Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a reminder that whoever controls curriculum controls the future a generation later.'?",
+        "counterpunch": "What would a domain expert challenge about 'Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a reminder that whoever controls curriculum controls the future a generation later.'?",
+        "validation": "What concrete evidence would confirm or disprove 'Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a reminder that whoever controls curriculum controls the future a generation later.' this month?"
+      },
+      "a11": {
+        "failure_case": "When does 'Guest: Iron Company guards and the Colorado National Guard show up in history books as corporate and state violence against workers.' fail, even if the intent is right?",
+        "constraint": "What real-world constraint blocks 'Guest: Iron Company guards and the Colorado National Guard show up in history books as corporate and state violence against workers.' despite effort?",
+        "contrarian": "What would a domain expert challenge about 'Guest: Iron Company guards and the Colorado National Guard show up in history books as corporate and state violence against workers.'?",
+        "application": "What one change should a listener make tomorrow based on 'Guest: Iron Company guards and the Colorado National Guard show up in history books as corporate and state violence against workers.'?",
+        "counterpunch": "What would a domain expert challenge about 'Guest: Iron Company guards and the Colorado National Guard show up in history books as corporate and state violence against workers.'?",
+        "validation": "What concrete evidence would confirm or disprove 'Guest: Iron Company guards and the Colorado National Guard show up in history books as corporate and state violence against workers.' this month?"
+      },
+      "a12": {
+        "failure_case": "When does 'The point for this episode is how centralized institutions align when their interests feel threatened.' fail, even if the intent is right?",
+        "constraint": "What real-world constraint blocks 'The point for this episode is how centralized institutions align when their interests feel threatened.' despite effort?",
+        "contrarian": "What would a domain expert challenge about 'The point for this episode is how centralized institutions align when their interests feel threatened.'?",
+        "application": "What one change should a listener make tomorrow based on 'The point for this episode is how centralized institutions align when their interests feel threatened.'?",
+        "counterpunch": "What would a domain expert challenge about 'The point for this episode is how centralized institutions align when their interests feel threatened.'?",
+        "validation": "What concrete evidence would confirm or disprove 'The point for this episode is how centralized institutions align when their interests feel threatened.' this month?"
+      },
+      "a13": {
+        "failure_case": "When does 'Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases.' fail, even if the intent is right?",
+        "constraint": "What real-world constraint blocks 'Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases.' despite effort?",
+        "contrarian": "What would a domain expert challenge about 'Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases.'?",
+        "application": "What one change should a listener make tomorrow based on 'Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases.'?",
+        "counterpunch": "What would a domain expert challenge about 'Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases.'?",
+        "validation": "What concrete evidence would confirm or disprove 'Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases.' this month?"
+      },
+      "a14": {
+        "failure_case": "When does 'Listeners should verify what applies in their district rather than assuming a national uniform rule.' fail, even if the intent is right?",
+        "constraint": "What real-world constraint blocks 'Listeners should verify what applies in their district rather than assuming a national uniform rule.' despite effort?",
+        "contrarian": "What would a domain expert challenge about 'Listeners should verify what applies in their district rather than assuming a national uniform rule.'?",
+        "application": "What one change should a listener make tomorrow based on 'Listeners should verify what applies in their district rather than assuming a national uniform rule.'?",
+        "counterpunch": "What would a domain expert challenge about 'Listeners should verify what applies in their district rather than assuming a national uniform rule.'?",
+        "validation": "What concrete evidence would confirm or disprove 'Listeners should verify what applies in their district rather than assuming a national uniform rule.' this month?"
+      },
+      "a15": {
+        "failure_case": "When does 'Guest: If you are just a speck in a standardized system, the political question is how you rebuild agency without pretending the system does not exist.' fail, even if the intent is right?",
+        "constraint": "What real-world constraint blocks 'Guest: If you are just a speck in a standardized system, the political question is how you rebuild agency without pretending the system does not exist.' despite effort?",
+        "contrarian": "What would a domain expert challenge about 'Guest: If you are just a speck in a standardized system, the political question is how you rebuild agency without pretending the system does not exist.'?",
+        "application": "What one change should a listener make tomorrow based on 'Guest: If you are just a speck in a standardized system, the political question is how you rebuild agency without pretending the system does not exist.'?",
+        "counterpunch": "What would a domain expert challenge about 'Guest: If you are just a speck in a standardized system, the political question is how you rebuild agency without pretending the system does not exist.'?",
+        "validation": "What concrete evidence would confirm or disprove 'Guest: If you are just a speck in a standardized system, the political question is how you rebuild agency without pretending the system does not exist.' this month?"
+      },
+      "a16": {
+        "failure_case": "When does 'Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities.' fail, even if the intent is right?",
+        "constraint": "What real-world constraint blocks 'Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities.' despite effort?",
+        "contrarian": "What would a domain expert challenge about 'Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities.'?",
+        "application": "What one change should a listener make tomorrow based on 'Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities.'?",
+        "counterpunch": "What would a domain expert challenge about 'Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities.'?",
+        "validation": "What concrete evidence would confirm or disprove 'Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities.' this month?"
+      },
+      "a17": {
+        "failure_case": "When does 'The Rockefeller foundation and related networks stayed heavily invested in education policy narratives.' fail, even if the intent is right?",
+        "constraint": "What real-world constraint blocks 'The Rockefeller foundation and related networks stayed heavily invested in education policy narratives.' despite effort?",
+        "contrarian": "What would a domain expert challenge about 'The Rockefeller foundation and related networks stayed heavily invested in education policy narratives.'?",
+        "application": "What one change should a listener make tomorrow based on 'The Rockefeller foundation and related networks stayed heavily invested in education policy narratives.'?",
+        "counterpunch": "What would a domain expert challenge about 'The Rockefeller foundation and related networks stayed heavily invested in education policy narratives.'?",
+        "validation": "What concrete evidence would confirm or disprove 'The Rockefeller foundation and related networks stayed heavily invested in education policy narratives.' this month?"
+      },
+      "a18": {
+        "failure_case": "When does 'Guest: School choice is one counter-pressure people talk about.' fail, even if the intent is right?",
+        "constraint": "What real-world constraint blocks 'Guest: School choice is one counter-pressure people talk about.' despite effort?",
+        "contrarian": "What would a domain expert challenge about 'Guest: School choice is one counter-pressure people talk about.'?",
+        "application": "What one change should a listener make tomorrow based on 'Guest: School choice is one counter-pressure people talk about.'?",
+        "counterpunch": "What would a domain expert challenge about 'Guest: School choice is one counter-pressure people talk about.'?",
+        "validation": "What concrete evidence would confirm or disprove 'Guest: School choice is one counter-pressure people talk about.' this month?"
+      },
+      "a19": {
+        "failure_case": "When does 'Studies are cited on both sides.' fail, even if the intent is right?",
+        "constraint": "What real-world constraint blocks 'Studies are cited on both sides.' despite effort?",
+        "contrarian": "What would a domain expert challenge about 'Studies are cited on both sides.'?",
+        "application": "What one change should a listener make tomorrow based on 'Studies are cited on both sides.'?",
+        "counterpunch": "What would a domain expert challenge about 'Studies are cited on both sides.'?",
+        "validation": "What concrete evidence would confirm or disprove 'Studies are cited on both sides.' this month?"
+      }
+    },
+    "guests": [],
+    "segments": [
+      {
+        "segment_title": "Host: We went down this centralized path where everything in society was moving more and more towards centralization.",
+        "trigger_clip": "a1",
+        "host_angle": "skeptical",
+        "guest_angle": "defensive",
+        "goal": "Separate perception from evidence."
+      },
+      {
+        "segment_title": "Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.",
+        "trigger_clip": "a2",
+        "host_angle": "skeptical",
+        "guest_angle": "defensive",
+        "goal": "Separate perception from evidence."
+      },
+      {
+        "segment_title": "Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.",
+        "trigger_clip": "a3",
+        "host_angle": "skeptical",
+        "guest_angle": "defensive",
+        "goal": "Separate perception from evidence."
+      }
+    ],
+    "takeaway": "Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer.",
+    "analytics_actionable": {
+      "what_worked": [
+        "Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410"
+      ],
+      "what_failed": [
+        "Claims that lack timestamped or third-party verification."
+      ],
+      "next_move": [
+        "Pressure-test the strongest claim with one dedicated segment next episode."
+      ]
+    },
+    "claims": [
+      {
+        "id": "a1",
+        "text": "Host: We went down this centralized path where everything in society was moving more and more towards centralization.",
+        "claim_type": "interpretation",
+        "confidence": "medium",
+        "evidence_basis": "explicit_transcript"
+      },
+      {
+        "id": "a2",
+        "text": "Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.",
+        "claim_type": "interpretation",
+        "confidence": "medium",
+        "evidence_basis": "explicit_transcript"
+      },
+      {
+        "id": "a3",
+        "text": "Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.",
+        "claim_type": "interpretation",
+        "confidence": "medium",
+        "evidence_basis": "explicit_transcript"
+      },
+      {
+        "id": "a4",
+        "text": "The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.",
+        "claim_type": "interpretation",
+        "confidence": "medium",
+        "evidence_basis": "explicit_transcript"
+      },
+      {
+        "id": "a5",
+        "text": "Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.",
+        "claim_type": "interpretation",
+        "confidence": "medium",
+        "evidence_basis": "explicit_transcript"
+      },
+      {
+        "id": "a6",
+        "text": "It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.",
+        "claim_type": "interpretation",
+        "confidence": "medium",
+        "evidence_basis": "explicit_transcript"
+      },
+      {
+        "id": "a7",
+        "text": "Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.",
+        "claim_type": "interpretation",
+        "confidence": "medium",
+        "evidence_basis": "explicit_transcript"
+      },
+      {
+        "id": "a8",
+        "text": "Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens.",
+        "claim_type": "interpretation",
+        "confidence": "medium",
+        "evidence_basis": "explicit_transcript"
+      },
+      {
+        "id": "a9",
+        "text": "The honest frame is: choice changes incentives, but it is not a magic wand if the underlying standards stay centralized.",
+        "claim_type": "interpretation",
+        "confidence": "medium",
+        "evidence_basis": "explicit_transcript"
+      },
+      {
+        "id": "a10",
+        "text": "Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a reminder that whoever controls curriculum controls the future a generation later.",
+        "claim_type": "interpretation",
+        "confidence": "medium",
+        "evidence_basis": "explicit_transcript"
+      },
+      {
+        "id": "a11",
+        "text": "Guest: Iron Company guards and the Colorado National Guard show up in history books as corporate and state violence against workers.",
+        "claim_type": "interpretation",
+        "confidence": "medium",
+        "evidence_basis": "explicit_transcript"
+      },
+      {
+        "id": "a12",
+        "text": "The point for this episode is how centralized institutions align when their interests feel threatened.",
+        "claim_type": "interpretation",
+        "confidence": "medium",
+        "evidence_basis": "explicit_transcript"
+      },
+      {
+        "id": "a13",
+        "text": "Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases.",
+        "claim_type": "interpretation",
+        "confidence": "medium",
+        "evidence_basis": "explicit_transcript"
+      },
+      {
+        "id": "a14",
+        "text": "Listeners should verify what applies in their district rather than assuming a national uniform rule.",
+        "claim_type": "interpretation",
+        "confidence": "medium",
+        "evidence_basis": "explicit_transcript"
+      },
+      {
+        "id": "a15",
+        "text": "Guest: If you are just a speck in a standardized system, the political question is how you rebuild agency without pretending the system does not exist.",
+        "claim_type": "interpretation",
+        "confidence": "medium",
+        "evidence_basis": "explicit_transcript"
+      },
+      {
+        "id": "a16",
+        "text": "Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities.",
+        "claim_type": "interpretation",
+        "confidence": "medium",
+        "evidence_basis": "explicit_transcript"
+      },
+      {
+        "id": "a17",
+        "text": "The Rockefeller foundation and related networks stayed heavily invested in education policy narratives.",
+        "claim_type": "interpretation",
+        "confidence": "medium",
+        "evidence_basis": "explicit_transcript"
+      },
+      {
+        "id": "a18",
+        "text": "Guest: School choice is one counter-pressure people talk about.",
+        "claim_type": "interpretation",
+        "confidence": "medium",
+        "evidence_basis": "explicit_transcript"
+      },
+      {
+        "id": "a19",
+        "text": "Studies are cited on both sides.",
+        "claim_type": "interpretation",
+        "confidence": "medium",
+        "evidence_basis": "explicit_transcript"
+      }
+    ],
+    "output_mode": "full",
+    "meta": {
+      "title": "Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+      "creator": "Julian Dorey",
+      "genre": "Entertainment",
+      "generated_at": "2026-04-21T12:50:23Z",
+      "structured_intelligence_source": "atomic_pipeline"
+    },
+    "report_readiness": {
+      "band": "weak",
+      "notes": [
+        "Transcript is on the short side — borderline signal for automated claims."
+      ],
+      "suggested_actions": [
+        "Aim for ~600+ words of continuous speech when possible."
+      ],
+      "metrics": {
+        "transcript_word_count": 391,
+        "claim_count": 19,
+        "evidence_row_count": 19,
+        "signal_mode": "HIGH_SIGNAL"
+      },
+      "quality_gates": {
+        "force_diagnostic": false,
+        "notes": [],
+        "title_topic_coherence": 0.6667
+      },
+      "output_mode": "full",
+      "diagnostic_reasons": []
+    },
+    "atomic_pipeline": {
+      "claims": [
+        {
+          "id": "a1",
+          "timestamp": 10.0,
+          "raw_statement": "Host: We went down this centralized path where everything in society was moving more and more towards centralization.",
+          "category": "interpretation",
+          "confidence": "medium",
+          "evidence_basis": "explicit_transcript"
+        },
+        {
+          "id": "a2",
+          "timestamp": 10.0,
+          "raw_statement": "Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.",
+          "category": "interpretation",
+          "confidence": "medium",
+          "evidence_basis": "explicit_transcript"
+        },
+        {
+          "id": "a3",
+          "timestamp": 120.0,
+          "raw_statement": "Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.",
+          "category": "interpretation",
+          "confidence": "medium",
+          "evidence_basis": "explicit_transcript"
+        },
+        {
+          "id": "a4",
+          "timestamp": 120.0,
+          "raw_statement": "The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.",
+          "category": "interpretation",
+          "confidence": "medium",
+          "evidence_basis": "explicit_transcript"
+        },
+        {
+          "id": "a5",
+          "timestamp": 330.0,
+          "raw_statement": "Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.",
+          "category": "interpretation",
+          "confidence": "medium",
+          "evidence_basis": "explicit_transcript"
+        },
+        {
+          "id": "a6",
+          "timestamp": 330.0,
+          "raw_statement": "It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.",
+          "category": "interpretation",
+          "confidence": "medium",
+          "evidence_basis": "explicit_transcript"
+        },
+        {
+          "id": "a7",
+          "timestamp": 480.0,
+          "raw_statement": "Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.",
+          "category": "interpretation",
+          "confidence": "medium",
+          "evidence_basis": "explicit_transcript"
+        },
+        {
+          "id": "a8",
+          "timestamp": 660.0,
+          "raw_statement": "Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens.",
+          "category": "interpretation",
+          "confidence": "medium",
+          "evidence_basis": "explicit_transcript"
+        },
+        {
+          "id": "a9",
+          "timestamp": 660.0,
+          "raw_statement": "The Rockefeller foundation and related networks stayed heavily invested in education policy narratives.",
+          "category": "interpretation",
+          "confidence": "medium",
+          "evidence_basis": "explicit_transcript"
+        },
+        {
+          "id": "a10",
+          "timestamp": 840.0,
+          "raw_statement": "Guest: School choice is one counter-pressure people talk about.",
+          "category": "interpretation",
+          "confidence": "medium",
+          "evidence_basis": "explicit_transcript"
+        },
+        {
+          "id": "a11",
+          "timestamp": 840.0,
+          "raw_statement": "Studies are cited on both sides.",
+          "category": "interpretation",
+          "confidence": "medium",
+          "evidence_basis": "explicit_transcript"
+        },
+        {
+          "id": "a12",
+          "timestamp": 840.0,
+          "raw_statement": "The honest frame is: choice changes incentives, but it is not a magic wand if the underlying standards stay centralized.",
+          "category": "interpretation",
+          "confidence": "medium",
+          "evidence_basis": "explicit_transcript"
+        },
+        {
+          "id": "a13",
+          "timestamp": 1020.0,
+          "raw_statement": "Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a reminder that whoever controls curriculum controls the future a generation later.",
+          "category": "interpretation",
+          "confidence": "medium",
+          "evidence_basis": "explicit_transcript"
+        },
+        {
+          "id": "a14",
+          "timestamp": 1200.0,
+          "raw_statement": "Guest: Iron Company guards and the Colorado National Guard show up in history books as corporate and state violence against workers.",
+          "category": "interpretation",
+          "confidence": "medium",
+          "evidence_basis": "explicit_transcript"
+        },
+        {
+          "id": "a15",
+          "timestamp": 1200.0,
+          "raw_statement": "The point for this episode is how centralized institutions align when their interests feel threatened.",
+          "category": "interpretation",
+          "confidence": "medium",
+          "evidence_basis": "explicit_transcript"
+        },
+        {
+          "id": "a16",
+          "timestamp": 1380.0,
+          "raw_statement": "Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases.",
+          "category": "interpretation",
+          "confidence": "medium",
+          "evidence_basis": "explicit_transcript"
+        },
+        {
+          "id": "a17",
+          "timestamp": 1380.0,
+          "raw_statement": "Listeners should verify what applies in their district rather than assuming a national uniform rule.",
+          "category": "interpretation",
+          "confidence": "medium",
+          "evidence_basis": "explicit_transcript"
+        },
+        {
+          "id": "a18",
+          "timestamp": 1560.0,
+          "raw_statement": "Guest: If you are just a speck in a standardized system, the political question is how you rebuild agency without pretending the system does not exist.",
+          "category": "interpretation",
+          "confidence": "medium",
+          "evidence_basis": "explicit_transcript"
+        },
+        {
+          "id": "a19",
+          "timestamp": 1740.0,
+          "raw_statement": "Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities.",
+          "category": "interpretation",
+          "confidence": "medium",
+          "evidence_basis": "explicit_transcript"
+        }
+      ],
+      "verification": [
+        {
+          "claim_id": "a1",
+          "status": "unverified",
+          "notes": "No external knowledge base in this pass; default conservative.",
+          "recommended_action": "fact_check_needed"
+        },
+        {
+          "claim_id": "a2",
+          "status": "unverified",
+          "notes": "No external knowledge base in this pass; default conservative.",
+          "recommended_action": "fact_check_needed"
+        },
+        {
+          "claim_id": "a3",
+          "status": "unverified",
+          "notes": "No external knowledge base in this pass; default conservative.",
+          "recommended_action": "fact_check_needed"
+        },
+        {
+          "claim_id": "a4",
+          "status": "unverified",
+          "notes": "No external knowledge base in this pass; default conservative.",
+          "recommended_action": "fact_check_needed"
+        },
+        {
+          "claim_id": "a5",
+          "status": "unverified",
+          "notes": "No external knowledge base in this pass; default conservative.",
+          "recommended_action": "fact_check_needed"
+        },
+        {
+          "claim_id": "a6",
+          "status": "unverified",
+          "notes": "No external knowledge base in this pass; default conservative.",
+          "recommended_action": "fact_check_needed"
+        },
+        {
+          "claim_id": "a7",
+          "status": "unverified",
+          "notes": "No external knowledge base in this pass; default conservative.",
+          "recommended_action": "fact_check_needed"
+        },
+        {
+          "claim_id": "a8",
+          "status": "unverified",
+          "notes": "No external knowledge base in this pass; default conservative.",
+          "recommended_action": "fact_check_needed"
+        },
+        {
+          "claim_id": "a9",
+          "status": "unverified",
+          "notes": "No external knowledge base in this pass; default conservative.",
+          "recommended_action": "fact_check_needed"
+        },
+        {
+          "claim_id": "a10",
+          "status": "unverified",
+          "notes": "No external knowledge base in this pass; default conservative.",
+          "recommended_action": "fact_check_needed"
+        },
+        {
+          "claim_id": "a11",
+          "status": "unverified",
+          "notes": "No external knowledge base in this pass; default conservative.",
+          "recommended_action": "fact_check_needed"
+        },
+        {
+          "claim_id": "a12",
+          "status": "unverified",
+          "notes": "No external knowledge base in this pass; default conservative.",
+          "recommended_action": "fact_check_needed"
+        },
+        {
+          "claim_id": "a13",
+          "status": "unverified",
+          "notes": "No external knowledge base in this pass; default conservative.",
+          "recommended_action": "fact_check_needed"
+        },
+        {
+          "claim_id": "a14",
+          "status": "unverified",
+          "notes": "No external knowledge base in this pass; default conservative.",
+          "recommended_action": "fact_check_needed"
+        },
+        {
+          "claim_id": "a15",
+          "status": "unverified",
+          "notes": "No external knowledge base in this pass; default conservative.",
+          "recommended_action": "fact_check_needed"
+        },
+        {
+          "claim_id": "a16",
+          "status": "unverified",
+          "notes": "No external knowledge base in this pass; default conservative.",
+          "recommended_action": "fact_check_needed"
+        },
+        {
+          "claim_id": "a17",
+          "status": "unverified",
+          "notes": "No external knowledge base in this pass; default conservative.",
+          "recommended_action": "fact_check_needed"
+        },
+        {
+          "claim_id": "a18",
+          "status": "unverified",
+          "notes": "No external knowledge base in this pass; default conservative.",
+          "recommended_action": "fact_check_needed"
+        },
+        {
+          "claim_id": "a19",
+          "status": "unverified",
+          "notes": "No external knowledge base in this pass; default conservative.",
+          "recommended_action": "fact_check_needed"
+        }
+      ],
+      "topic_graph": {
+        "nodes": [],
+        "edges": []
+      },
+      "insights": [],
+      "clips": [],
+      "guest_recommendations": [],
+      "actions": [],
+      "diagnostics": {
+        "pipeline_version": "atomic_pipeline/1",
+        "clustering_backend": "lexical_time_union",
+        "verification_present": true,
+        "low_confidence_share": 0.0,
+        "clip_reduction_applied": false,
+        "blocked_insights": false,
+        "blocked_guests_until_verification": false,
+        "claims_spine_pruned": true,
+        "claims_after_spine_prune": 19
+      }
+    },
+    "_consistency_tier_histogram": {
+      "ok": 0,
+      "soft": 2,
+      "repair": 0,
+      "collapse": 4
+    },
+    "_consistency_jaccard_samples": [
+      {
+        "field": "narrative_reconstruction.core_thesis",
+        "jaccard": 0.0769,
+        "tier": "soft"
+      },
+      {
+        "field": "narrative_reconstruction.supporting_mechanism",
+        "jaccard": 0.0,
+        "tier": "collapse"
+      },
+      {
+        "field": "narrative_reconstruction.practical_translation",
+        "jaccard": 0.0,
+        "tier": "collapse"
+      },
+      {
+        "field": "combined(core_thesis+clean_insights)",
+        "jaccard": 0.0476,
+        "tier": "collapse"
+      },
+      {
+        "field": "coach_report.episode_thesis",
+        "jaccard": 0.0769,
+        "tier": "soft"
+      },
+      {
+        "field": "coach_report.opportunities.clip_moments[0]",
+        "jaccard": 0.0,
+        "tier": "collapse"
+      }
+    ],
+    "_consistency_soft_suggestions": [
+      "Tighten core_thesis toward title/topic identity (jaccard=0.077); revisit before the next export if drift persists across episodes."
+    ],
+    "_consistency_drift_notes": [
+      "core_thesis: soft_drift_vs_identity (jaccard=0.077)",
+      "supporting_mechanism: realigned_to_identity (tier=collapse, jaccard=0.000)",
+      "practical_translation: realigned_to_identity (tier=collapse, jaccard=0.000)",
+      "combined_insights_gate: collapse_to_identity_anchor",
+      "episode_thesis: mirrored_to_repaired_narrative_spine"
+    ],
+    "_consistency_fix_applied": true,
+    "_claim_quality": {
+      "score": 1.0,
+      "warning": false,
+      "signals": {
+        "fragment_ratio": 0.0,
+        "fragments_count": 0,
+        "redundant_pair": false,
+        "specificity_ok": true,
+        "claim_count": 19
+      }
+    },
+    "_sgv_rewrite_count": 0,
+    "_sgv_applied": true,
+    "_sgv_status": "OK",
+    "_guest_decision_trace": {
+      "anchor_alignment_score": 0.0,
+      "anchor_stability_profile": {
+        "min_jaccard": 0.0,
+        "mean_jaccard": 0.03356666666666667,
+        "variance_jaccard": 0.0012221088888888889,
+        "sample_count": 6
+      },
+      "signal_mode": "HIGH_SIGNAL",
+      "issue_presence": true,
+      "issue_axis_effective": false,
+      "high_signal_axis_effective": false,
+      "high_signal_opportunity_raw": false,
+      "anchor_collapse_gate_fired": true,
+      "anchor_collapse_threshold": 0.05,
+      "anchor_collapse_max_variance": 0.02,
+      "anchor_collapse_reason": "min_below_threshold_low_variance",
+      "guest_trigger_source_raw": "ISSUE",
+      "guest_trigger_source": "NONE",
+      "guest_generation_effective": false,
+      "decision_primary_cause": "COLLAPSE_SUPPRESSION",
+      "guest_generation_confidence": 0.42,
+      "high_signal_arbitration_threshold": 0.1,
+      "arbitration_notes": [
+        "all_axes_suppressed: structural_collapse (min_below_threshold_low_variance; min_j=0.000, threshold=0.05)"
+      ],
+      "decision_steps": [
+        "EVAL_ISSUE_AXIS",
+        "ISSUE_AXIS_RAW:on",
+        "EVAL_HIGH_SIGNAL_AXIS",
+        "HIGH_SIGNAL_AXIS_RAW:off",
+        "ARBITRATE_ANCHOR_COLLAPSE_GATE",
+        "COLLAPSE_RULE:min_below_threshold_low_variance",
+        "COLLAPSE_SUPPRESS:structural min_j=0.000",
+        "AXIS_EFFECTIVE_ISSUE:off",
+        "AXIS_EFFECTIVE_HIGH_SIGNAL:off",
+        "ARBITRATE_FINAL_DECISION",
+        "PRIMARY_CAUSE:COLLAPSE_SUPPRESSION",
+        "GUEST_GENERATION:off",
+        "DOMINANT_AXIS:NONE"
+      ]
+    },
+    "_system_health_label": "ANCHOR_FRAGILE",
+    "_invariant_contract_check": {
+      "ok": true,
+      "contract_satisfied": true,
+      "violations": [],
+      "invariant_contract_version": "1",
+      "fail_on_soft_applied": false,
+      "all_checks_pass": true
+    }
+  },
+  "workflow_report": {
+    "metadata": {
+      "title": "Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+      "creator": "Julian Dorey",
+      "genre": "Entertainment",
+      "trace_id": "d14c6575-f950-442d-b9e8-f07f644e964e",
+      "generated": "2026-04-21T12:50:23.898375+00:00",
+      "v3_reality_check": {
+        "passed": true,
+        "failures": [],
+        "degraded_notes": [],
+        "would_ship": false,
+        "ship_blockers": [
+          "FAIL: thesis grounding ratio 0.18 < 0.25 (many thesis words not found in transcript — possible drift)."
+        ],
+        "rules_source": "C:\\Users\\yasuk\\SoapBoxx\\backend\\data\\v3_reality_expected.json",
+        "report_v3_output_mode": "full",
+        "signal_mode": "HIGH_SIGNAL",
+        "readiness_band": "weak",
+        "diagnostic_reasons": [],
+        "good_clean_insight_lines": 5
+      },
+      "workflow_mode": "local",
+      "workflow_enrichment_tier": "none",
+      "source_warnings": [
+        "SOAPBOXX_OLLAMA_MODEL is not set; no LLM brief was produced. Install Ollama, pull a model, and set SOAPBOXX_OLLAMA_MODEL for v2 brief extraction.",
+        "v3_reality: would-ship bar not met (1 blocker(s)) — see metadata.v3_reality_check.ship_blockers"
+      ],
+      "workflow_spec_version": "3",
+      "primary_episode_workflow": true,
+      "structure_state": "STRONG",
+      "structure_diagnostics": {
+        "evidence_rows": 19,
+        "segments": 3,
+        "structure_state": "STRONG"
+      },
+      "export_status": "insufficient_signal",
+      "export_blockers": [
+        "FAIL: thesis grounding ratio 0.18 < 0.25 (many thesis words not found in transcript — possible drift)."
+      ],
+      "export_blockers_by_source": {
+        "v3_reality": [],
+        "workflow_structure": [],
+        "unified_export": [
+          "FAIL: thesis grounding ratio 0.18 < 0.25 (many thesis words not found in transcript — possible drift)."
+        ],
+        "output_mode": [],
+        "ollama_transport": []
+      },
+      "signal_integrity_check": "pass",
+      "signal_integrity_checks": {
+        "no_duplicate_claims": true,
+        "no_orphaned_evidence": true,
+        "no_contradictory_claim_chain": true,
+        "no_unlinked_reasoning_steps": true
+      },
+      "signal_valid": false,
+      "semantic_delta_valid": true,
+      "evaluation_eligible": false,
+      "output_mode_valid": true,
+      "production_candidate": false,
+      "production_blockers": [],
+      "user_export_mode": "limited",
+      "limited_reason": "content",
+      "input_quality_score": 0.852133,
+      "input_quality_components": {
+        "input_quality_score": 0.852133,
+        "transcript_length_score": 0.26066666666666666,
+        "extraction_success_score": 1.0,
+        "grounding_density_score": 1.0
+      },
+      "decision": {
+        "tier": "highlight",
+        "limited_reason": "none",
+        "system_version": "reporting_v1",
+        "message": "High-signal output. Highlight-worthy.",
+        "quality_should_retry": false,
+        "transport_should_retry": false,
+        "should_retry_any": false,
+        "should_retry": false,
+        "should_surface": true,
+        "highlight": true,
+        "transport_degraded": false,
+        "metrics_ref": "input_quality_components",
+        "trace": {
+          "path_taken": "highlight_top_band",
+          "export_status": "insufficient_signal",
+          "transport_degraded": false,
+          "precedence": "quality_tier_first_then_transport_overlay",
+          "retry_routing_hint": "none"
+        }
+      },
+      "source_discrepancies": {
+        "evidence_count": {
+          "workflow": 19,
+          "report_v3": 19,
+          "delta": 0,
+          "mismatch": false
+        },
+        "segment_count": {
+          "workflow": 3,
+          "report_v3": 3,
+          "delta": 0,
+          "mismatch": false
+        }
+      },
+      "evaluation_snapshot_version": "1",
+      "evaluation_snapshot_hash": "bdb54b17aa5a9ad3265562947b707f1dbff58982bba632a54c584d2976e8a965",
+      "evaluation_finalized": true,
+      "evaluation_finalized_at": "2026-04-21T12:50:23.924132+00:00",
+      "system_version": "reporting_v1",
+      "evaluation_version": "v1",
+      "schema_version": "input_quality_components_v1",
+      "retry_blocked": true,
+      "unified_failure_category": "extraction",
+      "editorial_profile": "balanced"
+    },
+    "highlights": [
+      {
+        "id": "h1",
+        "insight": "Host: We went down this centralized path where everything in society was moving more and more towards centralization.",
+        "length_words": 18,
+        "priority": "high"
+      },
+      {
+        "id": "h2",
+        "insight": "Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.",
+        "length_words": 16,
+        "priority": "medium"
+      },
+      {
+        "id": "h3",
+        "insight": "The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.",
+        "length_words": 16,
+        "priority": "medium"
+      },
+      {
+        "id": "h4",
+        "insight": "It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.",
+        "length_words": 22,
+        "priority": "medium"
+      },
+      {
+        "id": "h5",
+        "insight": "Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.",
+        "length_words": 17,
+        "priority": "medium"
+      }
+    ],
+    "evidence_map": [
+      {
+        "id": "a4",
+        "claim": "The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.",
+        "evidence": "The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.",
+        "timestamp": 120.0,
+        "type": "interpretive",
+        "strength": 7
+      },
+      {
+        "id": "a3",
+        "claim": "Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.",
+        "evidence": "Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good.",
+        "timestamp": 120.0,
+        "type": "interpretive",
+        "strength": 7
+      },
+      {
+        "id": "a5",
+        "claim": "Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.",
+        "evidence": "Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.",
+        "timestamp": 330.0,
+        "type": "interpretive",
+        "strength": 7
+      },
+      {
+        "id": "a8",
+        "claim": "Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens.",
+        "evidence": "Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens.",
+        "timestamp": 660.0,
+        "type": "interpretive",
+        "strength": 7
+      },
+      {
+        "id": "a10",
+        "claim": "Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a reminder that whoever controls curriculum controls the future a generation later.",
+        "evidence": "Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a.",
+        "timestamp": 1020.0,
+        "type": "interpretive",
+        "strength": 7
+      },
+      {
+        "id": "a17",
+        "claim": "The Rockefeller foundation and related networks stayed heavily invested in education policy narratives.",
+        "evidence": "The Rockefeller foundation and related networks stayed heavily invested in education policy narratives.",
+        "timestamp": 660.0,
+        "type": "interpretive",
+        "strength": 7
+      },
+      {
+        "id": "a16",
+        "claim": "Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities.",
+        "evidence": "Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities.",
+        "timestamp": 1740.0,
+        "type": "interpretive",
+        "strength": 7
+      },
+      {
+        "id": "a2",
+        "claim": "Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.",
+        "evidence": "Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.",
+        "timestamp": 10.0,
+        "type": "interpretive",
+        "strength": 7
+      },
+      {
+        "id": "a7",
+        "claim": "Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.",
+        "evidence": "Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.",
+        "timestamp": 480.0,
+        "type": "interpretive",
+        "strength": 7
+      },
+      {
+        "id": "a1",
+        "claim": "Host: We went down this centralized path where everything in society was moving more and more towards centralization.",
+        "evidence": "Host: We went down this centralized path where everything in society was moving more and more towards centralization.",
+        "timestamp": 10.0,
+        "type": "interpretive",
+        "strength": 7
+      },
+      {
+        "id": "a13",
+        "claim": "Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases.",
+        "evidence": "Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases.",
+        "timestamp": 1380.0,
+        "type": "interpretive",
+        "strength": 7
+      },
+      {
+        "id": "a14",
+        "claim": "Listeners should verify what applies in their district rather than assuming a national uniform rule.",
+        "evidence": "Listeners should verify what applies in their district rather than assuming a national uniform rule.",
+        "timestamp": 1380.0,
+        "type": "interpretive",
+        "strength": 7
+      },
+      {
+        "id": "a15",
+        "claim": "Guest: If you are just a speck in a standardized system, the political question is how you rebuild agency without pretending the system does not exist.",
+        "evidence": "Guest: If you are just a speck in a standardized system, the political question is how you rebuild agency without pretending the system does.",
+        "timestamp": 1560.0,
+        "type": "interpretive",
+        "strength": 7
+      },
+      {
+        "id": "a18",
+        "claim": "Guest: School choice is one counter-pressure people talk about.",
+        "evidence": "Guest: School choice is one counter-pressure people talk about.",
+        "timestamp": 840.0,
+        "type": "interpretive",
+        "strength": 7
+      },
+      {
+        "id": "a6",
+        "claim": "It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.",
+        "evidence": "It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.",
+        "timestamp": 330.0,
+        "type": "interpretive",
+        "strength": 7
+      },
+      {
+        "id": "a9",
+        "claim": "The honest frame is: choice changes incentives, but it is not a magic wand if the underlying standards stay centralized.",
+        "evidence": "The honest frame is: choice changes incentives, but it is not a magic wand if the underlying standards stay centralized.",
+        "timestamp": 840.0,
+        "type": "interpretive",
+        "strength": 7
+      },
+      {
+        "id": "a11",
+        "claim": "Guest: Iron Company guards and the Colorado National Guard show up in history books as corporate and state violence against workers.",
+        "evidence": "Guest: Iron Company guards and the Colorado National Guard show up in history books as corporate and state violence against workers.",
+        "timestamp": 1200.0,
+        "type": "interpretive",
+        "strength": 7
+      },
+      {
+        "id": "a12",
+        "claim": "The point for this episode is how centralized institutions align when their interests feel threatened.",
+        "evidence": "The point for this episode is how centralized institutions align when their interests feel threatened.",
+        "timestamp": 1200.0,
+        "type": "interpretive",
+        "strength": 7
+      },
+      {
+        "id": "a19",
+        "claim": "Studies are cited on both sides.",
+        "evidence": "Studies are cited on both sides.",
+        "timestamp": 840.0,
+        "type": "interpretive",
+        "strength": 7
+      }
+    ],
+    "follow_up_questions": [
+      {
+        "question": "What would a domain expert challenge about 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.'?",
+        "question_type": "counter",
+        "claim_id": "a1"
+      },
+      {
+        "question": "What concrete evidence would confirm or disprove 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.' this month?",
+        "question_type": "validation",
+        "claim_id": "a1"
+      },
+      {
+        "question": "What one change should a listener make tomorrow based on 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.'?",
+        "question_type": "application",
+        "claim_id": "a1"
+      },
+      {
+        "question": "What would a domain expert challenge about 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.'?",
+        "question_type": "counter",
+        "claim_id": "a2"
+      },
+      {
+        "question": "What concrete evidence would confirm or disprove 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.' this month?",
+        "question_type": "validation",
+        "claim_id": "a2"
+      },
+      {
+        "question": "What one change should a listener make tomorrow based on 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.'?",
+        "question_type": "application",
+        "claim_id": "a2"
+      },
+      {
+        "question": "What would a domain expert challenge about 'Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.'?",
+        "question_type": "counter",
+        "claim_id": "a3"
+      },
+      {
+        "question": "What concrete evidence would confirm or disprove 'Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.' this month?",
+        "question_type": "validation",
+        "claim_id": "a3"
+      },
+      {
+        "question": "What one change should a listener make tomorrow based on 'Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.'?",
+        "question_type": "application",
+        "claim_id": "a3"
+      },
+      {
+        "question": "What would a domain expert challenge about 'The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.'?",
+        "question_type": "counter",
+        "claim_id": "a4"
+      },
+      {
+        "question": "What concrete evidence would confirm or disprove 'The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.' this month?",
+        "question_type": "validation",
+        "claim_id": "a4"
+      },
+      {
+        "question": "What one change should a listener make tomorrow based on 'The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.'?",
+        "question_type": "application",
+        "claim_id": "a4"
+      },
+      {
+        "question": "What would a domain expert challenge about 'Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.'?",
+        "question_type": "counter",
+        "claim_id": "a5"
+      },
+      {
+        "question": "What concrete evidence would confirm or disprove 'Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.' this month?",
+        "question_type": "validation",
+        "claim_id": "a5"
+      },
+      {
+        "question": "What one change should a listener make tomorrow based on 'Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.'?",
+        "question_type": "application",
+        "claim_id": "a5"
+      },
+      {
+        "question": "What would a domain expert challenge about 'It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.'?",
+        "question_type": "counter",
+        "claim_id": "a6"
+      },
+      {
+        "question": "What concrete evidence would confirm or disprove 'It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.' this month?",
+        "question_type": "validation",
+        "claim_id": "a6"
+      },
+      {
+        "question": "What one change should a listener make tomorrow based on 'It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.'?",
+        "question_type": "application",
+        "claim_id": "a6"
+      },
+      {
+        "question": "What would a domain expert challenge about 'Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.'?",
+        "question_type": "counter",
+        "claim_id": "a7"
+      },
+      {
+        "question": "What concrete evidence would confirm or disprove 'Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.' this month?",
+        "question_type": "validation",
+        "claim_id": "a7"
+      },
+      {
+        "question": "What one change should a listener make tomorrow based on 'Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.'?",
+        "question_type": "application",
+        "claim_id": "a7"
+      },
+      {
+        "question": "What would a domain expert challenge about 'Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens.'?",
+        "question_type": "counter",
+        "claim_id": "a8"
+      },
+      {
+        "question": "What concrete evidence would confirm or disprove 'Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens.' this month?",
+        "question_type": "validation",
+        "claim_id": "a8"
+      },
+      {
+        "question": "What one change should a listener make tomorrow based on 'Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens.'?",
+        "question_type": "application",
+        "claim_id": "a8"
+      },
+      {
+        "question": "What would a domain expert challenge about 'The honest frame is: choice changes incentives, but it is not a magic wand if the underlying standards stay centralized.'?",
+        "question_type": "counter",
+        "claim_id": "a9"
+      },
+      {
+        "question": "What concrete evidence would confirm or disprove 'The honest frame is: choice changes incentives, but it is not a magic wand if the underlying standards stay centralized.' this month?",
+        "question_type": "validation",
+        "claim_id": "a9"
+      },
+      {
+        "question": "What one change should a listener make tomorrow based on 'The honest frame is: choice changes incentives, but it is not a magic wand if the underlying standards stay centralized.'?",
+        "question_type": "application",
+        "claim_id": "a9"
+      },
+      {
+        "question": "What would a domain expert challenge about 'Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a reminder that whoever controls curriculum controls the future a generation later.'?",
+        "question_type": "counter",
+        "claim_id": "a10"
+      },
+      {
+        "question": "What concrete evidence would confirm or disprove 'Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a reminder that whoever controls curriculum controls the future a generation later.' this month?",
+        "question_type": "validation",
+        "claim_id": "a10"
+      },
+      {
+        "question": "What one change should a listener make tomorrow based on 'Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a reminder that whoever controls curriculum controls the future a generation later.'?",
+        "question_type": "application",
+        "claim_id": "a10"
+      },
+      {
+        "question": "What would a domain expert challenge about 'Guest: Iron Company guards and the Colorado National Guard show up in history books as corporate and state violence against workers.'?",
+        "question_type": "counter",
+        "claim_id": "a11"
+      },
+      {
+        "question": "What concrete evidence would confirm or disprove 'Guest: Iron Company guards and the Colorado National Guard show up in history books as corporate and state violence against workers.' this month?",
+        "question_type": "validation",
+        "claim_id": "a11"
+      },
+      {
+        "question": "What one change should a listener make tomorrow based on 'Guest: Iron Company guards and the Colorado National Guard show up in history books as corporate and state violence against workers.'?",
+        "question_type": "application",
+        "claim_id": "a11"
+      },
+      {
+        "question": "What would a domain expert challenge about 'The point for this episode is how centralized institutions align when their interests feel threatened.'?",
+        "question_type": "counter",
+        "claim_id": "a12"
+      },
+      {
+        "question": "What concrete evidence would confirm or disprove 'The point for this episode is how centralized institutions align when their interests feel threatened.' this month?",
+        "question_type": "validation",
+        "claim_id": "a12"
+      },
+      {
+        "question": "What one change should a listener make tomorrow based on 'The point for this episode is how centralized institutions align when their interests feel threatened.'?",
+        "question_type": "application",
+        "claim_id": "a12"
+      },
+      {
+        "question": "What would a domain expert challenge about 'Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases.'?",
+        "question_type": "counter",
+        "claim_id": "a13"
+      },
+      {
+        "question": "What concrete evidence would confirm or disprove 'Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases.' this month?",
+        "question_type": "validation",
+        "claim_id": "a13"
+      },
+      {
+        "question": "What one change should a listener make tomorrow based on 'Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases.'?",
+        "question_type": "application",
+        "claim_id": "a13"
+      },
+      {
+        "question": "What would a domain expert challenge about 'Listeners should verify what applies in their district rather than assuming a national uniform rule.'?",
+        "question_type": "counter",
+        "claim_id": "a14"
+      },
+      {
+        "question": "What concrete evidence would confirm or disprove 'Listeners should verify what applies in their district rather than assuming a national uniform rule.' this month?",
+        "question_type": "validation",
+        "claim_id": "a14"
+      },
+      {
+        "question": "What one change should a listener make tomorrow based on 'Listeners should verify what applies in their district rather than assuming a national uniform rule.'?",
+        "question_type": "application",
+        "claim_id": "a14"
+      },
+      {
+        "question": "What would a domain expert challenge about 'Guest: If you are just a speck in a standardized system, the political question is how you rebuild agency without pretending the system does not exist.'?",
+        "question_type": "counter",
+        "claim_id": "a15"
+      },
+      {
+        "question": "What concrete evidence would confirm or disprove 'Guest: If you are just a speck in a standardized system, the political question is how you rebuild agency without pretending the system does not exist.' this month?",
+        "question_type": "validation",
+        "claim_id": "a15"
+      },
+      {
+        "question": "What one change should a listener make tomorrow based on 'Guest: If you are just a speck in a standardized system, the political question is how you rebuild agency without pretending the system does not exist.'?",
+        "question_type": "application",
+        "claim_id": "a15"
+      },
+      {
+        "question": "What would a domain expert challenge about 'Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities.'?",
+        "question_type": "counter",
+        "claim_id": "a16"
+      },
+      {
+        "question": "What concrete evidence would confirm or disprove 'Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities.' this month?",
+        "question_type": "validation",
+        "claim_id": "a16"
+      },
+      {
+        "question": "What one change should a listener make tomorrow based on 'Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities.'?",
+        "question_type": "application",
+        "claim_id": "a16"
+      },
+      {
+        "question": "What would a domain expert challenge about 'The Rockefeller foundation and related networks stayed heavily invested in education policy narratives.'?",
+        "question_type": "counter",
+        "claim_id": "a17"
+      },
+      {
+        "question": "What concrete evidence would confirm or disprove 'The Rockefeller foundation and related networks stayed heavily invested in education policy narratives.' this month?",
+        "question_type": "validation",
+        "claim_id": "a17"
+      },
+      {
+        "question": "What one change should a listener make tomorrow based on 'The Rockefeller foundation and related networks stayed heavily invested in education policy narratives.'?",
+        "question_type": "application",
+        "claim_id": "a17"
+      },
+      {
+        "question": "What would a domain expert challenge about 'Guest: School choice is one counter-pressure people talk about.'?",
+        "question_type": "counter",
+        "claim_id": "a18"
+      },
+      {
+        "question": "What concrete evidence would confirm or disprove 'Guest: School choice is one counter-pressure people talk about.' this month?",
+        "question_type": "validation",
+        "claim_id": "a18"
+      },
+      {
+        "question": "What one change should a listener make tomorrow based on 'Guest: School choice is one counter-pressure people talk about.'?",
+        "question_type": "application",
+        "claim_id": "a18"
+      },
+      {
+        "question": "What would a domain expert challenge about 'Studies are cited on both sides.'?",
+        "question_type": "counter",
+        "claim_id": "a19"
+      },
+      {
+        "question": "What concrete evidence would confirm or disprove 'Studies are cited on both sides.' this month?",
+        "question_type": "validation",
+        "claim_id": "a19"
+      },
+      {
+        "question": "What one change should a listener make tomorrow based on 'Studies are cited on both sides.'?",
+        "question_type": "application",
+        "claim_id": "a19"
+      }
+    ],
+    "guests": [
+      {
+        "name": "Diane Ravitch",
+        "title": "Suggested",
+        "role": "Diane Ravitch",
+        "claim_id": "a1",
+        "angle": "U.S. education policy and reform narratives — stress-tests institutional claims with evidence.",
+        "topic_angle": "U.S. education policy and reform narratives — stress-tests institutional claims with evidence.",
+        "relevance": 7
+      },
+      {
+        "name": "Jonathan Kozol",
+        "title": "Author",
+        "role": "subject_matter_expert",
+        "claim_id": "a1",
+        "angle": "Inequality, schooling, and how policy lands in real districts.",
+        "topic_angle": "Human-impact framing for education episodes.",
+        "relevance": 9,
+        "source": "subject_fallback_tier3",
+        "reason": "named_public_figure_outreach_pool"
+      },
+      {
+        "name": "E.D. Hirsch Jr.",
+        "title": "Education Scholar",
+        "role": "subject_matter_expert",
+        "claim_id": "a1",
+        "angle": "Curriculum, cultural literacy, and what ‘standards’ actually change.",
+        "topic_angle": "Curriculum- and standards-heavy episodes.",
+        "relevance": 8,
+        "source": "subject_fallback_tier3",
+        "reason": "named_public_figure_outreach_pool"
+      },
+      {
+        "name": "Jill Lepore",
+        "title": "Historian",
+        "role": "subject_matter_expert",
+        "claim_id": "a1",
+        "angle": "American political and cultural history; narrative craft for serious audiences.",
+        "topic_angle": "Credibility pass on a narrative-heavy episode.",
+        "relevance": 10,
+        "source": "subject_fallback_tier3",
+        "reason": "named_public_figure_outreach_pool"
+      },
+      {
+        "name": "David W. Blight",
+        "title": "Historian",
+        "role": "subject_matter_expert",
+        "claim_id": "a1",
+        "angle": "U.S. history, memory, and how public stories form around events.",
+        "topic_angle": "Episodes where the story risks outpacing the evidence.",
+        "relevance": 9,
+        "source": "subject_fallback_tier3",
+        "reason": "named_public_figure_outreach_pool"
+      }
+    ],
+    "guest_recommendations": [
+      {
+        "name": "Diane Ravitch",
+        "title": "Suggested",
+        "role": "Diane Ravitch",
+        "claim_id": "a1",
+        "angle": "U.S. education policy and reform narratives — stress-tests institutional claims with evidence.",
+        "topic_angle": "U.S. education policy and reform narratives — stress-tests institutional claims with evidence.",
+        "relevance": 7
+      },
+      {
+        "name": "Jonathan Kozol",
+        "title": "Author",
+        "role": "subject_matter_expert",
+        "claim_id": "a1",
+        "angle": "Inequality, schooling, and how policy lands in real districts.",
+        "topic_angle": "Human-impact framing for education episodes.",
+        "relevance": 9,
+        "source": "subject_fallback_tier3",
+        "reason": "named_public_figure_outreach_pool"
+      },
+      {
+        "name": "E.D. Hirsch Jr.",
+        "title": "Education Scholar",
+        "role": "subject_matter_expert",
+        "claim_id": "a1",
+        "angle": "Curriculum, cultural literacy, and what ‘standards’ actually change.",
+        "topic_angle": "Curriculum- and standards-heavy episodes.",
+        "relevance": 8,
+        "source": "subject_fallback_tier3",
+        "reason": "named_public_figure_outreach_pool"
+      },
+      {
+        "name": "Jill Lepore",
+        "title": "Historian",
+        "role": "subject_matter_expert",
+        "claim_id": "a1",
+        "angle": "American political and cultural history; narrative craft for serious audiences.",
+        "topic_angle": "Credibility pass on a narrative-heavy episode.",
+        "relevance": 10,
+        "source": "subject_fallback_tier3",
+        "reason": "named_public_figure_outreach_pool"
+      },
+      {
+        "name": "David W. Blight",
+        "title": "Historian",
+        "role": "subject_matter_expert",
+        "claim_id": "a1",
+        "angle": "U.S. history, memory, and how public stories form around events.",
+        "topic_angle": "Episodes where the story risks outpacing the evidence.",
+        "relevance": 9,
+        "source": "subject_fallback_tier3",
+        "reason": "named_public_figure_outreach_pool"
+      }
+    ],
+    "segments": [
+      {
+        "segment_id": "s1",
+        "title": "Host: We went down this centralized path where everything in society was moving more and more towards centralization.",
+        "clip_id": "a1",
+        "host_position": "skeptical",
+        "guest_position": "defensive",
+        "goal": "Separate perception from evidence.",
+        "run_of_show": [
+          "Play clip",
+          "Host reacts",
+          "Guest responds",
+          "Challenge assumptions",
+          "Summarize takeaway"
+        ]
+      },
+      {
+        "segment_id": "s2",
+        "title": "Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.",
+        "clip_id": "a2",
+        "host_position": "skeptical",
+        "guest_position": "defensive",
+        "goal": "Separate perception from evidence.",
+        "run_of_show": [
+          "Play clip",
+          "Host reacts",
+          "Guest responds",
+          "Challenge assumptions",
+          "Summarize takeaway"
+        ]
+      },
+      {
+        "segment_id": "s3",
+        "title": "Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.",
+        "clip_id": "a3",
+        "host_position": "skeptical",
+        "guest_position": "defensive",
+        "goal": "Separate perception from evidence.",
+        "run_of_show": [
+          "Play clip",
+          "Host reacts",
+          "Guest responds",
+          "Challenge assumptions",
+          "Summarize takeaway"
+        ]
+      }
+    ],
+    "analytics": {
+      "storylines": [
+        "Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410"
+      ],
+      "topic_signals": [
+        "Claims that lack timestamped or third-party verification."
+      ],
+      "actionable_steps": [
+        "Pressure-test the strongest claim with one dedicated segment next episode."
+      ]
+    },
+    "guests_from_subject_fallback": false,
+    "guest_outreach_targets": {
+      "domain_key": "general_history",
+      "domain_label": "General History",
+      "experts": [
+        {
+          "name": "Jill Lepore",
+          "type": "historian",
+          "why": "American political and cultural history; narrative craft for serious audiences.",
+          "angle": "Separates myth from record and sharpens how claims are framed.",
+          "best_fit": "Credibility pass on a narrative-heavy episode.",
+          "outreach_hook": "We’re stress-testing our episode’s claims against the historical record—would value your read."
+        },
+        {
+          "name": "David W. Blight",
+          "type": "historian",
+          "why": "U.S. history, memory, and how public stories form around events.",
+          "angle": "Pressure-tests emotional beats against documented context.",
+          "best_fit": "Episodes where the story risks outpacing the evidence.",
+          "outreach_hook": "We want a historian’s eye on whether our through-line matches how the field reads the sources."
+        }
+      ],
+      "podcasts": [
+        {
+          "name": "Show in your niche with overlapping audience",
+          "why": "Faster wins than cold-contacting only major names.",
+          "pitch_angle": "We structured this episode’s thesis and claims—happy to share a one-pager for a fit check."
+        }
+      ]
+    },
+    "signal_mode": "HIGH_SIGNAL",
+    "coach_report": {
+      "signal_mode": "HIGH_SIGNAL",
+      "output_mode": "full",
+      "episode_diagnosis": {
+        "mode": "HIGH_SIGNAL",
+        "body": [
+          "**Thesis (one sentence):** Brainwash!",
+          "**Retention:** One thesis → one repeatable idea for clips and shares."
+        ]
+      },
+      "thesis_quality": null,
+      "episode_thesis": "Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+      "personalized_intro": "*For **Julian Dorey**'s show - **Education / Society** format - tailored to this episode:*",
+      "contrarian_hook": {
+        "title": "The angle listeners might miss",
+        "body": "The edit points at: Claims that lack timestamped or third-party verification. — the hidden angle is often **who benefits** if listeners stay emotional but never name the rule, sponsor, or metric. Say that actor once, on mic."
+      },
+      "uncomfortable_insight": {
+        "title": "Where the argument breaks under pressure",
+        "body": "The pressure point is: Claims that lack timestamped or third-party verification. If your thesis is “Brainwash!”, ask what would make you *wrong* on mic — not just what would make you sound fair. Someone scanning only the title may expect a harder verdict on “Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor ” than the conversation actually delivers."
+      },
+      "claim_stakes": [
+        "**[a1]** Host: We went down this centralized path where everything in society was moving more and more towards centralization. — *On mic:* What one change should a listener make tomorrow based on 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.'?",
+        "**[a2]** Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people. — *On mic:* What one change should a listener make tomorrow based on 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.'?",
+        "**[a3]** Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well. — *On mic:* What one change should a listener make tomorrow based on 'Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and school…",
+        "**[a4]** The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind. — *On mic:* What one change should a listener make tomorrow based on 'The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.'?",
+        "**[a5]** Host: The Rockefeller family's influence on the education system is more pervasive than most people assume. — *On mic:* What one change should a listener make tomorrow based on 'Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.'?"
+      ],
+      "themes": [
+        {
+          "label": "Theme 1",
+          "discussed": "Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        },
+        {
+          "label": "Theme 2",
+          "discussed": "Host: We went down this centralized path where everything in society was moving more and more towards centralization.",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        },
+        {
+          "label": "Theme 3",
+          "discussed": "Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        },
+        {
+          "label": "Theme 4",
+          "discussed": "The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.",
+          "implying": "The show is treating this as actionable for the listener, not background noise.",
+          "matters": "Turn this into one decision, one example, and one next step - or it stays noise."
+        }
+      ],
+      "what_worked": [
+        "Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410"
+      ],
+      "where_it_breaks": {
+        "issues": [
+          "Claims that lack timestamped or third-party verification."
+        ],
+        "rule": "Every segment must point back to the thesis; if it doesn't, it's a different episode."
+      },
+      "opportunities": {
+        "spinoff_title": "Deeper on: Host: We went down this centralized path where everythin…",
+        "spinoff_structure": "(1) State the single problem. (2) One framework or story. (3) One listener action. (4) What you'll measure.",
+        "clip_moments": [
+          "Anchor clips to the episode thesis: Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410"
+        ],
+        "segment_idea": "Add a tight \"Thesis line\" block that forces one conclusion before you move topics - fixes drift without new gear."
+      },
+      "follow_up_questions": [
+        "What would a domain expert challenge about 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.'?",
+        "What concrete evidence would confirm or disprove 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.' this month?",
+        "What one change should a listener make tomorrow based on 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.'?",
+        "What would a domain expert challenge about 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.'?",
+        "What concrete evidence would confirm or disprove 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.' this month?",
+        "What one change should a listener make tomorrow based on 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.'?"
+      ],
+      "guest_strategy": {
+        "intro": "Expert guests (specific authority) - bring verification, edge cases, and citations tied to your thesis.",
+        "guests": [
+          {
+            "guest_type": "Diane Ravitch",
+            "adds": "U.S. education policy and reform narratives — stress-tests institutional claims with evidence."
+          }
+        ]
+      },
+      "segment_upgrade": "**Single-ladder close (90s):** (1) One-sentence thesis. (2) One example or number. (3) One behavior change. Fixes \"outline without payoff\" in a high_signal episode.",
+      "immediate_fix_plan": [
+        "Pressure-test the strongest claim with one dedicated segment next episode.",
+        "Say your thesis out loud in the cold open; if you can't, rewrite before you record.",
+        "Cut one competing topic and schedule it as a separate episode."
+      ],
+      "bottom_line": {
+        "good": "There is raw material and intent - enough to coach.",
+        "must_change": "Tighten evidence and conclusion around the lead claim.",
+        "if_fixed": "Retention, clips, and referrals rise when listeners can repeat your idea in one sentence."
+      },
+      "meta": {
+        "title": "Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410",
+        "transcript_words": 391
+      }
+    },
+    "weak_claims": [
+      {
+        "id": "a19",
+        "reason": "Short evidence or low strength in local assessment",
+        "severity": "medium"
+      }
+    ],
+    "summary": "Export withheld: insufficient grounded signal for a network-grade report (see metadata.export_blockers).",
+    "score": 0,
+    "markdown_export": "# SoapBoxx Episode Report\n\n## Episode verdict: **C — Weak episode (limited read)**\n\n**Show / episode:** Julian Dorey · Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410\n\n### What's going on\nThis episode did not provide enough **structured signal** for a full breakdown (low evidence, weak segmentation, and/or transcript quality limits what can be verified).\n\n**Translation:** the content lacks a clear analyzable spine on the tape, or the transcript is too weak to extract it reliably.\n\n### Likely issues (from pattern + this run)\n\n1. **No clear structure** — ideas drift instead of building in stages.\n2. **Low specificity** — abstract talk without concrete claims or scenes.\n3. **Weak segmentation** — few “moments” to anchor clips or chapter-style insights.\n\n**From this run specifically:**\n- FAIL: thesis grounding ratio 0.18 < 0.25 (many thesis words not found in transcript — possible drift).\n\n### What to fix next episode\n\n- **Force a clear episode thesis early** — “This episode is about X; we’ll show it through Y.”\n- **Break the conversation into segments** — chapters, not one long ramble.\n- **Add concrete examples** — stories beat philosophy-only blocks for clips and growth.\n\n### Growth insight\n\nEpisodes like this (ambient, philosophical, or passive-listening formats) often:\n\n- perform well for **passive listening / retention**\n- perform poorly for **clips and growth** unless you add stakes and scenes\n\n**Decide:** is this a **growth episode** or a **retention episode**? Right now it reads as neither optimized.\n\n### Why this is limited\n\nTranscript words (when counted): ~391 · Signal mode: HIGH_SIGNAL · Primary topic (best effort): Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410\n\nDeeper scoring and clip picks would be guesswork without grounded evidence and segments.\n\n*This remains honest: there are **no synthetic scores** or faux-authoritative packaging here.*\n\n**Why this is limited** (plain language): the run had **insufficient signal** for a full network-grade strategist export — same bar as before, better coaching.\n\n---\n\n*Technical details for support / QA:* FAIL: thesis grounding ratio 0.18 < 0.25 (many thesis words not found in transcript — possible drift).\n\n---\n\n## Workflow execution checklist\n\n*From enriched `workflow_report`: highlights, anchors, follow-ups, guests, segments. Guest rows are **outreach-oriented**; names that only appear *in* the story are omitted.*\n\n## 1. Key Highlights\n- Host: We went down this centralized path where everything in society was moving more and more towards centralization.\n- Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.\n- The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.\n- It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.\n- Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.\n\n## 2. Key beats & pull quotes\n- **[a4]** 120.0s | interpretive | **Claim:** The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind. | **Evidence:** The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.\n- **[a3]** 120.0s | interpretive | **Claim:** Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well. | **Evidence:** Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good.\n- **[a5]** 330.0s | interpretive | **Claim:** Host: The Rockefeller family's influence on the education system is more pervasive than most people assume. | **Evidence:** Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.\n- **[a8]** 660.0s | interpretive | **Claim:** Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens. | **Evidence:** Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens.\n- **[a10]** 1020.0s | interpretive | **Claim:** Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a reminder that whoever controls curriculum controls the future a generation later. | **Evidence:** Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a.\n- **[a17]** 660.0s | interpretive | **Claim:** The Rockefeller foundation and related networks stayed heavily invested in education policy narratives. | **Evidence:** The Rockefeller foundation and related networks stayed heavily invested in education policy narratives.\n- **[a16]** 1740.0s | interpretive | **Claim:** Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities. | **Evidence:** Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities.\n- **[a2]** 10.0s | interpretive | **Claim:** Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people. | **Evidence:** Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.\n- **[a7]** 480.0s | interpretive | **Claim:** Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight. | **Evidence:** Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.\n- **[a1]** 10.0s | interpretive | **Claim:** Host: We went down this centralized path where everything in society was moving more and more towards centralization. | **Evidence:** Host: We went down this centralized path where everything in society was moving more and more towards centralization.\n- **[a13]** 1380.0s | interpretive | **Claim:** Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases. | **Evidence:** Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases.\n- **[a14]** 1380.0s | interpretive | **Claim:** Listeners should verify what applies in their district rather than assuming a national uniform rule. | **Evidence:** Listeners should verify what applies in their district rather than assuming a national uniform rule.\n\n## 3. Follow-Up Questions\n- **[a1]** What would a domain expert challenge about 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.'?\n- **[a1]** What concrete evidence would confirm or disprove 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.' this month?\n- **[a2]** What would a domain expert challenge about 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.'?\n- **[a2]** What concrete evidence would confirm or disprove 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.' this month?\n- **[a3]** What would a domain expert challenge about 'Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.'?\n- **[a3]** What concrete evidence would confirm or disprove 'Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.' this month?\n- **[a4]** What would a domain expert challenge about 'The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.'?\n- **[a4]** What concrete evidence would confirm or disprove 'The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.' this month?\n\n## 4. Guest / Research Recommendations\n| Suggested Guest | Title | Topic / Angle | Claim | Relevance |\n| --- | --- | --- | --- | --- |\n| Diane Ravitch | Suggested | U.S. education policy and reform narratives — stress-tests institutional claims with evidence. | a4 | 7 |\n| Jonathan Kozol | Author | Human-impact framing for education episodes. | a3 | 9 |\n| E.D. Hirsch Jr. | Education Scholar | Curriculum- and standards-heavy episodes. | a5 | 8 |\n| Jill Lepore | Historian | Credibility pass on a narrative-heavy episode. | a8 | 10 |\n| David W. Blight | Historian | Episodes where the story risks outpacing the evidence. | a10 | 9 |\n\n## 5. Segment Planning\n- **Host: We went down this centralized path where everything in society was moving more and more towards centralization.** — Separate perception from evidence.\n- **Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.** — Separate perception from evidence.\n- **Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.** — Separate perception from evidence.\n\n## 6. Analytics / Narrative Tracking\n**Recurring / supporting themes:**\n- Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410\n**Topic signals:** Claims that lack timestamped or third-party verification.\n**Next moves:**\n- Pressure-test the strongest claim with one dedicated segment next episode.\n\n*SoapBoxx Episode Intelligence — workflow appendix — v3*\n"
+  },
+  "markdown_export": "# SoapBoxx Episode Report\n\n## Episode verdict: **C — Weak episode (limited read)**\n\n**Show / episode:** Julian Dorey · Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410\n\n### What's going on\nThis episode did not provide enough **structured signal** for a full breakdown (low evidence, weak segmentation, and/or transcript quality limits what can be verified).\n\n**Translation:** the content lacks a clear analyzable spine on the tape, or the transcript is too weak to extract it reliably.\n\n### Likely issues (from pattern + this run)\n\n1. **No clear structure** — ideas drift instead of building in stages.\n2. **Low specificity** — abstract talk without concrete claims or scenes.\n3. **Weak segmentation** — few “moments” to anchor clips or chapter-style insights.\n\n**From this run specifically:**\n- FAIL: thesis grounding ratio 0.18 < 0.25 (many thesis words not found in transcript — possible drift).\n\n### What to fix next episode\n\n- **Force a clear episode thesis early** — “This episode is about X; we’ll show it through Y.”\n- **Break the conversation into segments** — chapters, not one long ramble.\n- **Add concrete examples** — stories beat philosophy-only blocks for clips and growth.\n\n### Growth insight\n\nEpisodes like this (ambient, philosophical, or passive-listening formats) often:\n\n- perform well for **passive listening / retention**\n- perform poorly for **clips and growth** unless you add stakes and scenes\n\n**Decide:** is this a **growth episode** or a **retention episode**? Right now it reads as neither optimized.\n\n### Why this is limited\n\nTranscript words (when counted): ~391 · Signal mode: HIGH_SIGNAL · Primary topic (best effort): Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410\n\nDeeper scoring and clip picks would be guesswork without grounded evidence and segments.\n\n*This remains honest: there are **no synthetic scores** or faux-authoritative packaging here.*\n\n**Why this is limited** (plain language): the run had **insufficient signal** for a full network-grade strategist export — same bar as before, better coaching.\n\n---\n\n*Technical details for support / QA:* FAIL: thesis grounding ratio 0.18 < 0.25 (many thesis words not found in transcript — possible drift).\n\n---\n\n## Workflow execution checklist\n\n*From enriched `workflow_report`: highlights, anchors, follow-ups, guests, segments. Guest rows are **outreach-oriented**; names that only appear *in* the story are omitted.*\n\n## 1. Key Highlights\n- Host: We went down this centralized path where everything in society was moving more and more towards centralization.\n- Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.\n- The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.\n- It is not a cartoon villain story; it is about funding flows, standards, and what gets treated as normal in a classroom.\n- Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.\n\n## 2. Key beats & pull quotes\n- **[a4]** 120.0s | interpretive | **Claim:** The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind. | **Evidence:** The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.\n- **[a3]** 120.0s | interpretive | **Claim:** Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well. | **Evidence:** Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good.\n- **[a5]** 330.0s | interpretive | **Claim:** Host: The Rockefeller family's influence on the education system is more pervasive than most people assume. | **Evidence:** Host: The Rockefeller family's influence on the education system is more pervasive than most people assume.\n- **[a8]** 660.0s | interpretive | **Claim:** Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens. | **Evidence:** Host: Local school board meetings still matter because foundations and national organizations can steer what shows up on an agenda long before a vote happens.\n- **[a10]** 1020.0s | interpretive | **Claim:** Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a reminder that whoever controls curriculum controls the future a generation later. | **Evidence:** Host: The Soviet Union taking control of education is often used as a cautionary tale — not as a direct prediction, but as a.\n- **[a17]** 660.0s | interpretive | **Claim:** The Rockefeller foundation and related networks stayed heavily invested in education policy narratives. | **Evidence:** The Rockefeller foundation and related networks stayed heavily invested in education policy narratives.\n- **[a16]** 1740.0s | interpretive | **Claim:** Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities. | **Evidence:** Host: Closing thought: decentralization is not chaos; it is a design choice about where decisions get tested against real families and real communities.\n- **[a2]** 10.0s | interpretive | **Claim:** Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people. | **Evidence:** Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.\n- **[a7]** 480.0s | interpretive | **Claim:** Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight. | **Evidence:** Guest: We see especially with education, during COVID, how disastrous it was when schooling became remote-first overnight.\n- **[a1]** 10.0s | interpretive | **Claim:** Host: We went down this centralized path where everything in society was moving more and more towards centralization. | **Evidence:** Host: We went down this centralized path where everything in society was moving more and more towards centralization.\n- **[a13]** 1380.0s | interpretive | **Claim:** Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases. | **Evidence:** Host: Parents can opt their kids out of some curriculum tracks when policy allows; courts have weighed religious freedom and parental rights in specific cases.\n- **[a14]** 1380.0s | interpretive | **Claim:** Listeners should verify what applies in their district rather than assuming a national uniform rule. | **Evidence:** Listeners should verify what applies in their district rather than assuming a national uniform rule.\n\n## 3. Follow-Up Questions\n- **[a1]** What would a domain expert challenge about 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.'?\n- **[a1]** What concrete evidence would confirm or disprove 'Host: We went down this centralized path where everything in society was moving more and more towards centralization.' this month?\n- **[a2]** What would a domain expert challenge about 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.'?\n- **[a2]** What concrete evidence would confirm or disprove 'Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.' this month?\n- **[a3]** What would a domain expert challenge about 'Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.'?\n- **[a3]** What concrete evidence would confirm or disprove 'Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.' this month?\n- **[a4]** What would a domain expert challenge about 'The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.'?\n- **[a4]** What concrete evidence would confirm or disprove 'The Prussian model of schooling was imported into the United States with industrial-scale discipline in mind.' this month?\n\n## 4. Guest / Research Recommendations\n| Suggested Guest | Title | Topic / Angle | Claim | Relevance |\n| --- | --- | --- | --- | --- |\n| Diane Ravitch | Suggested | U.S. education policy and reform narratives — stress-tests institutional claims with evidence. | a4 | 7 |\n| Jonathan Kozol | Author | Human-impact framing for education episodes. | a3 | 9 |\n| E.D. Hirsch Jr. | Education Scholar | Curriculum- and standards-heavy episodes. | a5 | 8 |\n| Jill Lepore | Historian | Credibility pass on a narrative-heavy episode. | a8 | 10 |\n| David W. Blight | Historian | Episodes where the story risks outpacing the evidence. | a10 | 9 |\n\n## 5. Segment Planning\n- **Host: We went down this centralized path where everything in society was moving more and more towards centralization.** — Separate perception from evidence.\n- **Power, media, authority, schooling — when those drift together it rarely ends well for ordinary people.** — Separate perception from evidence.\n- **Guest: We have seen through history that anytime we really drift into centralization of power, media authority, and schooling, it is not a good path and it does not end well.** — Separate perception from evidence.\n\n## 6. Analytics / Narrative Tracking\n**Recurring / supporting themes:**\n- Through-line (best effort): Brainwash! - The Rockefeller School Psyop WORSE Than You Think | Spencer Taylor 410\n**Topic signals:** Claims that lack timestamped or third-party verification.\n**Next moves:**\n- Pressure-test the strongest claim with one dedicated segment next episode.\n\n*SoapBoxx Episode Intelligence — workflow appendix — v3*\n",
+  "warnings": [
+    "SOAPBOXX_OLLAMA_MODEL is not set; no LLM brief was produced. Install Ollama, pull a model, and set SOAPBOXX_OLLAMA_MODEL for v2 brief extraction."
+  ],
+  "model": "brief-unavailable"
+}
