@@ -3,28 +3,37 @@
     "n_episodes": 2,
     "n_labeled": 0,
     "n_matched": 0,
-    "agreement": null
+    "agreement": null,
+    "n_labeled_calibration": 0,
+    "n_matched_calibration": 0,
+    "agreement_calibration": null
   },
   "rows": [
     {
       "id": "smoke_ok",
-      "source": "inline",
+      "source": "C:\\Users\\yasuk\\SoapBoxx\\config/eval_briefs/smoke_ok.json",
       "ship_gate": "FAIL",
-      "ship_score": 0.3518,
-      "ship_score_weighted": 0.3518,
+      "ship_score": 0.4216,
+      "ship_score_weighted": 0.4216,
       "label": null,
-      "alignment_score": 0.3518,
-      "alignment_top_k_mean": 0.5062,
+      "alignment_score": 0.4216,
+      "alignment_top_k_mean": 0.6056,
       "alignment_support_ratio": 0.0,
-      "alignment_std_dev": 0.0103,
+      "alignment_std_dev": 0.009,
+      "alignment_low_support_count": 0,
       "alignment_num_claims": 2,
       "alignment_k": 2,
       "alignment_n": 2,
-      "alignment_thesis": "Policy pressure leads public agencies to delay sensitive disclosures until after major elections in order to reduce political backlash and protect credibility in office."
+      "alignment_thesis": "Policy pressure leads public agencies to delay sensitive disclosures until after major elections in order to reduce political backlash and protect credibility in office.",
+      "ship_notes": [
+        "Low semantic alignment between thesis and claims"
+      ],
+      "calibration_eval": "FAIL",
+      "reason": "Low semantic alignment between thesis and claims"
     },
     {
       "id": "smoke_tag",
-      "source": "inline",
+      "source": "C:\\Users\\yasuk\\SoapBoxx\\config/eval_briefs/smoke_tag.json",
       "ship_gate": "FAIL",
       "ship_score": 0.0,
       "ship_score_weighted": 0.0,
@@ -33,10 +42,16 @@
       "alignment_top_k_mean": 0.0,
       "alignment_support_ratio": 0.0,
       "alignment_std_dev": 0.0,
+      "alignment_low_support_count": 0,
       "alignment_num_claims": 0,
       "alignment_k": 0,
       "alignment_n": 0,
-      "alignment_thesis": "A; B; C; D; E; F; G; H"
+      "alignment_thesis": "A; B; C; D; E; F; G; H",
+      "ship_notes": [
+        "Thesis is not a structured, testable claim"
+      ],
+      "calibration_eval": "FAIL",
+      "reason": "Thesis is not a structured, testable claim"
     }
   ]
 }

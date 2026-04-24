@@ -1,14 +1,14 @@
 {
-  "description": "Batch eval for scripts/eval_ship_gate_batch.py — paths relative to repo root unless absolute.",
+  "description": "Batch eval for scripts/eval_ship_gate_batch.py — paths relative to repo root unless absolute. Copy to config/eval_manifest.json and add your episodes, or use config/eval_manifest.json (ships with smoke fixtures).",
   "episodes": [
     {
       "id": "example_good_01",
-      "brief": "path/to/saved_brief_good.json",
+      "brief": "config/eval_briefs/smoke_ok.json",
       "label": "PASS"
     },
     {
       "id": "example_bad_01",
-      "brief": "path/to/saved_brief_bad.json",
+      "brief": "config/eval_briefs/smoke_tag.json",
       "label": "FAIL"
     }
   ]

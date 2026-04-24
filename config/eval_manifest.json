@@ -1,0 +1,13 @@
+{
+  "description": "Default eval manifest for scripts/eval_ship_gate_batch.py (paths relative to repo root).",
+  "episodes": [
+    {
+      "id": "smoke_ok",
+      "brief": "config/eval_briefs/smoke_ok.json"
+    },
+    {
+      "id": "smoke_tag",
+      "brief": "config/eval_briefs/smoke_tag.json"
+    }
+  ]
+}

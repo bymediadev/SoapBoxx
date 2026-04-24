@@ -1,0 +1,13 @@
+{
+  "argument_spine": {
+    "data": {
+      "thesis": "A; B; C; D; E; F; G; H",
+      "claims": [
+        {
+          "claim": "Some filler claim text with enough length for alignment scoring only."
+        }
+      ]
+    }
+  },
+  "claims": []
+}

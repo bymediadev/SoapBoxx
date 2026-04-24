@@ -1,0 +1,16 @@
+{
+  "argument_spine": {
+    "data": {
+      "thesis": "Policy pressure leads public agencies to delay sensitive disclosures until after major elections in order to reduce political backlash and protect credibility in office.",
+      "claims": [
+        {
+          "claim": "Elected pressure makes agencies postpone sensitive disclosure until after the election season when transparency would be costly to incumbents."
+        },
+        {
+          "claim": "Disclosure and policy transparency timing still tracks electoral incentives after major elections for agencies that face public backlash risk in the same cycle."
+        }
+      ]
+    }
+  },
+  "claims": []
+}

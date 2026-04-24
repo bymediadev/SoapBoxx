@@ -1,26 +1,225 @@
 """
-Single-file intelligence core: semantic alignment, ship scoring, and gate decisions.
+Single-file intelligence core: **judgment** (transcript → passes → ship) plus **brief** ship gate.
 
-Tweak thresholds and ``SHIP_GATE_DEFAULT`` here for fast iteration. ``load_ship_gate_config()``
-still merges ``config/ship_gate.json`` / ``$SOAPBOXX_SHIP_GATE_CONFIG`` when present.
+**Judgment path** (transcript, no module sprawl; calibrate only thresholds)::
 
-**Alignment** implementations live in ``semantic_alignment`` (so unit tests can patch
-``semantic_alignment`` / ``claim_alignment_detail``). The ``intelligence_ship_gate`` module
-re-exports ``claim_alignment_detail`` and wraps ``assess_brief_intelligence_ship`` with an
-injected aligner (patch-friendly). This file holds ship weighting, thresholds, optional
-standalone Ollama HTTP, built-in eval smoke, and stub pipeline entrypoints.
+    empty_brief, run_spine_first, run_critic, run_refiner, semantic_alignment, ship_decision, run, EVAL_SET, run_eval
 
-For a quick check: ``python backend/soapboxx_intelligence_core.py --smoke`` or ``--eval``.
+**Episode-brief path** (production; unchanged API)::
+
+    assess_brief_intelligence_ship, load_ship_gate_config, claim_alignment_detail (from ``semantic_alignment``)
+
+Tweak ``JUDGMENT_*`` and ``SHIP_GATE_DEFAULT`` / ``load_ship_gate_config`` for fast iteration.
+For a quick check: ``python backend/soapboxx_intelligence_core.py --smoke`` (briefs) or ``--judgment`` (EVAL_SET).
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import urllib.error
 import urllib.request
+
+# ===== JUDGMENT ENGINE (transcript; structural repair, not paraphrase) — calibrate: JUDGMENT_* only =====
+
+JUDGMENT_ALIGNMENT_FAIL = 0.45
+JUDGMENT_SCORE_REVIEW = 0.6
+
+_VAGUE_TOKENS = ("maybe", "perhaps", "sort of", "kind of", "sortof", "hmm", "umm", "uh", "things")
+
+
+def empty_brief() -> Dict[str, Any]:
+    return {
+        "pass1": {},
+        "pass2": {},
+        "pass3": {},
+        "score": 0.0,
+        "alignment": 0.0,
+        "decision": None,
+    }
+
+
+def run_spine_first(transcript: str) -> Dict[str, Any]:
+    """
+    Pass 1: thesis + atomic claims (heuristic extraction from raw transcript; replace with LLM in pipeline).
+    """
+    t = (transcript or "").strip()
+    if not t:
+        return {"thesis": "", "claims": []}
+    parts = re.split(r"(?<=[.!?])\s+|\n+", t)
+    sents = [p.strip() for p in parts if p and p.strip()]
+    if not sents:
+        sents = [t]
+
+    def _wc(s: str) -> int:
+        return len(s.split())
+
+    thesis_s = sents[0]
+    if _wc(thesis_s) < 6 and len(sents) > 1:
+        thesis_s = (sents[0] + " " + sents[1]).strip()
+
+    claim_texts: List[str] = []
+    for s in sents:
+        if not s or s == thesis_s:
+            continue
+        if _wc(s) >= 8:
+            claim_texts.append(s)
+    if not claim_texts:
+        for s in sents[1:4]:
+            if s and s not in (thesis_s,):
+                claim_texts.append(s)
+    if not claim_texts and thesis_s:
+        claim_texts = [thesis_s if len(thesis_s) <= 200 else thesis_s[:197] + "..."]
+
+    claims = [{"id": f"c{j+1}", "text": tx} for j, tx in enumerate(claim_texts[:12])]
+    return {"thesis": thesis_s, "claims": claims}
+
+
+def run_critic(pass1: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Pass 2: attack vagueness, unsupported (short) claims, and weak structure (heuristic).
+    """
+    issues: List[Dict[str, Any]] = []
+    for c in pass1.get("claims") or []:
+        if not isinstance(c, dict):
+            continue
+        cid = str(c.get("id", "") or "")
+        text = (c.get("text") or "").strip()
+        low = text.lower()
+        if len(text) < 12:
+            issues.append({"claim_id": cid, "problem": "unverifiable"})
+        elif any(v in low for v in _VAGUE_TOKENS):
+            issues.append({"claim_id": cid, "problem": "vague"})
+    thesis = (pass1.get("thesis") or "").strip()
+    if len(thesis.split()) < 6:
+        issues.append({"claim_id": "", "problem": "vague_thesis"})
+    if ";" in thesis and thesis.count(";") >= 1 and len(thesis.split()) < 8:
+        issues.append({"claim_id": "", "problem": "unstructured_thesis"})
+
+    severity = min(1.0, 0.12 * len(issues) + (0.15 if not thesis else 0.0))
+    return {"issues": issues, "severity": round(float(severity), 4)}
+
+
+def run_refiner(pass1: Dict[str, Any], pass2: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Pass 3: repair support structure: drop or tighten, not paraphrase for its own sake.
+    """
+    issues = pass2.get("issues") or []
+    claims: List[Dict[str, Any]] = []
+    for c in pass1.get("claims") or []:
+        if not isinstance(c, dict):
+            continue
+        cid = c.get("id", "")
+        issue = next((i for i in issues if i.get("claim_id") == cid), None)
+        if issue and issue.get("problem") == "unverifiable":
+            continue
+        if issue and issue.get("problem") == "vague" and len((c.get("text") or "").split()) < 8:
+            continue
+        claims.append(dict(c))
+    if any(x.get("problem") == "unstructured_thesis" for x in issues if isinstance(x, dict)):
+        return {"refined_thesis": "", "claims": []}
+    return {"refined_thesis": pass1.get("thesis") or "", "claims": claims}
+
+
+def semantic_alignment(thesis: str, claims: List[Dict[str, Any]]) -> float:
+    """
+    Simple agreement signal thesis↔claims; swap for embeddings/NLI later — keep signature stable.
+    """
+    if not claims:
+        return 0.0
+    scores: List[float] = []
+    toks = (thesis or "").split()
+    head = toks[0] if toks else ""
+    for c in claims:
+        text = (c.get("text", "") or "") if isinstance(c, dict) else str(c)
+        score = 1.0 if (head and head.lower() in text.lower()) else 0.4
+        scores.append(score)
+    return float(sum(scores) / max(1, len(scores)))
+
+
+def ship_decision(pass1: Dict[str, Any], pass2: Dict[str, Any], pass3: Dict[str, Any]) -> Dict[str, Any]:
+    th = (pass1.get("thesis") or "") or (pass3.get("refined_thesis") or "")
+    claims = pass3.get("claims") or []
+    align = semantic_alignment(str(th), claims if isinstance(claims, list) else [])
+    sev = float(pass2.get("severity") or 0.0)
+    score = align * 0.5 + (1.0 - sev) * 0.5
+    if align < JUDGMENT_ALIGNMENT_FAIL:
+        return {
+            "decision": "FAIL",
+            "reason": "low_alignment",
+            "score": round(float(score), 4),
+            "alignment": round(float(align), 4),
+        }
+    if score < JUDGMENT_SCORE_REVIEW:
+        return {
+            "decision": "REVIEW",
+            "reason": "borderline",
+            "score": round(float(score), 4),
+            "alignment": round(float(align), 4),
+        }
+    return {
+        "decision": "PASS",
+        "reason": "ok",
+        "score": round(float(score), 4),
+        "alignment": round(float(align), 4),
+    }
+
+
+EVAL_SET: List[Dict[str, Any]] = [
+    {
+        "id": "case_1",
+        "transcript": (
+            "Revenue growth often reflects pricing power in durable competitive moats. "
+            "Revenue increases when customers accept higher prices for the same value proposition. "
+            "Revenue deceleration sometimes signals market saturation or new competition in the same segment."
+        ),
+        "label": "PASS",
+    },
+    {
+        "id": "case_2",
+        "transcript": "One; two; three; four",
+        "label": "FAIL",
+    },
+    {
+        "id": "case_3",
+        "transcript": "",
+        "label": "FAIL",
+    },
+]
+
+
+def run(transcript: str) -> Dict[str, Any]:
+    p1 = run_spine_first(transcript)
+    p2 = run_critic(p1)
+    p3 = run_refiner(p1, p2)
+    dec = ship_decision(p1, p2, p3)
+    return {
+        "pass1": p1,
+        "pass2": p2,
+        "pass3": p3,
+        "decision": dec,
+    }
+
+
+def run_eval() -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for case in EVAL_SET:
+        r = run(str(case.get("transcript") or ""))
+        d = r.get("decision") or {}
+        out.append(
+            {
+                "id": case.get("id"),
+                "pred": d.get("decision"),
+                "label": case.get("label"),
+                "score": d.get("score"),
+                "alignment": d.get("alignment"),
+            }
+        )
+    return out
+
 
 # Scoring formulas live in ``semantic_alignment`` (patchable in tests). This module owns ship math + Ollama.
 try:
@@ -607,37 +806,9 @@ def assess_brief_intelligence_ship(
     }
 
 
-# --- optional full-episode entrypoints (wire to v3 / scripts; no imports here) ---
-
-
-def run_spine_first(_transcript: str) -> Dict[str, Any]:
-    """
-    Not implemented in this file: your pipeline produces the episode brief (pass 1).
-    See ``soapboxx_v3_workflow`` or ``scripts/episode_brief.py``.
-    """
-    raise NotImplementedError(
-        "Build the spine brief in your v3 pipeline, then call assess_brief_intelligence_ship(brief)."
-    )
-
-
-def run_critic(_pass1: Dict[str, Any]) -> Dict[str, Any]:
-    """Critic pass: not implemented here; returns argument_critic in your real workflow."""
-    raise NotImplementedError("Run your critic step on the pass-1 brief, then merge into the same brief dict.")
-
-
-def run_refiner(_pass1: Dict[str, Any], _pass2: Dict[str, Any]) -> Dict[str, Any]:
-    """Refiner pass: not implemented here."""
-    raise NotImplementedError("Run your refiner step, then set argument_refined on the brief if applicable.")
-
-
-def run_episode(_transcript: str, _eval_mode: bool = False) -> Dict[str, Any]:
-    """
-    Example composition. Stages are stubs: use your workflow to build ``brief``, then
-    ``assess_brief_intelligence_ship(brief)``.
-    """
-    raise NotImplementedError(
-        "End-to-end episode run is not inlined here; produce a brief, then call assess_brief_intelligence_ship."
-    )
+def run_episode(transcript: str, _eval_mode: bool = False) -> Dict[str, Any]:
+    """Backward-compatible alias for ``run``; ``_eval_mode`` reserved."""
+    return run(transcript)
 
 
 # === Public re-exports (subset of this module) ================================
@@ -649,12 +820,20 @@ __all__ = [
     "THESIS_MIN_WORDS",
     "SUPPORT_RATIO_GATE_MIN",
     "SUPPORT_RATIO_REVIEW_MAX",
+    "JUDGMENT_ALIGNMENT_FAIL",
+    "JUDGMENT_SCORE_REVIEW",
+    "empty_brief",
+    "run",
     "run_spine_first",
     "run_critic",
     "run_refiner",
+    "semantic_alignment",
+    "ship_decision",
     "run_episode",
     "run_eval",
+    "EVAL_SET",
     "EVAL_SMOKE",
+    "run_brief_smoke_eval",
     "main",
 ]
 
@@ -707,7 +886,8 @@ EVAL_SMOKE: list[dict[str, Any]] = [
 ]
 
 
-def run_eval() -> list[dict[str, Any]]:
+def run_brief_smoke_eval() -> list[dict[str, Any]]:
+    """Synthetic **brief** briefs (EVAL_SMOKE) through ``assess_brief_intelligence_ship`` (Ollama alignment)."""
     out: list[dict[str, Any]] = []
     for row in EVAL_SMOKE:
         r = assess_brief_intelligence_ship(row["brief"])
@@ -724,16 +904,24 @@ def run_eval() -> list[dict[str, Any]]:
 
 def _cli() -> int:
     import argparse
-    import sys
 
     ap = argparse.ArgumentParser(description="SoapBoxx single-file intelligence core (eval / smoke).")
-    ap.add_argument("--smoke", action="store_true", help="Run EVAL_SMOKE briefs through the ship gate")
+    ap.add_argument("--smoke", action="store_true", help="Run EVAL_SMOKE briefs through assess_brief_intelligence_ship")
     ap.add_argument("--eval", dest="do_eval", action="store_true", help="Same as --smoke (alias)")
+    ap.add_argument(
+        "--judgment",
+        action="store_true",
+        help="Run EVAL_SET transcripts through the embedded judgment pipeline (run_eval)",
+    )
     args = ap.parse_args()
-    if not args.smoke and not args.do_eval:
+    if not args.smoke and not args.do_eval and not args.judgment:
         ap.print_help()
         return 0
-    rows = run_eval()
+    rows: list[dict[str, Any]] = []
+    if args.judgment:
+        rows.extend(run_eval())
+    if args.smoke or args.do_eval:
+        rows.extend(run_brief_smoke_eval())
     for row in rows:
         print(json.dumps(row, ensure_ascii=True))
     return 0

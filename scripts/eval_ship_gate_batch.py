@@ -16,8 +16,10 @@ Per row (JSON):
 
 Usage:
 
-  # Manifest (see config/eval_manifest.example.json)
-  python scripts/eval_ship_gate_batch.py --manifest config/eval_manifest.example.json
+  # Manifest (default fixtures: config/eval_manifest.json)
+  python scripts/eval_ship_gate_batch.py --manifest config/eval_manifest.json
+
+  # Copy config/eval_manifest.example.json to add your own brief paths and labels
 
   # One or more brief JSON files
   python scripts/eval_ship_gate_batch.py path/to/brief1.json
