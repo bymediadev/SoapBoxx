@@ -48,12 +48,21 @@ def verify(*, repo_root: str) -> Tuple[bool, List[str]]:
 
     try:
         import backend.episode_intelligence as ei  # noqa: E402
+        import backend.episode_report_v3 as er3  # noqa: E402
         import backend.soapboxx_v3_workflow as wf  # noqa: E402
+        import backend.strict_episode_contract as sec  # noqa: E402
+        import backend.transcript_structure_extract as tse  # noqa: E402
     except ImportError as e:
         errors.append(f"Import failed: {e}")
         return False, errors
 
-    for label, mod in (("episode_intelligence", ei), ("soapboxx_v3_workflow", wf)):
+    for label, mod in (
+        ("episode_intelligence", ei),
+        ("episode_report_v3", er3),
+        ("soapboxx_v3_workflow", wf),
+        ("strict_episode_contract", sec),
+        ("transcript_structure_extract", tse),
+    ):
         fp = getattr(mod, "__file__", None)
         if not fp or not isinstance(fp, str):
             errors.append(f"{label}: missing __file__")
@@ -75,10 +84,61 @@ def verify(*, repo_root: str) -> Tuple[bool, List[str]]:
             "episode_intelligence: missing _coerce_brief_data_shape — "
             "file is older than this repo; sync backend/episode_intelligence.py (brief envelope coercion)."
         )
+    if not hasattr(ei, "_try_lift_stringified_brief_single_key"):
+        errors.append(
+            "episode_intelligence: missing _try_lift_stringified_brief_single_key — "
+            "file is older than this repo; sync backend/episode_intelligence.py (camelCase / stringified brief envelopes)."
+        )
+    if not hasattr(ei, "_brief_llm_envelope"):
+        errors.append(
+            "episode_intelligence: missing _brief_llm_envelope — "
+            "file is older than this repo; sync backend/episode_intelligence.py (brief Ollama retries)."
+        )
+    if not hasattr(ei, "_strict_contract_brief_enabled"):
+        errors.append(
+            "episode_intelligence: missing _strict_contract_brief_enabled — "
+            "sync backend/episode_intelligence.py (strict JSON brief path)."
+        )
+    if not hasattr(ei, "_spine_first_brief_enabled"):
+        errors.append(
+            "episode_intelligence: missing _spine_first_brief_enabled — "
+            "sync backend/episode_intelligence.py (spine-first brief path)."
+        )
+    if not hasattr(ei, "_spine_refiner_llm_enabled"):
+        errors.append(
+            "episode_intelligence: missing _spine_refiner_llm_enabled — "
+            "sync backend/episode_intelligence.py (spine refiner pass)."
+        )
+    try:
+        import backend.intelligence_ship_gate as isg  # noqa: E402
+    except ImportError as e:
+        errors.append(
+            "intelligence_ship_gate: import failed (sync repo / backend/): "
+            f"{e} — if the file is present, also sync backend/soapboxx_intelligence_core.py and "
+            "backend/semantic_alignment.py (and config/ship_gate.json when used)."
+        )
+    else:
+        if not hasattr(isg, "assess_brief_intelligence_ship"):
+            errors.append("intelligence_ship_gate: missing assess_brief_intelligence_ship.")
+    if not hasattr(sec, "validate_strict_episode_contract"):
+        errors.append(
+            "strict_episode_contract: missing validate_strict_episode_contract — "
+            "sync backend/strict_episode_contract.py."
+        )
     if not hasattr(wf, "_prune_follow_up_questions_to_evidence_map"):
         errors.append(
             "soapboxx_v3_workflow: missing _prune_follow_up_questions_to_evidence_map — "
             "file is older than this repo; sync backend/soapboxx_v3_workflow.py."
+        )
+    if not hasattr(tse, "strip_youtube_caption_metadata"):
+        errors.append(
+            "transcript_structure_extract: missing strip_youtube_caption_metadata — "
+            "sync backend/transcript_structure_extract.py (caption junk stripping)."
+        )
+    if not hasattr(er3, "_merge_strategist_blueprint_with_derived"):
+        errors.append(
+            "episode_report_v3: missing _merge_strategist_blueprint_with_derived — "
+            "sync backend/episode_report_v3.py (strategist + blueprint merge)."
         )
 
     return not errors, errors

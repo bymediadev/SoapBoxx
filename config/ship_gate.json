@@ -1,0 +1,16 @@
+{
+  "version": 4,
+  "description": "Weights and thresholds for brief intelligence ship assessment (spine / critic / refiner). Override path with SOAPBOXX_SHIP_GATE_CONFIG.",
+  "weights": {
+    "thesis_strength": 0.35,
+    "claim_quality": 0.20,
+    "claim_alignment": 0.25,
+    "evidence_quality": 0.10,
+    "critic_composure": 0.05,
+    "refinement_delta": 0.05
+  },
+  "thresholds": {
+    "pass_min": 0.72,
+    "review_min": 0.52
+  }
+}
