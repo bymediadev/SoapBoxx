@@ -36,6 +36,10 @@ strict mode. Set ``SOAPBOXX_LLM_VALIDATE_BRIEF_SCHEMA=1`` to run lightweight v2 
 chunked fallback). Optional ``SOAPBOXX_OLLAMA_NUM_CTX`` / ``OLLAMA_NUM_CTX`` and ``SOAPBOXX_OLLAMA_TOP_P``
 are forwarded to Ollama ``options``. Brief synthesis can retry after envelope coercion failures
 (``SOAPBOXX_BRIEF_ENVELOPE_RETRIES``; unset defaults to **3** extra attempts after the first).
+
+**Claim filter (v2):** after the LLM fills ``claims``, ``_normalize_brief`` runs
+``claim_filter_v2.apply_claim_filter_v2_to_brief`` (on by default; set ``SOAPBOXX_CLAIM_FILTER_V2=0`` to
+disable). See ``.env.example`` for ``SOAPBOXX_CLAIM_FILTER_MODE`` / ``SOAPBOXX_CLAIM_FILTER_DEBUG_TRACE``.
 """
 
 from __future__ import annotations
@@ -2806,7 +2810,12 @@ def _refine_genre_from_title(title: str, current_genre: str) -> str:
     return cg
 
 
-def _normalize_brief(data: Dict[str, Any], metadata: Dict[str, str]) -> Dict[str, Any]:
+def _normalize_brief(
+    data: Dict[str, Any],
+    metadata: Dict[str, str],
+    *,
+    transcript: Optional[str] = None,
+) -> Dict[str, Any]:
     snap = data.get("episode_snapshot") or {}
     snap.setdefault("title", metadata.get("title") or "")
     snap.setdefault("creator", metadata.get("creator") or "")
@@ -2825,6 +2834,16 @@ def _normalize_brief(data: Dict[str, Any], metadata: Dict[str, str]) -> Dict[str
         c["text"] = _clean_claim_text(str(c.get("text") or ""))
         ca = _clean_claim_text(str(c.get("counter_angle") or ""))
         c["counter_angle"] = ca
+    data["claims"] = claims
+    try:
+        from .claim_filter_v2 import apply_claim_filter_v2_to_brief
+    except ImportError:  # pragma: no cover
+        from claim_filter_v2 import apply_claim_filter_v2_to_brief  # type: ignore
+    try:
+        apply_claim_filter_v2_to_brief(data, transcript_context=transcript)
+    except Exception as e:  # pragma: no cover - do not break brief on filter bug
+        _LOG.warning("claim_filter_v2 apply failed: %s", e)
+    claims = [c for c in (data.get("claims") or []) if isinstance(c, dict)]
     data["claims"] = claims
     qwarn: List[str] = []
     try:
@@ -3190,7 +3209,7 @@ def generate_episode_brief(
                 flush=True,
             )
         print("[episode_intelligence] Brief generation completed.")
-        data = _normalize_brief(data, meta)
+        data = _normalize_brief(data, meta, transcript=t)
         asp = data.get("argument_spine")
         if isinstance(asp, dict):
             smd = asp.get("metadata")

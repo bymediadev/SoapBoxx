@@ -872,7 +872,8 @@ class TestEpisodeIntelligence(unittest.TestCase):
             "guests": [],
             "action_plan_7d": [],
         }
-        nb = ei._normalize_brief(brief, {})
+        with patch.dict(os.environ, {"SOAPBOXX_CLAIM_FILTER_V2": "0"}, clear=False):
+            nb = ei._normalize_brief(brief, {})
         self.assertEqual(len(nb["claims"]), 1)
         self.assertIn("Institutional accountability", nb["claims"][0]["text"])
 
@@ -1005,7 +1006,8 @@ class TestEpisodeIntelligence(unittest.TestCase):
             ],
             "action_plan_7d": [],
         }
-        nb = ei._normalize_brief(brief, {})
+        with patch.dict(os.environ, {"SOAPBOXX_CLAIM_FILTER_V2": "0"}, clear=False):
+            nb = ei._normalize_brief(brief, {})
         self.assertEqual(len(nb["claims"]), 1)
         self.assertEqual(nb["claims"][0]["id"], "c1")
         self.assertEqual(nb["guests"][0]["maps_to_claim_id"], "c1")
@@ -1064,6 +1066,7 @@ class TestEpisodeIntelligence(unittest.TestCase):
                 "SOAPBOXX_OLLAMA_MODEL": "llama3.1:8b",
                 "SOAPBOXX_OFFLINE": "0",
                 "SOAPBOXX_BRIEF_STRICT_CONTRACT": "0",
+                "SOAPBOXX_CLAIM_FILTER_V2": "0",
             },
             clear=False,
         ):
