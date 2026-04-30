@@ -102,6 +102,22 @@ If you **fork**, update **`PACKAGE_INFO.json`** (`github_repo_url`, `github_repo
 - **Windows**, **macOS**, or **Linux**
 - Internet optional for the UI; **only needed** if you use cloud APIs or SMTP.
 
+### Demo activation (14-day lock)
+
+- On startup, the app asks for a demo activation token if none is installed.
+- Tokens expire automatically (default 14 days), then the app is locked until a new token is entered.
+- Maintainers generate tokens from the demo folder:
+
+```bash
+python scripts/generate_demo_license.py --email tester@example.com --days 14
+```
+
+- Optional machine-bound token:
+
+```bash
+python scripts/generate_demo_license.py --email tester@example.com --bind-this-machine
+```
+
 ### Plug-and-play (recommended — especially for the GitHub Release ZIP)
 
 From inside **`SoapBoxx-Demo`** (open **`READ_ME_FIRST.txt`** for the same steps):

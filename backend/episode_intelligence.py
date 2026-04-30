@@ -14,7 +14,9 @@ so ``generate_episode_brief`` calls a local Ollama server.
 **Structured API mode (default, recommended):** ``SOAPBOXX_BRIEF_STRICT_CONTRACT`` defaults to **on**
 (omit the variable or set ``1``) so the brief uses ``strict_episode_contract`` — one JSON-only
 generation pass plus at most one **repair** pass (no ``text``/``data`` envelope, no prose). Input
-is capped by ``SOAPBOXX_BRIEF_CONTRACT_MAX_CHARS`` (default 48000 for long captioned episodes). Output is mapped into the legacy
+is capped by ``SOAPBOXX_BRIEF_CONTRACT_MAX_CHARS`` (code default 8000 unless set; see ``.env.example``).
+When over cap, **multi-window packing** (opening + closing + middle marker) is on by default
+(``SOAPBOXX_BRIEF_CONTRACT_MULTI_WINDOW``). Output is mapped into the legacy
 v2 brief for v3. Set to ``0`` to opt into legacy mode.
 
 **Spine-first + critic + refiner (optional):** set ``SOAPBOXX_BRIEF_SPINE_FIRST=1`` while strict contract stays on
@@ -31,7 +33,13 @@ gains ``argument_topic`` (intelligence line) vs ``primary_topic`` (identity / UI
 ``SOAPBOXX_LLM_ENVELOPE_TEXT_FALLBACK=1``. ``SOAPBOXX_LLM_STRICT_USEFULNESS=1`` to
 reject very short ``text`` when ``data`` is empty; ``SOAPBOXX_LLM_MIN_TEXT_CHARS`` (default 10) with
 strict mode. Set ``SOAPBOXX_LLM_VALIDATE_BRIEF_SCHEMA=1`` to run lightweight v2 brief semantics checks
-(see ``llm_data_contracts.validate_brief_v2_semantics``). For long transcripts, set
+(see ``llm_data_contracts.validate_brief_v2_semantics``).
+**Transcript grounding (default on):** ``SOAPBOXX_BRIEF_TRANSCRIPT_GUARDRAILS=1`` (default) adds
+token-overlap checks so claims/narrative/primary_topic must visibly match the transcript excerpt the
+model saw (see ``llm_parse_guardrails``). Set ``0`` to disable. Tune thresholds with
+``SOAPBOXX_BRIEF_MIN_TRANSCRIPT_ANCHOR`` and ``SOAPBOXX_BRIEF_GUARD_MIN_WORDS``.
+**Strict JSON repair:** ``SOAPBOXX_STRICT_JSON_NO_LOOSE=1`` makes strict-contract parses fail on
+invalid JSON instead of falling back to ``_parse_json_loose``. For long transcripts, set
 ``SOAPBOXX_BRIEF_MAX_CHARS`` to match your model context (single full transcript pass before
 chunked fallback). Optional ``SOAPBOXX_OLLAMA_NUM_CTX`` / ``OLLAMA_NUM_CTX`` and ``SOAPBOXX_OLLAMA_TOP_P``
 are forwarded to Ollama ``options``. Brief synthesis can retry after envelope coercion failures
@@ -39,7 +47,9 @@ are forwarded to Ollama ``options``. Brief synthesis can retry after envelope co
 
 **Claim filter (v2):** after the LLM fills ``claims``, ``_normalize_brief`` runs
 ``claim_filter_v2.apply_claim_filter_v2_to_brief`` (on by default; set ``SOAPBOXX_CLAIM_FILTER_V2=0`` to
-disable). See ``.env.example`` for ``SOAPBOXX_CLAIM_FILTER_MODE`` / ``SOAPBOXX_CLAIM_FILTER_DEBUG_TRACE``.
+disable). ``SOAPBOXX_CLAIM_REQUIRE_CAUSAL`` (default ``1``) drops claims with no explicit causal/mechanism
+wording unless they score as strong reportative/numeric (see ``causal_claim``). See ``.env.example`` for
+``SOAPBOXX_CLAIM_FILTER_MODE`` / ``SOAPBOXX_CLAIM_FILTER_DEBUG_TRACE``.
 """
 
 from __future__ import annotations
@@ -469,7 +479,9 @@ Rules: No filler adjectives. Every claim must have next_action and counter_angle
 Inside every JSON string value, escape literal double-quote characters as \\\" (broken quotes make the JSON invalid).
 
 Claim text rules (strict):
-- One sentence paraphrase of what the show argues; readable standalone.
+- One sentence: what the show **argues** (mechanism + outcome), not a topic label; use causal glue from the
+  transcript when possible (e.g. because, leads to, drives, increases, reduces, forces, results in,
+  therefore, as a result, influenced, affects). Readable standalone.
 - Never paste raw transcript dialogue, filler (\"you know\", \"man\"), or first-person host/guest lines.
 - No duplicated sentences or repeated phrases in the same claim.
 - maps_to_claim_id on guests must be exactly one of the claim ids you output (c1..c5), or \"\".
@@ -509,6 +521,12 @@ def _clean_claim_text(s: str) -> str:
     s = strip_youtube_caption_metadata(s)
     if not s:
         return s
+    # Strip dialogue labels from chunked ASR / atomic claims (not part of the argumentative line).
+    for _ in range(4):
+        s2 = re.sub(r"^(?:(?:host|guest|interviewer|moderator)\s*:\s*)+", "", s, flags=re.I).strip()
+        if s2 == s:
+            break
+        s = s2
     s = _RE_SPEAKER_LEAD.sub("", s)
     s = re.sub(r"\s+", " ", s)
     s = re.sub(r"\bcuzut\b", "cuz it", s, flags=re.I)
@@ -2120,7 +2138,9 @@ def _extract_claims_chunk(
         "Inside the required \"data\" object, output exactly: {\"claims\": [...]}. "
         "Each claim has fields: text, claim_type, confidence, "
         "why_it_matters, counter_angle (one sentence or empty), next_action. "
-        "Each text must be ONE short paraphrase sentence (no dialogue, no filler words). "
+        "Each text must be ONE short sentence that states a mechanism or cause→effect using words from the chunk "
+        "(e.g. because, leads to, drives, increases, reduces, forces, results in, therefore, influenced). "
+        "Skip vague topic labels. No dialogue, no filler. "
         "Max 4 claims per chunk. Skip small talk. Use \"text\": \"\" unless you add a one-line note."
     )
     md = dict(metadata or {})
@@ -2188,6 +2208,98 @@ def _strict_contract_input_cap_chars() -> int:
     return 8_000
 
 
+def _strict_contract_multi_window_enabled() -> bool:
+    """
+    When strict contract truncates, pack **opening + closing** transcript windows instead of head-only.
+
+    Set ``SOAPBOXX_BRIEF_CONTRACT_MULTI_WINDOW=0`` to restore legacy behavior (first ``cap`` chars only).
+    """
+    raw = os.getenv("SOAPBOXX_BRIEF_CONTRACT_MULTI_WINDOW", "1").strip().lower()
+    return raw not in ("0", "false", "no", "off")
+
+
+def _strict_contract_head_fraction() -> float:
+    """Fraction of the character budget (excluding middle marker) assigned to the opening window."""
+    raw = (os.getenv("SOAPBOXX_BRIEF_CONTRACT_HEAD_FRACTION") or "").strip()
+    if not raw:
+        return 0.58
+    try:
+        v = float(raw)
+        return min(0.92, max(0.35, v))
+    except ValueError:
+        return 0.58
+
+
+def _strict_contract_transcript_excerpt(full: str, cap: int) -> Tuple[str, Dict[str, Any]]:
+    """
+    Fit ``full`` into at most ``cap`` characters for the strict JSON contract call.
+
+    **Multi-window (default):** opening + closing segments with a clear middle-omitted marker so the
+    model sees how the episode **starts** and how it **lands**, not only act one.
+
+    Returns:
+        (excerpt, stats dict for logging)
+    """
+    t = full or ""
+    n = len(t)
+    suffix = (
+        "\n\n[TRANSCRIPT TRUNCATED — strict contract mode; raise SOAPBOXX_BRIEF_CONTRACT_MAX_CHARS if needed]\n"
+    )
+    stats: Dict[str, Any] = {
+        "full_chars": n,
+        "cap": cap,
+        "multi_window": False,
+        "head_chars": 0,
+        "tail_chars": 0,
+        "excerpt_chars": n,
+        "mode": "unchanged",
+    }
+    if n <= cap:
+        stats["mode"] = "full"
+        return t, stats
+
+    if not _strict_contract_multi_window_enabled() or cap < 900:
+        stats["mode"] = "head_only"
+        head_take = max(0, cap - len(suffix))
+        stats["head_chars"] = min(head_take, n)
+        out = t[:head_take] + suffix
+        stats["excerpt_chars"] = len(out)
+        return out, stats
+
+    mid = (
+        "\n\n--- [SOAPBOXX: middle of transcript omitted for length — "
+        "use opening and closing sections below] ---\n\n"
+    )
+    inner_budget = cap - len(suffix) - len(mid)
+    if inner_budget < 400:
+        stats["mode"] = "head_only_small_cap"
+        head_take = max(0, cap - len(suffix))
+        stats["head_chars"] = min(head_take, n)
+        out = t[:head_take] + suffix
+        stats["excerpt_chars"] = len(out)
+        return out, stats
+
+    frac = _strict_contract_head_fraction()
+    head_len = int(inner_budget * frac)
+    tail_len = max(0, inner_budget - head_len)
+    head = t[:head_len]
+    tail = t[-tail_len:] if tail_len > 0 else ""
+    out = head + mid + tail + suffix
+    if len(out) > cap:
+        over = len(out) - cap
+        if len(tail) >= over:
+            tail = tail[:-over]
+        elif len(head) >= over:
+            head = head[: len(head) - over]
+        out = head + mid + tail + suffix
+    stats["mode"] = "multi_window"
+    stats["multi_window"] = True
+    stats["head_chars"] = len(head)
+    stats["tail_chars"] = len(tail)
+    stats["excerpt_chars"] = len(out)
+    return out, stats
+
+
 def _strict_contract_brief_enabled() -> bool:
     """
     Default **on**: one JSON contract pass (+ optional repair) avoids fragile ``text``/``data`` envelopes.
@@ -2224,7 +2336,12 @@ def _parse_strict_model_json(raw: Any) -> Dict[str, Any]:
         raise ValueError("strict contract: empty model output")
     try:
         parsed: Any = json.loads(s)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exc:
+        if llm_env_truthy("SOAPBOXX_STRICT_JSON_NO_LOOSE"):
+            raise ValueError(
+                "strict contract: model output is not valid JSON "
+                "(SOAPBOXX_STRICT_JSON_NO_LOOSE=1 disables loose repair)"
+            ) from exc
         parsed = _parse_json_loose(s)
     if not isinstance(parsed, dict):
         raise ValueError("strict contract: model output is not a JSON object")
@@ -2402,6 +2519,8 @@ def _single_pass_brief(
     grounding = (
         "GROUNDING: Use metadata title, creator, and genre as the source of truth for what this episode is about. "
         "primary_topic must visibly overlap those fields (names, domain, format). "
+        "Every claim and narrative bullet must reuse distinctive words or short phrases that appear in TRANSCRIPT "
+        "(no invented topics the tape never discusses — downstream checks token-match the transcript). "
         "Do not output religious/spiritual framing unless the show is explicitly faith-oriented.\n\n"
     )
     user = (
@@ -2457,7 +2576,10 @@ def _minimal_brief(metadata: Dict[str, str]) -> Dict[str, Any]:
 _BRIEF_SCHEMA_MAX_RETRIES = 2
 
 
-def _brief_schema_failures(brief: Dict[str, Any]) -> List[str]:
+def _brief_schema_failures(
+    brief: Dict[str, Any],
+    transcript: Optional[str] = None,
+) -> List[str]:
     """Strict v2 brief validator: missing keys/types/critical empties are hard failures."""
     failures: List[str] = []
     if not isinstance(brief, dict):
@@ -2603,6 +2725,14 @@ def _brief_schema_failures(brief: Dict[str, Any]) -> List[str]:
                 failures.append(f"action_plan_7d[{i}].day too short")
             if not isinstance(task, str) or len(task.strip()) < 8:
                 failures.append(f"action_plan_7d[{i}].task too short (min 8 chars)")
+
+    if transcript is not None:
+        try:
+            from .llm_parse_guardrails import brief_transcript_parse_guardrail_failures
+        except ImportError:  # pragma: no cover
+            from llm_parse_guardrails import brief_transcript_parse_guardrail_failures  # type: ignore
+
+        failures.extend(brief_transcript_parse_guardrail_failures(brief, transcript))
     return failures
 
 
@@ -3090,13 +3220,27 @@ def generate_episode_brief(
         if strict_mode:
             cap = _strict_contract_input_cap_chars()
             if len(t_for_generation) > cap:
-                t_for_generation = (
-                    t_for_generation[:cap]
-                    + "\n\n[TRANSCRIPT TRUNCATED — strict contract mode; raise SOAPBOXX_BRIEF_CONTRACT_MAX_CHARS if needed]\n"
-                )
-                warnings.append(
-                    f"Strict contract mode: transcript capped to {cap} chars "
-                    f"(full length {len(t)}; set SOAPBOXX_BRIEF_CONTRACT_MAX_CHARS to adjust)."
+                t_for_generation, tw_stats = _strict_contract_transcript_excerpt(t_for_generation, cap)
+                if tw_stats.get("multi_window"):
+                    warnings.append(
+                        f"Strict contract mode: transcript packed to {cap} chars (opening + closing windows; "
+                        f"middle omitted). Full length {len(t)} chars — raise SOAPBOXX_BRIEF_CONTRACT_MAX_CHARS to send more."
+                    )
+                else:
+                    warnings.append(
+                        f"Strict contract mode: transcript capped to {cap} chars "
+                        f"(full length {len(t)}; set SOAPBOXX_BRIEF_CONTRACT_MAX_CHARS to adjust)."
+                    )
+                _LOG.info(
+                    "strict_contract_transcript excerpt full_chars=%s cap=%s mode=%s multi_window=%s "
+                    "head_chars=%s tail_chars=%s excerpt_chars=%s",
+                    tw_stats.get("full_chars"),
+                    tw_stats.get("cap"),
+                    tw_stats.get("mode"),
+                    tw_stats.get("multi_window"),
+                    tw_stats.get("head_chars"),
+                    tw_stats.get("tail_chars"),
+                    tw_stats.get("excerpt_chars"),
                 )
         elif len(t) > single_pass_limit:
             warnings.append(
@@ -3177,7 +3321,7 @@ def generate_episode_brief(
                 )
                 continue
 
-            schema_failures = _brief_schema_failures(data)
+            schema_failures = _brief_schema_failures(data, transcript=t_for_generation)
             if not schema_failures:
                 if attempt > 0:
                     print(
@@ -3237,7 +3381,7 @@ def generate_episode_brief(
                         warnings.append(f"Spine refiner: {w.strip()}")
                 if str(rmd.get("error") or "").strip():
                     warnings.append(f"Spine refiner: {str(rmd.get('error')).strip()}")
-        post_norm_failures = _brief_schema_failures(data)
+        post_norm_failures = _brief_schema_failures(data, transcript=t_for_generation)
         if post_norm_failures:
             raise ValueError(
                 "Normalized brief failed schema validation: " + "; ".join(post_norm_failures)

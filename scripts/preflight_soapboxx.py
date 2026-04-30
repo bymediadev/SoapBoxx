@@ -3,7 +3,7 @@
 Run before SoapBoxx-Local-Workflow or any long pipeline:
 
 1. ``verify_soapboxx_backend`` — correct ``backend/`` on ``sys.path`` (no stale vendored copy).
-2. Fast pytest slice — envelope coercion, caption strip, verify script smoke.
+2. Fast pytest slice — envelope coercion, claim filters (incl. causal gate), brief normalize, caption strip.
 3. Optional ``--ollama-ping`` — confirms Ollama HTTP is reachable (no model inference).
 
 Examples:
@@ -30,6 +30,25 @@ def _repo_root(cli_repo: str | None) -> str:
         return os.path.abspath(cli_repo)
     here = os.path.dirname(os.path.abspath(__file__))
     return os.path.abspath(os.path.join(here, ".."))
+
+
+def _quality_env_summary() -> str:
+    """Effective defaults match backend docs when vars are unset."""
+    rows = [
+        ("SOAPBOXX_CLAIM_FILTER_V2", "1", "claim_filter_v2 on brief claims"),
+        ("SOAPBOXX_CLAIM_REQUIRE_CAUSAL", "1", "require causal/mechanism wording"),
+        ("SOAPBOXX_CLAIM_QUALITY_GATE", "on", "substrate check before SGV (off if 0/false)"),
+        ("SOAPBOXX_BRIEF_TRANSCRIPT_GUARDRAILS", "1", "brief transcript anchoring"),
+    ]
+    lines = ["Quality-related env (unset = default shown):"]
+    for key, default, note in rows:
+        raw = os.environ.get(key)
+        if raw is None or str(raw).strip() == "":
+            disp = f"{default} (default)"
+        else:
+            disp = str(raw).strip()
+        lines.append(f"  {key}={disp}  # {note}")
+    return "\n".join(lines)
 
 
 def _ollama_ping(host: str) -> tuple[bool, str]:
@@ -75,7 +94,9 @@ def main() -> int:
     if not args.no_tests:
         tests = [
             "tests/test_verify_soapboxx_backend.py",
-            "tests/test_episode_intelligence.py::TestLlmEnvelope",
+            "tests/test_episode_intelligence.py",
+            "tests/test_claim_filter_v2.py",
+            "tests/test_causal_claim.py",
             "tests/test_transcript_structure_extract.py",
         ]
         pr = subprocess.run(
@@ -84,6 +105,8 @@ def main() -> int:
         )
         if pr.returncode != 0:
             return pr.returncode
+
+    print(_quality_env_summary(), flush=True)
 
     if args.ollama_ping:
         host = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")

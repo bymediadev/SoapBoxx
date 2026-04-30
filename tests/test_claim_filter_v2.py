@@ -100,6 +100,26 @@ class TestClaimFilterV2(unittest.TestCase):
         d = cf.explain_verdict("A substantive claim is needed because the mechanism matters for the outcome here.")
         self.assertTrue(d["semantic_complete"])
         self.assertTrue(d["information_weight_present"])
+        self.assertTrue(d.get("is_causal_claim"))
+
+    def test_rejects_non_causal_topic_label_when_score_passes(self):
+        t = (
+            "This means logistics automation timelines compress hiring windows across Midwest distribution hubs "
+            "while vendor contracts stay fixed for renewal cycles under current procurement rules."
+        )
+        r = cf.filter_claim_candidates([("nc", t)], mode="debug")
+        self.assertEqual(len(r["accepted_claims"]), 0, msg=r)
+        self.assertEqual(r["rejected_claims"][0].get("rejection_reason"), cf.R_NOT_CAUSAL)
+        self.assertIn("NON_CAUSAL_STATEMENT", r["rejected_claims"][0].get("reason_codes") or [])
+
+    def test_non_causal_gate_off_accepts_topic_coherence(self):
+        t = (
+            "This means logistics automation timelines compress hiring windows across Midwest distribution hubs "
+            "while vendor contracts stay fixed for renewal cycles under current procurement rules."
+        )
+        with patch.dict(os.environ, {"SOAPBOXX_CLAIM_REQUIRE_CAUSAL": "0"}):
+            r = cf.filter_claim_candidates([("nc2", t)], mode="debug")
+        self.assertEqual(len(r["accepted_claims"]), 1, msg=r)
 
     def test_production_mode_includes_slim_rejects(self):
         out = cf.filter_claim_candidates(

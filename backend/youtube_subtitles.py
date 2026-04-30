@@ -9,6 +9,10 @@ Strategy:
 
 Does not request multiple locale variants (no en-af, en-ar, …). Use ``en`` only.
 
+**Audio download (ASR path):** :func:`download_youtube_best_audio` pulls a single best-audio track for
+local/cloud transcription when YouTube captions are missing or too noisy. Requires ``ffmpeg`` (same
+as typical ``yt-dlp -x`` installs).
+
 Env (optional):
   SOAPBOXX_YTDLP_SLEEP_INTERVAL — seconds between phases (default 1.0)
   SOAPBOXX_YTDLP_MAX_SLEEP — passed to yt-dlp ``--max-sleep-interval`` (default 5)
@@ -142,3 +146,70 @@ def download_youtube_en_vtt(
             return found
 
     return resolve_existing_en_vtt(out_dir, vid)
+
+
+def resolve_existing_audio(out_dir: Path, video_id: str) -> Optional[Path]:
+    """Return a previously downloaded audio file for ``video_id``, if any."""
+    out_dir = Path(out_dir)
+    for ext in (".m4a", ".opus", ".webm", ".mp3", ".ogg", ".wav"):
+        p = out_dir / f"{video_id}{ext}"
+        if p.is_file():
+            return p
+    return None
+
+
+def download_youtube_best_audio(
+    url: str,
+    out_dir: Path,
+    *,
+    video_id: Optional[str] = None,
+) -> Optional[Path]:
+    """
+    Download the best **audio-only** stream and extract to ``m4a`` for ASR.
+
+    Used when YouTube captions are weak and :class:`transcriber.Transcriber` should read the episode
+    audio. Requires ``ffmpeg`` (typical ``yt-dlp`` setups).
+
+    **OpenAI Whisper HTTP** (``SOAPBOXX_TRANSCRIBER=openai``) caps audio at ~25MB in ``transcriber.py``.
+    Long episodes: use ``SOAPBOXX_TRANSCRIBER=local`` or ``assemblyai``, or set
+    ``SOAPBOXX_YOUTUBE_ASR_AUDIO_QUALITY`` to a higher ffmpeg VBR level (e.g. ``5``) to shrink ``m4a``.
+    """
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    vid = video_id or parse_youtube_video_id(url)
+    existing = resolve_existing_audio(out_dir, vid)
+    if existing is not None:
+        return existing
+
+    quality = (os.getenv("SOAPBOXX_YOUTUBE_ASR_AUDIO_QUALITY") or "0").strip() or "0"
+    output_template = str(out_dir / f"{vid}.%(ext)s")
+    cmd = [
+        sys.executable,
+        "-m",
+        "yt_dlp",
+        "--no-playlist",
+        "-f",
+        "bestaudio/best",
+        "--extract-audio",
+        "--audio-format",
+        "m4a",
+        "--audio-quality",
+        quality,
+        "-o",
+        output_template,
+        "--retries",
+        "3",
+        "--fragment-retries",
+        "3",
+        "--sleep-interval",
+        os.getenv("SOAPBOXX_YTDLP_SLEEP_REQUESTS", "1"),
+        "--max-sleep-interval",
+        os.getenv("SOAPBOXX_YTDLP_MAX_SLEEP", "5"),
+        "--",
+        url,
+    ]
+    try:
+        subprocess.run(cmd, check=False, capture_output=True, text=True)
+    except OSError:
+        return resolve_existing_audio(out_dir, vid)
+    return resolve_existing_audio(out_dir, vid)

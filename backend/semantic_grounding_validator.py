@@ -63,6 +63,27 @@ def _is_grounded(
     return n >= need
 
 
+def _is_narrative_spine_grounded(
+    text: str,
+    bag: set,
+    *,
+    min_main: int,
+) -> bool:
+    """
+    ``core_thesis`` / mechanism lines shorter than ``min_main`` content words cannot satisfy
+    ``overlap >= min_main`` (e.g. two-word identity fallbacks). Treat them as grounded only when
+    **every** content word appears in the claim vocabulary so we do not spuriously rewrite into a
+    random transcript-shaped claim line.
+    """
+    tb = _word_bag(text)
+    if not tb:
+        return True
+    n = _overlap_count(text, bag)
+    if len(tb) < min_main:
+        return n >= len(tb)
+    return n >= min_main
+
+
 def _closest_claim(text: str, claim_texts: List[str]) -> str:
     if not claim_texts:
         return ""
@@ -115,13 +136,26 @@ def apply_semantic_grounding_validator(report: Dict[str, Any]) -> Dict[str, Any]
     rewrites = 0
     followups_touched = 0
 
+    try:
+        from .episode_intelligence import _clean_claim_text
+    except ImportError:  # pragma: no cover
+        from episode_intelligence import _clean_claim_text  # type: ignore
+
     def _maybe_rewrite(val: str, *, short: bool = False) -> Tuple[str, bool]:
         s = str(val or "").strip()
         if not s:
             return s, False
         if _is_grounded(s, bag, short=short, min_main=min_main, min_short=min_short):
             return s, False
-        return _trim(_closest_claim(s, claim_texts)), True
+        return _trim(_clean_claim_text(_closest_claim(s, claim_texts))), True
+
+    def _maybe_rewrite_narrative_spine(val: str) -> Tuple[str, bool]:
+        s = str(val or "").strip()
+        if not s:
+            return s, False
+        if _is_narrative_spine_grounded(s, bag, min_main=min_main):
+            return s, False
+        return _trim(_clean_claim_text(_closest_claim(s, claim_texts))), True
 
     # --- A. Core narrative (narrative_reconstruction) ---
     nr = report.get("narrative_reconstruction")
@@ -132,7 +166,7 @@ def apply_semantic_grounding_validator(report: Dict[str, Any]) -> Dict[str, Any]
         raw = str(nr.get(key) or "").strip()
         if not raw:
             continue
-        fixed, ch = _maybe_rewrite(raw, short=False)
+        fixed, ch = _maybe_rewrite_narrative_spine(raw)
         if ch:
             nr[key] = fixed
             rewrites += 1
@@ -186,7 +220,7 @@ def apply_semantic_grounding_validator(report: Dict[str, Any]) -> Dict[str, Any]
                 if _is_grounded(s, bag, short=False, min_main=min_main, min_short=min_short):
                     new_fu.append(s)
                 else:
-                    anchor = _closest_claim(s, claim_texts)
+                    anchor = _clean_claim_text(_closest_claim(s, claim_texts))
                     new_fu.append(_trim(f"Grounded in your claim: {anchor[:200]}", 420))
                     rewrites += 1
                     followups_touched += 1

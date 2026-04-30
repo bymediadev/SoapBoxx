@@ -717,6 +717,19 @@ class TestEpisodeReportV3(unittest.TestCase):
             w = v3.dialin_production_warnings({"report_v3": {"meta": {}}, "model": "offline"})
         self.assertTrue(any("SOAPBOXX_OFFLINE" in x for x in w))
 
+    def test_dialin_brief_unavailable_does_not_blame_missing_ollama_model(self):
+        with patch.dict(
+            os.environ,
+            {"SOAPBOXX_OFFLINE": "0", "SOAPBOXX_OLLAMA_MODEL": "llama3.1:8b"},
+            clear=False,
+        ):
+            w = v3.dialin_production_warnings(
+                {"report_v3": {"meta": {}}, "model": "brief-unavailable"}
+            )
+        blob = " ".join(w)
+        self.assertIn("Strict JSON brief failed", blob)
+        self.assertNotIn("SOAPBOXX_OLLAMA_MODEL is not set", blob)
+
     def test_coach_follow_ups_breadth_first_across_claims(self):
         """Do not stack three engagement slots from the same claim before moving to the next."""
         brief = {
@@ -2404,6 +2417,137 @@ class TestProducerReadyHeuristics(unittest.TestCase):
                 snap,
             )
         )
+
+
+class TestSpineAndThesisQualityGates(unittest.TestCase):
+    """Spine eligibility + thesis shallow/list coercion (aligned with lexical evidence engine)."""
+
+    def test_promo_claim_tagged_and_omitted_from_spine(self):
+        brief = {
+            "episode_snapshot": {
+                "title": "Habits Episode",
+                "creator": "C",
+                "genre": "Education",
+                "primary_topic": "habits",
+                "why_it_matters": "w",
+            },
+            "narrative": [],
+            "claims": [
+                {
+                    "id": "c1",
+                    "text": "Systems beat goals when motivation drops because routines persist.",
+                    "claim_type": "interpretation",
+                    "confidence": "high",
+                    "why_it_matters": "m",
+                },
+                {
+                    "id": "c2",
+                    "text": "Sign up for our newsletter and buy the CRM plan pricing today.",
+                    "claim_type": "interpretation",
+                    "confidence": "high",
+                    "why_it_matters": "m",
+                },
+            ],
+            "evidence_gaps": {"supported": [], "weak_or_unsupported": [], "proof_needed": []},
+            "production_moves": {
+                "segment_to_run": {"name": "s", "goal": "g"},
+                "host_questions": [],
+                "clip_candidates": [],
+                "risk_note": "",
+            },
+            "guests": [],
+            "action_plan_7d": [],
+        }
+        transcript = "Host: Systems beat goals when motivation drops because routines persist."
+        r = v3.build_v3_report(brief, transcript, metadata={}, atomic_ground_truth=False)
+        rows = [c for c in (r.get("claims") or []) if isinstance(c, dict)]
+        self.assertTrue(any(str(c.get("_spine_excluded_reason")) == "promo" for c in rows))
+        spine = v3.build_episode_spine(r)
+        blob = " ".join(str(c.get("line") or "") for c in (spine.get("claims") or [])).lower()
+        self.assertIn("systems beat goals", blob)
+        self.assertNotIn("crm", blob)
+
+    def test_weak_transcript_anchor_omitted_from_spine(self):
+        brief = {
+            "episode_snapshot": {
+                "title": "T",
+                "creator": "C",
+                "genre": "G",
+                "primary_topic": "p",
+                "why_it_matters": "w",
+            },
+            "narrative": [],
+            "claims": [
+                {
+                    "id": "c1",
+                    "text": "Zyglotron flux capacitors reverse planetary entropy fields completely.",
+                    "claim_type": "interpretation",
+                    "confidence": "high",
+                    "why_it_matters": "m",
+                },
+                {
+                    "id": "c2",
+                    "text": "Morning sunlight anchors circadian rhythm for better sleep onset.",
+                    "claim_type": "interpretation",
+                    "confidence": "high",
+                    "why_it_matters": "m",
+                },
+            ],
+            "evidence_gaps": {"supported": [], "weak_or_unsupported": [], "proof_needed": []},
+            "production_moves": {
+                "segment_to_run": {"name": "s", "goal": "g"},
+                "host_questions": [],
+                "clip_candidates": [],
+                "risk_note": "",
+            },
+            "guests": [],
+            "action_plan_7d": [],
+        }
+        transcript = (
+            "Host: Morning sunlight anchors circadian rhythm for better sleep onset when exposure is early."
+        )
+        r = v3.build_v3_report(brief, transcript, metadata={}, atomic_ground_truth=False)
+        spine = v3.build_episode_spine(r)
+        lines = [str(c.get("line") or "") for c in (spine.get("claims") or [])]
+        self.assertTrue(any("circadian" in x.lower() for x in lines))
+        self.assertFalse(any("zyglotron" in x.lower() for x in lines))
+
+    def test_thesis_list_semicolon_coerced_longer(self):
+        snap = {
+            "title": "Systems vs Goals Long Enough For Title",
+            "creator": "Test",
+            "genre": "Education",
+            "primary_topic": "habit systems and routines",
+            "why_it_matters": "w",
+        }
+        claims = [
+            {
+                "id": "c1",
+                "text": "Systems beat goals when motivation drops because routines automate behavior daily.",
+                "claim_type": "interpretation",
+                "confidence": "high",
+                "why_it_matters": "m",
+            }
+        ]
+        out = v3._coerce_thesis_avoid_shallow_list_style(
+            "topic; angle; stakes",
+            snap,
+            None,
+            "HIGH_SIGNAL",
+            claims,
+            ["Systems outperform goals when motivation is unreliable."],
+        )
+        self.assertNotIn(";", out)
+        self.assertGreaterEqual(len(out.split()), 6)
+
+    def test_compute_report_readiness_insufficient_tape_metric(self):
+        rr = v3.compute_report_readiness(
+            "word " * 40,
+            signal_mode="HIGH_SIGNAL",
+            claim_count=2,
+            evidence_row_count=3,
+        )
+        self.assertTrue((rr.get("metrics") or {}).get("insufficient_tape"))
 
 
 if __name__ == "__main__":

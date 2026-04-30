@@ -890,7 +890,10 @@ class TestEpisodeIntelligence(unittest.TestCase):
             "claims": [
                 {
                     "id": "c1",
-                    "text": "Small environment changes beat willpower for lasting habits.",
+                    "text": (
+                        "Small environment changes reduce reliance on willpower because friction "
+                        "reshapes daily defaults more reliably than motivation spikes alone."
+                    ),
                     "claim_type": "interpretation",
                     "confidence": "medium",
                     "why_it_matters": "m",
@@ -1208,6 +1211,100 @@ class TestStrictEpisodeContract(unittest.TestCase):
         warns = " ".join(r.get("warnings") or []).lower()
         self.assertIn("hard failure after schema retries", warns)
         self.assertNotIn("weak structured output detected", warns)
+
+
+class TestStrictContractTranscriptExcerpt(unittest.TestCase):
+    def test_excerpt_unchanged_when_under_cap(self):
+        body = "alpha " * 100
+        out, st = ei._strict_contract_transcript_excerpt(body, cap=50_000)
+        self.assertEqual(out, body)
+        self.assertEqual(st.get("mode"), "full")
+
+    @patch.dict(os.environ, {"SOAPBOXX_BRIEF_CONTRACT_MULTI_WINDOW": "1"}, clear=False)
+    def test_multi_window_includes_tail_content(self):
+        head = "START_" + ("x" * 800)
+        tail = "END_UNIQUE_TAIL_MARKER"
+        body = head + ("MID" * 2000) + tail
+        cap = 2500
+        out, st = ei._strict_contract_transcript_excerpt(body, cap=cap)
+        self.assertEqual(st.get("mode"), "multi_window")
+        self.assertTrue(st.get("multi_window"))
+        self.assertLessEqual(len(out), cap)
+        self.assertIn("START_", out)
+        self.assertIn("END_UNIQUE_TAIL_MARKER", out)
+        self.assertIn("middle of transcript omitted", out.lower())
+
+    @patch.dict(os.environ, {"SOAPBOXX_BRIEF_CONTRACT_MULTI_WINDOW": "0"}, clear=False)
+    def test_head_only_when_multi_window_disabled(self):
+        body = "A" * 5000
+        cap = 1200
+        out, st = ei._strict_contract_transcript_excerpt(body, cap=cap)
+        self.assertEqual(st.get("mode"), "head_only")
+        self.assertFalse(st.get("multi_window"))
+        self.assertLessEqual(len(out), cap)
+        self.assertTrue(out.startswith("A" * min(5000, cap - 200)))
+
+
+class TestTranscriptParseGuardrails(unittest.TestCase):
+    def test_brief_transcript_guardrails_off_returns_empty(self):
+        from llm_parse_guardrails import brief_transcript_parse_guardrail_failures
+
+        with patch.dict(os.environ, {"SOAPBOXX_BRIEF_TRANSCRIPT_GUARDRAILS": "0"}, clear=False):
+            fails = brief_transcript_parse_guardrail_failures(
+                {"claims": [{"text": "Zyglotron flux unrelated to tape."}], "narrative": [], "episode_snapshot": {}},
+                "host talks only about coffee roasting temperatures daily practice",
+            )
+        self.assertEqual(fails, [])
+
+    def test_brief_transcript_guardrail_catches_off_tape_claim(self):
+        from llm_parse_guardrails import brief_transcript_parse_guardrail_failures
+
+        tape = " ".join(
+            [
+                "Host: We discuss circadian rhythm and how morning sunlight anchors sleep onset for listeners.",
+            ]
+            * 35
+        )
+        brief = {
+            "claims": [
+                {
+                    "text": "Quantum entanglement reverses planetary thermodynamics in all macroscopic closed systems.",
+                }
+            ],
+            "narrative": [],
+            "episode_snapshot": {},
+        }
+        with patch.dict(os.environ, {"SOAPBOXX_BRIEF_TRANSCRIPT_GUARDRAILS": "1"}, clear=False):
+            fails = brief_transcript_parse_guardrail_failures(brief, tape)
+        self.assertTrue(any("not visibly grounded" in f for f in fails), msg=fails)
+
+    def test_brief_transcript_guardrail_passes_grounded_claim(self):
+        from llm_parse_guardrails import brief_transcript_parse_guardrail_failures
+
+        tape = " ".join(
+            [
+                "Host: Morning sunlight anchors circadian rhythm and improves sleep onset when exposure is early.",
+            ]
+            * 35
+        )
+        brief = {
+            "claims": [
+                {
+                    "text": "Morning sunlight anchors circadian rhythm and improves sleep onset when exposure is early for listeners.",
+                }
+            ],
+            "narrative": ["Morning sunlight anchors circadian rhythm for better sleep habits when timed well."],
+            "episode_snapshot": {"primary_topic": "circadian rhythm morning sunlight sleep habits"},
+        }
+        with patch.dict(os.environ, {"SOAPBOXX_BRIEF_TRANSCRIPT_GUARDRAILS": "1"}, clear=False):
+            fails = brief_transcript_parse_guardrail_failures(brief, tape)
+        self.assertEqual(fails, [])
+
+    @patch.dict(os.environ, {"SOAPBOXX_STRICT_JSON_NO_LOOSE": "1"}, clear=False)
+    def test_parse_strict_model_json_raises_without_loose_repair(self):
+        with self.assertRaises(ValueError) as ctx:
+            ei._parse_strict_model_json("<<<this-is-not-json>>>")
+        self.assertIn("not valid JSON", str(ctx.exception))
 
 
 if __name__ == "__main__":

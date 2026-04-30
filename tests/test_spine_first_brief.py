@@ -8,10 +8,31 @@ import sys
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+_repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+_backend = os.path.join(_repo_root, "backend")
+for _p in (_repo_root, _backend):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
-import episode_intelligence as ei  # noqa: E402
-import spine_first_brief as sfb  # noqa: E402
+try:
+    import backend.episode_intelligence as ei  # noqa: E402
+except ImportError:
+    import episode_intelligence as ei  # noqa: E402
+
+try:
+    from backend import spine_first_brief as sfb  # noqa: E402
+except ImportError:
+    import spine_first_brief as sfb  # noqa: E402
+
+# Pin flags so host .env cannot disable critic / strip synthetic claims (patch.dict(..., clear=False)).
+_SPINE_BRIEF_TEST_ENV_BASE = {
+    "SOAPBOXX_OLLAMA_MODEL": "stub",
+    "SOAPBOXX_BRIEF_STRICT_CONTRACT": "1",
+    "SOAPBOXX_BRIEF_SPINE_FIRST": "1",
+    "SOAPBOXX_OFFLINE": "0",
+    "SOAPBOXX_CLAIM_FILTER_V2": "0",
+    "SOAPBOXX_BRIEF_SPINE_CRITIC": "1",
+}
 
 
 class TestSpineFirstBrief(unittest.TestCase):
@@ -130,13 +151,7 @@ class TestSpineFirstBrief(unittest.TestCase):
 
         with patch.dict(
             os.environ,
-            {
-                "SOAPBOXX_OLLAMA_MODEL": "stub",
-                "SOAPBOXX_BRIEF_STRICT_CONTRACT": "1",
-                "SOAPBOXX_BRIEF_SPINE_FIRST": "1",
-                "SOAPBOXX_BRIEF_SPINE_REFINE": "0",
-                "SOAPBOXX_OFFLINE": "0",
-            },
+            {**_SPINE_BRIEF_TEST_ENV_BASE, "SOAPBOXX_BRIEF_SPINE_REFINE": "0"},
             clear=False,
         ):
             with patch.object(ei, "_ollama_chat_invoke", side_effect=fake_invoke):
@@ -370,13 +385,7 @@ class TestSpineFirstBrief(unittest.TestCase):
 
         with patch.dict(
             os.environ,
-            {
-                "SOAPBOXX_OLLAMA_MODEL": "stub",
-                "SOAPBOXX_BRIEF_STRICT_CONTRACT": "1",
-                "SOAPBOXX_BRIEF_SPINE_FIRST": "1",
-                "SOAPBOXX_BRIEF_SPINE_REFINE": "1",
-                "SOAPBOXX_OFFLINE": "0",
-            },
+            {**_SPINE_BRIEF_TEST_ENV_BASE, "SOAPBOXX_BRIEF_SPINE_REFINE": "1"},
             clear=False,
         ):
             with patch.object(ei, "_ollama_chat_invoke", side_effect=fake_invoke):

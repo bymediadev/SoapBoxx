@@ -692,10 +692,16 @@ def apply_rule_based_structure_bootstrap(
     segs = [x for x in (report.get("segments") or []) if isinstance(x, dict)]
 
     if n_g >= 2 and len(segs) >= 1:
+        # ``em`` may have dropped ungrounded quotes vs ``report["evidence_map"]``; keep ids + follow-ups aligned.
+        report["evidence_map"] = em
+        valid_ids = [str(x.get("id")) for x in em if isinstance(x, dict) and x.get("id")]
+        if valid_ids:
+            _ensure_followups_for_claim_ids(report, valid_ids)
         return
 
     applied = False
     if n_g >= 2 and len(segs) < 1:
+        report["evidence_map"] = em
         report["segments"] = _segments_by_thirds(em, cleaned)
         valid_ids = [str(x.get("id")) for x in em if isinstance(x, dict) and x.get("id")]
         _ensure_followups_for_claim_ids(report, valid_ids)

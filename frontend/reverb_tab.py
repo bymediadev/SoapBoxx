@@ -8,13 +8,92 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 # Add backend to path - handle separate frontend/backend folder structure
 current_dir = os.path.dirname(os.path.abspath(__file__))  # frontend/
 parent_dir = os.path.dirname(current_dir)  # root/
 backend_dir = os.path.join(parent_dir, "backend")  # root/backend/
 sys.path.insert(0, backend_dir)
+
+
+def _reverb_ollama_model_configured() -> bool:
+    return bool((os.getenv("SOAPBOXX_OLLAMA_MODEL") or "").strip())
+
+
+def _reverb_clip_corpus(text: str, limit: int = 14000) -> str:
+    t = (text or "").strip()
+    if len(t) <= limit:
+        return t
+    return t[:limit] + "\n…(truncated for LLM context)"
+
+
+def _reverb_summarize_search_hits(heading: str, corpus: str) -> Optional[str]:
+    """
+    Turn API search hits (YouTube / Podchaser) into producer-facing bullets using the same
+    stack as workflow LLM calls: ``call_llm`` → Ollama when ``SOAPBOXX_OLLAMA_MODEL`` is set
+    (or Groq when ``SOAPBOXX_WORKFLOW_LLM_BACKEND=groq`` and a Groq key is present).
+    """
+    if not _reverb_ollama_model_configured():
+        return None
+    if (os.getenv("SOAPBOXX_REVERB_SEARCH_LLM") or "1").strip().lower() in (
+        "0",
+        "false",
+        "no",
+        "off",
+    ):
+        return None
+    corpus = _reverb_clip_corpus(corpus)
+    if not corpus:
+        return None
+    try:
+        from soapboxx_v3_workflow import call_llm
+    except ImportError:
+        return None
+    prompt = (
+        f"{heading}\n\n"
+        "Below are structured search hits (titles, channels, ratings, snippets). "
+        "Write 6–10 bullet points for a podcast producer. Be specific to these results; "
+        "avoid generic podcast platitudes. Use plain lines starting with '- '.\n\n"
+        f"{corpus}"
+    )
+    try:
+        env = call_llm(
+            prompt,
+            max_tokens=900,
+            temperature=0.25,
+            system=(
+                "You interpret podcast discovery search results into concise, actionable producer notes. "
+                "Do not invent shows or metrics not present in the input."
+            ),
+            client=None,
+            json_format=False,
+            stage="reverb.search_summary",
+        )
+        text = (env.get("text") or "").strip()
+        return text or None
+    except Exception:
+        return None
+
+
+def _append_reverb_llm_block(lines: List[str], heading: str, corpus: str) -> None:
+    """Append an LLM summary block, or a short hint when no model is configured."""
+    blob = _reverb_summarize_search_hits(heading, corpus)
+    lines.append("")
+    if blob:
+        lines.append("Producer insights (LLM):")
+        lines.append(blob)
+    elif _reverb_ollama_model_configured():
+        lines.append(
+            "Producer insights (LLM): (call failed — check Ollama/Groq logs and SOAPBOXX_OLLAMA_DEBUG.)"
+        )
+    else:
+        lines.append(
+            "Producer insights (LLM): set SOAPBOXX_OLLAMA_MODEL in .env and run Ollama "
+            "to replace generic bullets with summaries here. "
+            "Optional: SOAPBOXX_WORKFLOW_LLM_BACKEND=ollama to force Ollama when a Groq key exists."
+        )
+
 
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (QButtonGroup, QComboBox, QFileDialog, QGridLayout,
@@ -327,6 +406,9 @@ class ReverbTab(QWidget):
 
         api_keys = {
             "OpenAI API Key": os.environ.get("OPENAI_API_KEY", "Not set"),
+            "Ollama model (SOAPBOXX_OLLAMA_MODEL)": os.environ.get(
+                "SOAPBOXX_OLLAMA_MODEL", "Not set"
+            ),
             "YouTube API Key": os.environ.get("YOUTUBE_API_KEY", "Not set"),
             "AssemblyAI API Key": os.environ.get("ASSEMBLYAI_API_KEY", "Not set"),
             "ElevenLabs API Key": os.environ.get("ELEVENLABS_API_KEY", "Not set"),
@@ -706,6 +788,7 @@ class ReverbTab(QWidget):
             analysis_results.append("📊 Trending Video Content Analysis:")
             analysis_results.append("=" * 50)
 
+            corpus_lines: List[str] = []
             for i, video in enumerate(trending_results.get("videos", [])[:3], 1):
                 title = video.get("title", "Unknown")
                 channel = video.get("channel_title", "Unknown")
@@ -720,21 +803,14 @@ class ReverbTab(QWidget):
                 analysis_results.append(f"   Channel: {channel}")
                 analysis_results.append(f"   Views: {view_count}")
                 analysis_results.append(f"   Description: {description}")
+                corpus_lines.append(
+                    f"- Hit {i}: title={title!r} channel={channel!r} views={view_count} desc={description!r}"
+                )
 
-                # Add analysis insights
-                analysis_results.append(f"   📈 Analysis:")
-                analysis_results.append(f"   • High engagement potential (trending)")
-                analysis_results.append(f"   • Popular channel format")
-                analysis_results.append(f"   • Strong audience appeal")
-
-            analysis_results.append(f"\n🎯 Key Insights:")
-            analysis_results.append(
-                f"• Trending content shows current audience interests"
-            )
-            analysis_results.append(f"• Video format increases engagement potential")
-            analysis_results.append(f"• Popular channels provide format examples")
-            analysis_results.append(
-                f"• High view counts indicate successful content strategies"
+            _append_reverb_llm_block(
+                analysis_results,
+                "YouTube trending (US): summarize these video hits for a podcast producer.",
+                "\n".join(corpus_lines),
             )
 
             self.results_text.setText("\n".join(analysis_results))
@@ -808,6 +884,7 @@ class ReverbTab(QWidget):
             research_results.append("📊 Video Podcast Content Research:")
             research_results.append("=" * 50)
 
+            corpus_lines: List[str] = []
             for i, video in enumerate(search_results.get("videos", [])[:3], 1):
                 title = video.get("title", "Unknown")
                 channel = video.get("channel_title", "Unknown")
@@ -822,23 +899,15 @@ class ReverbTab(QWidget):
                 research_results.append(f"   Channel: {channel}")
                 research_results.append(f"   Description: {description}")
                 research_results.append(f"   URL: {url}")
+                corpus_lines.append(
+                    f"- Hit {i}: title={title!r} channel={channel!r} url={url!r} desc={description!r}"
+                )
 
-                # Add research insights
-                research_results.append(f"   🔍 Research Insights:")
-                research_results.append(f"   • Content format analysis")
-                research_results.append(f"   • Audience engagement patterns")
-                research_results.append(f"   • Production quality indicators")
-
-            research_results.append(f"\n🎯 Research Summary:")
-            research_results.append(f"• Video podcasts are gaining popularity")
-            research_results.append(f"• Visual content enhances audience engagement")
-            research_results.append(
-                f"• Multiple formats available (interviews, discussions, etc.)"
+            _append_reverb_llm_block(
+                research_results,
+                'YouTube search query: "video podcast". Interpret these results for a producer.',
+                "\n".join(corpus_lines),
             )
-            research_results.append(
-                f"• High-quality production increases viewer retention"
-            )
-            research_results.append(f"• Regular uploads maintain audience interest")
 
             self.results_text.setText("\n".join(research_results))
 
@@ -1015,6 +1084,7 @@ class ReverbTab(QWidget):
             analytics_results.append("📊 Podcast Analytics from Podchaser:")
             analytics_results.append("=" * 50)
 
+            corpus_lines: List[str] = []
             # Analyze the first few results
             for i, edge in enumerate(search_results.get("results", [])[:3], 1):
                 node = edge.get("node", {})
@@ -1036,21 +1106,16 @@ class ReverbTab(QWidget):
                     f"   Categories: {', '.join(categories) if categories else 'N/A'}"
                 )
                 analytics_results.append(f"   Description: {description}")
+                corpus_lines.append(
+                    f"- Hit {i}: title={title!r} rating={rating} reviews={review_count} "
+                    f"categories={categories!r} desc={description!r}"
+                )
 
-                # Add analytics insights
-                analytics_results.append(f"   📈 Analytics Insights:")
-                analytics_results.append(f"   • Audience engagement potential")
-                analytics_results.append(f"   • Content quality indicators")
-                analytics_results.append(f"   • Market positioning")
-
-            analytics_results.append(f"\n🎯 Key Analytics Insights:")
-            analytics_results.append(
-                f"• High-rated podcasts show strong audience engagement"
+            _append_reverb_llm_block(
+                analytics_results,
+                'Podchaser search: query "podcast". Summarize positioning and takeaways.',
+                "\n".join(corpus_lines),
             )
-            analytics_results.append(f"• Review counts indicate community involvement")
-            analytics_results.append(f"• Category analysis reveals content positioning")
-            analytics_results.append(f"• Description quality impacts discoverability")
-            analytics_results.append(f"• Rating trends show content performance")
 
             self.results_text.setText("\n".join(analytics_results))
 
@@ -1121,6 +1186,7 @@ class ReverbTab(QWidget):
             trending_data.append("🔥 Currently Trending on Podchaser:")
             trending_data.append("=" * 50)
 
+            corpus_lines: List[str] = []
             # Display trending podcasts
             for i, edge in enumerate(trending_results.get("trending", [])[:5], 1):
                 node = edge.get("node", {})
@@ -1136,19 +1202,15 @@ class ReverbTab(QWidget):
                 trending_data.append(f"\n{i}. {title}")
                 trending_data.append(f"   Rating: {rating}/5 ({review_count} reviews)")
                 trending_data.append(f"   Description: {description}")
+                corpus_lines.append(
+                    f"- Trend {i}: title={title!r} rating={rating} reviews={review_count} desc={description!r}"
+                )
 
-                # Add trending insights
-                trending_data.append(f"   🔥 Trending Insights:")
-                trending_data.append(f"   • High audience engagement")
-                trending_data.append(f"   • Strong community feedback")
-                trending_data.append(f"   • Current market relevance")
-
-            trending_data.append(f"\n🎯 Trending Analysis:")
-            trending_data.append(f"• Trending podcasts show current audience interests")
-            trending_data.append(f"• High ratings indicate quality content")
-            trending_data.append(f"• Review counts show community engagement")
-            trending_data.append(f"• Trending status reflects market demand")
-            trending_data.append(f"• Content themes reveal audience preferences")
+            _append_reverb_llm_block(
+                trending_data,
+                "Podchaser trending list: what should a producer notice or try next?",
+                "\n".join(corpus_lines),
+            )
 
             self.results_text.setText("\n".join(trending_data))
 

@@ -8,6 +8,11 @@ narrative/analytical assembly + weights — see ``lens_engine_prompts.assemble_d
 Builds on normalized **v2** brief JSON from episode_intelligence.generate_episode_brief.
 The coach always surfaces a single-sentence thesis line (argument-shaped); low-signal runs pair it with an honest-read note.
 
+**Constraint brief v2 (optional):** set ``SOAPBOXX_BRIEF_V2=1`` to run :mod:`backend.episode_brief_v2` after
+:func:`build_v3_report`, attach ``episode_brief_v2`` to ``report_v3``, sync ``episode_thesis`` / ``core_thesis``
+when the v2 thesis passes validation, prepend a visible block to unified markdown, and mark **diagnostic**
+when v2 cannot produce a thesis (no silent completeness).
+
 **Structured intelligence source of truth:** when enabled (default; ``SOAPBOXX_V3_ATOMIC_GROUND_TRUTH=1`` or
 ``atomic_ground_truth=True`` on :func:`build_v3_report`), claims and graph-derived guests come **only** from
 ``atomic_pipeline.run_atomic_pipeline`` — v3 does not re-extract claims, re-cluster topics, or synthesize guests
@@ -1161,6 +1166,163 @@ def _distinctive_coverage(claim_text: str, sentence_text: str) -> float:
     low = (sentence_text or "").lower()
     hits = sum(1 for w in dist if _token_hits_sentence(w, low))
     return hits / float(len(dist))
+
+
+def _max_distinctive_anchor_coverage(claim_text: str, transcript: str) -> float:
+    """Best sentence-level lexical overlap vs transcript (matches evidence engine behavior)."""
+    units = _split_into_sentence_units(transcript or "")
+    if not units:
+        return 0.0
+    return max((_distinctive_coverage(claim_text, u.text) for u in units), default=0.0)
+
+
+_CLAIM_PROMO_SPINE_SUBSTRINGS = (
+    "buy now",
+    "sign up",
+    "signup",
+    "limited time",
+    "pricing",
+    " special offer",
+    "free trial",
+    "discount code",
+    "coupon",
+    "subscribe today",
+    "crm",
+    "saas",
+    "book a demo",
+    "schedule a call",
+    "our plan",
+    "upgrade to pro",
+    "use code ",
+)
+
+
+def _claim_is_promotional_spine_blocker(text: str) -> bool:
+    """Hard block: promo / funnel language must not appear in export spine claim list."""
+    low = (text or "").strip().lower()
+    if not low:
+        return False
+    if any(p in low for p in _CLAIM_PROMO_SPINE_SUBSTRINGS):
+        return True
+    if re.search(r"\b(?:buy|purchase|order)\s+(?:now|today)\b", low):
+        return True
+    if re.search(r"\b(?:sign|log)\s*[- ]?up\b", low) and any(
+        x in low for x in ("free", "plan", "offer", "newsletter", "waitlist", "course", "webinar")
+    ):
+        return True
+    return False
+
+
+def _thesis_is_shallow_or_list_style(thesis: str) -> bool:
+    """
+    Block list-style theses and ultra-short labels (producer-facing spine line).
+    Semicolon lists read as packaging, not one causal sentence.
+    """
+    t = (thesis or "").strip()
+    if not t:
+        return True
+    if ";" in t:
+        return True
+    if len(t.split()) < 6:
+        return True
+    return False
+
+
+def _apply_claim_spine_gates(claims: List[Dict[str, Any]], transcript: str) -> List[Dict[str, Any]]:
+    """
+    Tag claims that must not drive **The spine** markdown: promo, too-short for overlap scoring,
+    or weak transcript anchor (distinctive-coverage max < 0.3).
+    Full ``claims`` list is unchanged for evidence / engagement; ``build_episode_spine`` skips gated rows.
+    """
+    out: List[Dict[str, Any]] = []
+    for c in claims or []:
+        if not isinstance(c, dict):
+            continue
+        row = dict(c)
+        txt = _clean_claim_text(str(row.get("text") or "")).strip()
+        reason: Optional[str] = None
+        if _claim_is_promotional_spine_blocker(txt):
+            reason = "promo"
+        elif len(txt.split()) < 6:
+            reason = "short_claim_shape"
+        elif _max_distinctive_anchor_coverage(txt, transcript) < 0.3:
+            reason = "weak_transcript_anchor"
+        if reason:
+            row["_spine_excluded_reason"] = reason
+        else:
+            row.pop("_spine_excluded_reason", None)
+        out.append(row)
+    return out
+
+
+def _coerce_thesis_avoid_shallow_list_style(
+    thesis: str,
+    snap: Dict[str, Any],
+    thesis_quality: Optional[Dict[str, str]],
+    signal_mode: str,
+    claims: List[Dict[str, Any]],
+    clean_insights: List[str],
+) -> str:
+    """If thesis is list-like or too short, fall through stronger argumentative scaffolds."""
+    _ = signal_mode  # reserved for future signal-aware coercion
+
+    def _acceptable_thesis_line(x: str) -> bool:
+        s = (x or "").strip()
+        if not s or _thesis_is_shallow_or_list_style(s):
+            return False
+        if _thesis_line_is_quote_like(s):
+            return False
+        if _thesis_is_identity_stub(s, snap):
+            return False
+        return True
+
+    t0 = _polish_thesis_one_sentence(str(thesis or "").strip())
+    t0 = _normalize_keyword_salad_thesis(t0, snap)
+    t0 = _coerce_thesis_off_episode_title(t0, snap, {})
+    if _acceptable_thesis_line(t0):
+        return t0
+
+    tq = thesis_quality
+    if tq and str(tq.get("suggested_argument") or "").strip():
+        alt = _polish_thesis_one_sentence(str(tq["suggested_argument"]).strip())
+        alt = _normalize_keyword_salad_thesis(alt, snap)
+        alt = _coerce_thesis_off_episode_title(alt, snap, {})
+        if _acceptable_thesis_line(alt):
+            return alt
+
+    use_claims = _claims_non_filler_for_thesis(claims)
+    for c in use_claims or claims or []:
+        if not isinstance(c, dict):
+            continue
+        raw = str(c.get("text") or "").strip()
+        if (
+            len(raw.split()) < 8
+            or _looks_like_quote_fragment_thesis(raw)
+            or _thesis_line_is_quote_like(raw)
+        ):
+            continue
+        alt = _polish_thesis_one_sentence(raw)
+        alt = _normalize_keyword_salad_thesis(alt, snap)
+        alt = _coerce_thesis_off_episode_title(alt, snap, {})
+        if _acceptable_thesis_line(alt):
+            return alt
+
+    alt = _polish_thesis_one_sentence(
+        _suggested_argument_thesis(snap, clean_insights, use_claims or claims or [])
+    )
+    alt = _normalize_keyword_salad_thesis(alt, snap)
+    alt = _coerce_thesis_off_episode_title(alt, snap, {})
+    if _acceptable_thesis_line(alt):
+        return alt
+
+    fb = _polish_thesis_one_sentence(
+        _identity_spine_fallback_sentence(
+            snap, "State one falsifiable claim this episode can defend on mic."
+        )
+    )
+    fb = _normalize_keyword_salad_thesis(fb, snap)
+    fb = _coerce_thesis_off_episode_title(fb, snap, {})
+    return fb
 
 
 def _soft_evidence_concept_bonus(claim_text: str, sentence_lower: str) -> float:
@@ -2690,6 +2852,7 @@ def compute_report_readiness(
             "claim_count": claim_count,
             "evidence_row_count": evidence_row_count,
             "signal_mode": signal_mode,
+            "insufficient_tape": bool(words < 150),
         },
     }
 
@@ -3057,40 +3220,53 @@ def _finalize_episode_thesis_line(
     """Non-negotiable one-sentence thesis for spine + coach (argument, not vibes)."""
     use_claims = _claims_non_filler_for_thesis(claims)
     tq = thesis_quality
+    cand = ""
+
     if tq and str(tq.get("suggested_argument") or "").strip():
         out = _polish_thesis_one_sentence(str(tq["suggested_argument"]))
         out = _normalize_keyword_salad_thesis(out, snap)
         out = _coerce_thesis_off_episode_title(out, snap, {})
         if not _thesis_line_is_quote_like(out) and not _thesis_is_identity_stub(out, snap):
-            return out
-    if use_claims:
+            cand = out
+
+    if not cand and use_claims:
         raw = str(use_claims[0].get("text") or "").strip()
         if (
             raw
             and len(raw.split()) >= 8
             and not _looks_like_quote_fragment_thesis(raw)
+            and not _thesis_line_is_quote_like(raw)
         ):
             out = _polish_thesis_one_sentence(raw)
             out = _normalize_keyword_salad_thesis(out, snap)
             out = _coerce_thesis_off_episode_title(out, snap, {})
             if not _thesis_line_is_quote_like(out) and not _thesis_is_identity_stub(out, snap):
-                return out
-    out = _polish_thesis_one_sentence(
-        _suggested_argument_thesis(snap, clean_insights, use_claims or claims or [])
-    )
-    out = _normalize_keyword_salad_thesis(out, snap)
-    out = _coerce_thesis_off_episode_title(out, snap, {})
-    if _thesis_is_identity_stub(out, snap):
+                cand = out
+
+    if not cand:
         out = _polish_thesis_one_sentence(
             _suggested_argument_thesis(snap, clean_insights, use_claims or claims or [])
         )
         out = _normalize_keyword_salad_thesis(out, snap)
         out = _coerce_thesis_off_episode_title(out, snap, {})
-    if not _thesis_line_is_quote_like(out):
-        return out
-    # Hard fallback: ensure the final thesis is an argumentative scaffold, not transcript dialogue.
-    return _identity_spine_fallback_sentence(
-        snap, "State one falsifiable claim this episode can defend on mic."
+        if _thesis_is_identity_stub(out, snap):
+            out = _polish_thesis_one_sentence(
+                _suggested_argument_thesis(snap, clean_insights, use_claims or claims or [])
+            )
+            out = _normalize_keyword_salad_thesis(out, snap)
+            out = _coerce_thesis_off_episode_title(out, snap, {})
+        if not _thesis_line_is_quote_like(out):
+            cand = out
+
+    if not cand:
+        cand = _polish_thesis_one_sentence(
+            _identity_spine_fallback_sentence(
+                snap, "State one falsifiable claim this episode can defend on mic."
+            )
+        )
+
+    return _coerce_thesis_avoid_shallow_list_style(
+        cand, snap, tq, signal_mode, claims, clean_insights
     )
 
 
@@ -3311,17 +3487,21 @@ def _thesis_line_is_quote_like(text: str) -> bool:
     """
     Final thesis must not be a raw transcript quote.
     """
-    t = _clean_claim_text(str(text or "")).strip()
+    raw = str(text or "").strip()
+    low_raw = raw.lower()
+    # Dialogue labels must be detected on the **raw** line. :func:`episode_intelligence._clean_claim_text`
+    # strips ``Host:/Guest:`` for export hygiene; checking only the cleaned string would miss mic quotes.
+    if re.match(r"^(?:host|guest|speaker|interviewer|caller)\s*:\s*", low_raw):
+        return True
+    if re.search(r"\b(?:host|guest|speaker)\s*:\s*", low_raw):
+        return True
+    t = _clean_claim_text(raw).strip()
     if not t:
         return True
     low = t.lower()
     if _looks_like_quote_fragment_thesis(t):
         return True
     if re.match(r"^\[[0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?\]\s*", t):
-        return True
-    if re.match(r"^(?:host|guest|speaker|interviewer|caller)\s*:\s*", low):
-        return True
-    if re.search(r"\b(?:host|guest|speaker)\s*:\s*", low):
         return True
     if t and t[0] in "\"'“”‘":
         return True
@@ -3345,7 +3525,13 @@ def _suggested_argument_thesis(
         if claims:
             raw = str(claims[0].get("text") or "").strip()
             g = _generalize_sentence(raw) if raw else ""
-            if g and len(g) > 20 and not _looks_like_quote_fragment_thesis(g):
+            if (
+                g
+                and len(g) > 20
+                and not _looks_like_quote_fragment_thesis(g)
+                and not _thesis_line_is_quote_like(raw)
+                and not _thesis_line_is_quote_like(g)
+            ):
                 frag = g[:200] + ("…" if len(g) > 200 else "")
                 return f"{tail}: commit the episode to proving {frag}"
         if pt and not _is_meta_topic_line(pt) and len(pt) > 8:
@@ -3361,8 +3547,9 @@ def _suggested_argument_thesis(
             f"one falsifiable claim, defended on the record."
         )
     if claims:
-        g = _generalize_sentence(str(claims[0].get("text") or ""))
-        if g and not _looks_like_quote_fragment_thesis(g):
+        raw0 = str(claims[0].get("text") or "").strip()
+        g = _generalize_sentence(raw0)
+        if g and not _looks_like_quote_fragment_thesis(g) and not _thesis_line_is_quote_like(raw0) and not _thesis_line_is_quote_like(g):
             return g
     if len(clean_insights) > 1 and not _looks_like_quote_fragment_thesis(clean_insights[1]):
         return _generalize_sentence(clean_insights[1])
@@ -4708,6 +4895,7 @@ def build_v3_report(
         brief = {**brief, "claims": claims}
     else:
         claims = [c for c in (brief.get("claims") or []) if isinstance(c, dict)]
+    claims = _apply_claim_spine_gates(claims, cleaned)
     claim_by_id = {str(c.get("id")): c for c in claims if c.get("id")}
 
     raw_claims = extract_claims(cleaned, claims)
@@ -4794,6 +4982,16 @@ def build_v3_report(
         ]
     report_readiness["output_mode"] = output_mode
     report_readiness["diagnostic_reasons"] = diagnostic_reasons
+    if output_mode == "full" and str(report_readiness.get("band") or "").strip().lower() in (
+        "minimal",
+        "weak",
+    ):
+        _split_msg = (
+            "**Layout vs quality:** `output_mode=full` only selects the v3 section layout — it does **not** "
+            "mean producer-ready. Check **readiness band**, argument rigor, and transcript depth before shipping."
+        )
+        if _split_msg not in rnotes:
+            rnotes.append(_split_msg)
 
     narrative = build_or_reconstruct_narrative(
         brief,
@@ -5025,6 +5223,8 @@ def build_episode_spine(
     claims_out: List[Dict[str, str]] = []
     for c in r3.get("claims") or []:
         if not isinstance(c, dict):
+            continue
+        if str(c.get("_spine_excluded_reason") or "").strip():
             continue
         cid = str(c.get("id") or "").strip()
         if not cid:
@@ -8073,6 +8273,63 @@ def finalize_unified_markdown_export(md: str) -> str:
     return md
 
 
+def _brief_v2_env_enabled() -> bool:
+    """When on, :func:`generate_episode_report_v3` runs :mod:`backend.episode_brief_v2` and attaches ``episode_brief_v2``."""
+    v = (os.getenv("SOAPBOXX_BRIEF_V2") or "0").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+def _apply_episode_brief_v2_to_report(report: Dict[str, Any], transcript: str, meta: Dict[str, Any]) -> None:
+    """Mutates ``report`` in place: runs constraint brief, syncs thesis when valid, surfaces diagnostic reasons."""
+    try:
+        from .episode_brief_v2 import (
+            build_episode_brief_v2,
+            format_brief_v2_markdown_section,
+            segments_from_transcript_for_brief_v2,
+        )
+    except ImportError:
+        from episode_brief_v2 import (  # type: ignore
+            build_episode_brief_v2,
+            format_brief_v2_markdown_section,
+            segments_from_transcript_for_brief_v2,
+        )
+    segs = segments_from_transcript_for_brief_v2(transcript)
+    meta_b2 = {
+        "title": str(meta.get("title") or ""),
+        "creator": str(meta.get("creator") or ""),
+        "genre": str(meta.get("genre") or ""),
+        "generated_at": str(meta.get("generated_at") or ""),
+    }
+    b2 = build_episode_brief_v2(segs, metadata=meta_b2, mode="debug")
+    report["episode_brief_v2"] = b2
+    report["_brief_v2_markdown"] = format_brief_v2_markdown_section(b2)
+    th2 = b2.get("thesis")
+    if th2:
+        cr = report.get("coach_report")
+        if isinstance(cr, dict):
+            cr["episode_thesis"] = th2
+        nr = report.get("narrative_reconstruction")
+        if isinstance(nr, dict):
+            nr["core_thesis"] = th2
+        return
+    rr = report.get("report_readiness")
+    if not isinstance(rr, dict):
+        rr = {}
+        report["report_readiness"] = rr
+    dr = rr.get("diagnostic_reasons")
+    if not isinstance(dr, list):
+        dr = []
+    if "BRIEF_V2_THESIS_UNAVAILABLE" not in dr:
+        dr.append("BRIEF_V2_THESIS_UNAVAILABLE")
+    for fr in b2.get("status", {}).get("fail_reasons") or []:
+        tag = f"BRIEF_V2:{fr}"
+        if tag not in dr:
+            dr.append(tag)
+    rr["diagnostic_reasons"] = dr
+    rr["output_mode"] = "diagnostic"
+    report["output_mode"] = "diagnostic"
+
+
 def render_unified_episode_export_markdown(bundle: Dict[str, Any]) -> str:
     """
     One markdown string for sharing: **strategist export** plus optional **workflow execution appendix**
@@ -8083,6 +8340,10 @@ def render_unified_episode_export_markdown(bundle: Dict[str, Any]) -> str:
     Set ``SOAPBOXX_UNIFIED_APPENDIX=0`` to omit sections 1–7 (strategist-only; smaller paste).
     """
     strategist = _render_strategist_export_markdown(bundle).rstrip()
+    r3 = bundle.get("report_v3") if isinstance(bundle.get("report_v3"), dict) else {}
+    b2_block = r3.get("_brief_v2_markdown") if isinstance(r3.get("_brief_v2_markdown"), str) else ""
+    if b2_block:
+        strategist = b2_block.rstrip() + "\n\n" + strategist
     raw_appendix = (os.getenv("SOAPBOXX_UNIFIED_APPENDIX") or "1").strip().lower()
     if raw_appendix in ("0", "false", "no", "off"):
         out = strategist + "\n"
@@ -8113,6 +8374,9 @@ def generate_episode_report_v3(
     """
     Full v3 pipeline: base brief (v2 generator) + v3 enrichment + markdown.
 
+    For **one orchestrated call** that also runs workflow and returns a single canonical dict, see
+    :func:`unified_episode_run.run_unified_episode_pipeline`.
+
     Applies :func:`transcript_for_v3_pipeline` before the brief pass (normalization is **on** by
     default; set ``SOAPBOXX_TRANSCRIPT_NORMALIZE=0`` to disable).
 
@@ -8131,6 +8395,8 @@ def generate_episode_report_v3(
     report = build_v3_report(
         brief, transcript or "", metadata=meta, atomic_ground_truth=atomic_ground_truth
     )
+    if _brief_v2_env_enabled():
+        _apply_episode_brief_v2_to_report(report, transcript or "", meta)
     warnings = list(base.get("warnings") or [])
     product_mode = _episode_product_mode()
     truth_gate = {
@@ -8241,10 +8507,16 @@ def dialin_production_warnings(bundle: Dict[str, Any]) -> List[str]:
             "DIAL-IN: SOAPBOXX_OFFLINE is on — the strict JSON brief is skipped. "
             "Unset SOAPBOXX_OFFLINE in `.env` for full v3 quality (Ollama + coach/workflow)."
         )
-    elif not ollama or brief_model == "brief-unavailable":
+    elif not ollama:
         lines.append(
-            "DIAL-IN: SOAPBOXX_OLLAMA_MODEL is not set or brief failed to load — claims stay a thin shell. "
+            "DIAL-IN: SOAPBOXX_OLLAMA_MODEL is not set — claims stay a thin shell. "
             "Set `SOAPBOXX_OLLAMA_MODEL=llama3.1:8b` (or your model) and ensure Ollama is running (`preflight` / health)."
+        )
+    elif brief_model == "brief-unavailable":
+        lines.append(
+            "DIAL-IN: Strict JSON brief failed validation or did not load (see stderr for schema / retry errors) — "
+            "claims may be empty. Check Ollama JSON output, `SOAPBOXX_BRIEF_ENVELOPE_RETRIES`, and "
+            "`SOAPBOXX_BRIEF_CONTRACT_MAX_CHARS` for long transcripts."
         )
 
     r3 = bundle.get("report_v3")

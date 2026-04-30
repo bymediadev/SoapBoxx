@@ -16,6 +16,22 @@ Example:
 
   python scripts/episode_intake.py ^
     --url "https://www.youtube.com/watch?v=SwQhKFMxmDY"
+
+  Same URL but **re-transcribe from downloaded audio** (often beats auto-captions; needs ffmpeg + Transcriber):
+  python scripts/episode_intake.py ^
+    --url "https://www.youtube.com/watch?v=SwQhKFMxmDY" ^
+    --youtube-transcript asr
+
+  Same URL with automatic source choice (captions first, ASR fallback when quality is weak):
+  python scripts/episode_intake.py ^
+    --url "https://www.youtube.com/watch?v=SwQhKFMxmDY" ^
+    --youtube-transcript auto
+
+  DAW / master bounce (same pipeline as transcript after ASR; set SOAPBOXX_TRANSCRIBER, e.g. openai or local):
+  python scripts/episode_intake.py ^
+    --audio "exports/Episode12_Master.wav" ^
+    --title "Episode 12 — Working title" ^
+    --creator "Your Show"
 """
 
 from __future__ import annotations
@@ -224,8 +240,30 @@ def main() -> int:
 
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--transcript", default="", help="Path to transcript .txt")
+    p.add_argument(
+        "--audio",
+        default="",
+        help=(
+            "Path to episode audio (wav/mp3/…). Transcribes via backend Transcriber "
+            "(SOAPBOXX_TRANSCRIBER, default openai) then runs the same v3 intake as --transcript. "
+            "Use for DAW master / dialogue stems."
+        ),
+    )
     p.add_argument("--url", default="", help="YouTube watch URL (caption-first path)")
     p.add_argument("--id", dest="video_id", default="", help="YouTube video id (11 chars)")
+    p.add_argument(
+        "--youtube-transcript",
+        dest="youtube_transcript",
+        choices=("captions", "asr", "auto"),
+        default="captions",
+        help=(
+            "YouTube only. captions: English VTT (manual then auto), default. "
+            "asr: yt-dlp best-audio → m4a → SOAPBOXX_TRANSCRIBER (OpenAI/local/…). "
+            "auto: score caption quality and escalate to ASR when weak. "
+            "Long episodes may need transcriber=local or assemblyai "
+            "(OpenAI HTTP cap ~25MB — shrink with SOAPBOXX_YOUTUBE_ASR_AUDIO_QUALITY)."
+        ),
+    )
     p.add_argument("--title", default="", help="Episode title (auto when --url/--id)")
     p.add_argument("--creator", default="", help="Show / creator name (auto when --url/--id)")
     p.add_argument("--genre", default="", help="Genre label (optional)")
@@ -251,8 +289,14 @@ def main() -> int:
     )
     args = p.parse_args()
 
-    if not args.transcript and not args.url and not args.video_id:
-        print("Provide --transcript or --url/--id", file=sys.stderr)
+    _has_tx = bool(str(args.transcript or "").strip())
+    _has_yt = bool(str(args.url or "").strip() or str(args.video_id or "").strip())
+    _has_audio = bool(str(args.audio or "").strip())
+    if int(_has_tx) + int(_has_yt) + int(_has_audio) != 1:
+        print("Provide exactly one of: --transcript, --url/--id, --audio", file=sys.stderr)
+        return 1
+    if str(args.youtube_transcript) != "captions" and not _has_yt:
+        print("--youtube-transcript is only valid with --url/--id", file=sys.stderr)
         return 1
 
     video_id = str(args.video_id or "").strip()
@@ -262,6 +306,10 @@ def main() -> int:
     genre = str(args.genre or "").strip()
     tx_path = ""
     transcript = ""
+    audio_source = ""
+    transcript_quality: Dict[str, Any] = {}
+    transcript_quality_candidates: List[Dict[str, Any]] = []
+    transcript_source_used = "transcript" if _has_tx else ("audio" if _has_audio else "youtube")
 
     if args.preflight:
         try:
@@ -285,12 +333,40 @@ def main() -> int:
             creator = "Unknown Creator"
         if not genre:
             genre = "Podcast"
+    elif args.audio:
+        audio_source = args.audio if os.path.isabs(args.audio) else os.path.join(root, args.audio)
+        if not os.path.isfile(audio_source):
+            print(f"Audio not found: {audio_source}", file=sys.stderr)
+            return 1
+        if not title:
+            title = os.path.splitext(os.path.basename(audio_source))[0].replace("_", " ")
+        if not creator:
+            creator = "Unknown Creator"
+        if not genre:
+            genre = "Podcast"
     else:
         sys.path.insert(0, os.path.join(root, "backend"))
-        from youtube_subtitles import download_youtube_en_vtt, parse_youtube_video_id
+        from youtube_subtitles import (
+            download_youtube_best_audio,
+            download_youtube_en_vtt,
+            parse_youtube_video_id,
+        )
+        from transcript_quality_assess import (
+            assess_transcript_quality,
+            pick_better_transcript_report,
+        )
 
         if url:
-            video_id = parse_youtube_video_id(url)
+            try:
+                video_id = parse_youtube_video_id(url)
+            except ValueError as e:
+                print(f"Invalid YouTube URL: {e}", file=sys.stderr)
+                print(
+                    "Use a real 11-character video id, e.g. "
+                    "https://www.youtube.com/watch?v=SwQhKFMxmDY or --id SwQhKFMxmDY",
+                    file=sys.stderr,
+                )
+                return 1
         if not re.fullmatch(r"[\w-]{11}", video_id or ""):
             print(f"Bad/empty YouTube video id: {video_id!r}", file=sys.stderr)
             return 1
@@ -317,12 +393,117 @@ def main() -> int:
 
     if args.transcript:
         _write_text(os.path.join(run_dir, "transcript.txt"), transcript)
+    elif args.audio:
+        from transcriber import Transcriber
+
+        with open(audio_source, "rb") as af:
+            audio_bytes = af.read()
+        tr = Transcriber(service=os.getenv("SOAPBOXX_TRANSCRIBER", "openai"))
+        transcript = tr.transcribe(audio_bytes)
+        if not transcript or str(transcript).startswith("Error"):
+            print(transcript or "Transcription failed", file=sys.stderr)
+            return 1
+        tx_path = os.path.join(run_dir, "transcript.txt")
+        _write_text(tx_path, str(transcript))
     else:
-        vtt_path = download_youtube_en_vtt(url, run_dir, video_id=video_id)
-        if vtt_path is None:
-            print("No English subtitles found (manual or auto).", file=sys.stderr)
-            return 2
-        transcript = _vtt_to_text(str(vtt_path))
+        from pathlib import Path as _Path
+
+        def _asr_from_youtube_audio() -> str:
+            nonlocal audio_source
+            ap = download_youtube_best_audio(url, _Path(run_dir), video_id=video_id)
+            if ap is None:
+                print(
+                    "Failed to download episode audio for ASR (install ffmpeg; check yt-dlp and URL).",
+                    file=sys.stderr,
+                )
+                return ""
+            audio_source = str(ap)
+            from transcriber import Transcriber
+
+            with open(ap, "rb") as af:
+                audio_bytes = af.read()
+            tr = Transcriber(service=os.getenv("SOAPBOXX_TRANSCRIBER", "openai"))
+            out = tr.transcribe(audio_bytes)
+            if not out or str(out).startswith("Error"):
+                em = str(out or "Transcription failed").strip()
+                if "too large" in em.lower() or "25mb" in em.lower():
+                    print(
+                        "ASR failed due to size cap. For long episodes set SOAPBOXX_TRANSCRIBER=local "
+                        "or assemblyai, or increase SOAPBOXX_YOUTUBE_ASR_AUDIO_QUALITY.",
+                        file=sys.stderr,
+                    )
+                print(em, file=sys.stderr)
+                return ""
+            return str(out)
+
+        mode = str(args.youtube_transcript or "captions")
+        if mode == "asr":
+            transcript = _asr_from_youtube_audio()
+            if not transcript:
+                return 1
+            transcript_source_used = "youtube_asr"
+            transcript_quality = assess_transcript_quality(transcript, source="asr")
+            transcript_quality_candidates = [dict(transcript_quality)]
+        else:
+            vtt_path = download_youtube_en_vtt(url, run_dir, video_id=video_id)
+            caption_text = _vtt_to_text(str(vtt_path)) if vtt_path is not None else ""
+            caption_quality = (
+                assess_transcript_quality(caption_text, source="captions")
+                if caption_text.strip()
+                else {
+                    "source": "captions",
+                    "score": 0.0,
+                    "verdict": "fail",
+                    "reasons": ["captions_unavailable"],
+                    "metrics": {"word_count": 0, "line_count": 0},
+                }
+            )
+            transcript_quality_candidates.append(dict(caption_quality))
+            if mode == "captions":
+                if vtt_path is None:
+                    print("No English subtitles found (manual or auto).", file=sys.stderr)
+                    return 2
+                transcript = caption_text
+                transcript_source_used = "youtube_captions"
+                transcript_quality = caption_quality
+            else:
+                auto_cut = float(os.getenv("SOAPBOXX_YOUTUBE_AUTO_ASR_SCORE", "0.62"))
+                try_asr = (
+                    caption_quality.get("verdict") == "fail"
+                    or float(caption_quality.get("score") or 0.0) < auto_cut
+                )
+                asr_quality: Dict[str, Any] = {}
+                asr_text = ""
+                if try_asr:
+                    asr_text = _asr_from_youtube_audio()
+                    if asr_text:
+                        asr_quality = assess_transcript_quality(asr_text, source="asr")
+                        transcript_quality_candidates.append(dict(asr_quality))
+                best = pick_better_transcript_report(transcript_quality_candidates)
+                best_source = str(best.get("source") or "captions")
+                if best_source == "asr" and asr_text:
+                    transcript = asr_text
+                    transcript_source_used = "youtube_asr_auto"
+                    transcript_quality = asr_quality or best
+                else:
+                    if not caption_text:
+                        print(
+                            "AUTO mode could not obtain usable captions and ASR failed. "
+                            "Try --youtube-transcript asr with SOAPBOXX_TRANSCRIBER=local/assemblyai.",
+                            file=sys.stderr,
+                        )
+                        return 2
+                    transcript = caption_text
+                    transcript_source_used = "youtube_captions_auto"
+                    transcript_quality = caption_quality
+                if try_asr and transcript_source_used.startswith("youtube_captions"):
+                    print(
+                        "AUTO: kept captions after quality comparison (ASR was not better).",
+                        file=sys.stderr,
+                    )
+                elif try_asr and transcript_source_used.startswith("youtube_asr"):
+                    print("AUTO: switched to ASR due to weak captions.", file=sys.stderr)
+
         tx_path = os.path.join(run_dir, "transcript.txt")
         _write_text(tx_path, transcript)
 
@@ -365,6 +546,17 @@ def main() -> int:
             "transcript_path": tx_path,
             "url": url,
             "video_id": video_id,
+            "audio_source": audio_source or None,
+            "youtube_transcript": (args.youtube_transcript if _has_yt else None),
+            "transcript_source_used": transcript_source_used,
+            "transcriber": (
+                os.getenv("SOAPBOXX_TRANSCRIBER", "openai")
+                if (
+                    audio_source
+                    or (_has_yt and str(transcript_source_used).startswith("youtube_asr"))
+                )
+                else None
+            ),
         },
         "title": title,
         "creator": creator,
@@ -374,6 +566,8 @@ def main() -> int:
         "argument_rigor_status": (ar or {}).get("status"),
         "argument_rigor_score": (ar or {}).get("score"),
         "warnings": out.get("warnings") if isinstance(out, dict) else [],
+        "transcript_quality": transcript_quality or None,
+        "transcript_quality_candidates": transcript_quality_candidates or [],
         "dialin_checklist": (out.get("dialin_checklist") or []) if isinstance(out, dict) else [],
         "artifacts": {
             "episode_report_unified_md": path_unified,

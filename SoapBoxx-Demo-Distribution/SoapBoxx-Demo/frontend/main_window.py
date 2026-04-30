@@ -97,10 +97,15 @@ from PyQt6.QtGui import QAction, QFont, QIcon, QKeySequence, QPixmap
 from PyQt6.QtWidgets import (QApplication, QComboBox, QDateEdit, QDialog,
                              QDialogButtonBox, QFormLayout, QFrame,
                              QGridLayout, QGroupBox, QHBoxLayout, QLabel,
-                             QLineEdit, QMainWindow, QMenu, QMenuBar,
+                             QInputDialog, QLineEdit, QMainWindow, QMenu, QMenuBar,
                              QMessageBox, QPushButton, QScrollArea, QSizePolicy,
                              QSplitter, QStatusBar, QTabWidget, QTextEdit,
                              QTimeEdit, QVBoxLayout, QWidget)
+
+try:
+    from backend.demo_license import DemoLicenseGate
+except Exception:  # pragma: no cover
+    DemoLicenseGate = None  # type: ignore
 
 # Import the bulletproof tab loader
 try:
@@ -376,6 +381,55 @@ def _get_github_setup_urls():
         "branch": branch,
         "release_demo_zip": release_demo_zip,
     }
+
+
+def _enforce_demo_license_or_exit() -> bool:
+    """
+    Require a valid demo activation token before login.
+    Returns True when app startup can continue.
+    """
+    if DemoLicenseGate is None:
+        QMessageBox.critical(
+            None,
+            "License module missing",
+            "Demo license module is unavailable. Reinstall this demo package.",
+        )
+        return False
+    gate = DemoLicenseGate(Path(__file__).resolve().parent.parent)
+    check = gate.validate_current()
+    if check.ok:
+        return True
+
+    # Let user enter/refresh token for missing or expired states.
+    token_needed = check.status in ("missing", "expired", "invalid", "clock_rollback")
+    if not token_needed:
+        QMessageBox.critical(None, "Demo locked", check.message)
+        return False
+
+    prompt = (
+        f"{check.message}\n\n"
+        "Paste your SoapBoxx demo activation token to continue.\n"
+        "If you don't have one, request a new 14-day token."
+    )
+    token, ok = QInputDialog.getMultiLineText(
+        None,
+        "SoapBoxx Demo Activation",
+        prompt,
+        "",
+    )
+    if not ok or not token.strip():
+        QMessageBox.information(
+            None,
+            "Activation required",
+            "The demo requires a valid activation token.",
+        )
+        return False
+    act = gate.activate_token(token.strip())
+    if not act.ok:
+        QMessageBox.critical(None, "Activation failed", act.message)
+        return False
+    QMessageBox.information(None, "Demo activated", act.message)
+    return True
 
 
 def _default_user_record():
@@ -2079,6 +2133,10 @@ def main():
         app.setApplicationVersion("1.0.0")
         app.setOrganizationName("SoapBoxx")
         print("QApplication created successfully")
+
+        # Enforce signed 14-day demo activation before login portal.
+        if not _enforce_demo_license_or_exit():
+            sys.exit(1)
 
         # Login / sign-up portal first (before main window)
         print("Showing login portal...")

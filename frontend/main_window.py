@@ -245,9 +245,9 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         try:
-            print("🏗️ MainWindow: Starting initialization...")
+            print("MainWindow: Starting initialization...")
             super().__init__()
-            print("✅ MainWindow: Super class initialized")
+            print("MainWindow: Super class initialized")
 
             # Initialize state tracking
             self._is_initializing = True
@@ -255,30 +255,30 @@ class MainWindow(QMainWindow):
             self._is_switching_tab = False
             self._error_count = 0
             self._last_error_time = None
-            print("✅ MainWindow: State tracking initialized")
+            print("MainWindow: State tracking initialized")
 
             # Setup global exception handler
-            print("🔧 MainWindow: Setting up exception handler...")
+            print("MainWindow: Setting up exception handler...")
             self._setup_global_exception_handler()
-            print("✅ MainWindow: Exception handler setup complete")
+            print("MainWindow: Exception handler setup complete")
 
             # Initialize UI
-            print("🎨 MainWindow: Setting up UI...")
+            print("MainWindow: Setting up UI...")
             self.setup_ui()
-            print("✅ MainWindow: UI setup complete")
+            print("MainWindow: UI setup complete")
 
             # Mark initialization complete
             self._is_initializing = False
 
             # Start health monitoring
-            print("💚 MainWindow: Starting health monitoring...")
+            print("MainWindow: Starting health monitoring...")
             self._start_health_monitoring()
-            print("✅ MainWindow: Health monitoring started")
+            print("MainWindow: Health monitoring started")
 
-            print("✅ MainWindow: Initialization complete!")
+            print("MainWindow: Initialization complete!")
 
         except Exception as e:
-            print(f"❌ MainWindow initialization failed: {e}")
+            print(f"MainWindow initialization failed: {e}")
             import traceback
 
             traceback.print_exc()
@@ -585,12 +585,12 @@ class MainWindow(QMainWindow):
     def _create_soapboxx_tab(self):
         """Create SoapBoxx tab with error handling"""
         try:
-            print("🔧 MainWindow: Creating SoapBoxx tab...")
+            print("MainWindow: Creating SoapBoxx tab...")
             tab = SoapBoxxTab()
-            print("✅ MainWindow: SoapBoxx tab created successfully")
+            print("MainWindow: SoapBoxx tab created successfully")
             return tab
         except Exception as e:
-            print(f"❌ MainWindow: Failed to create SoapBoxx tab: {e}")
+            print(f"MainWindow: Failed to create SoapBoxx tab: {e}")
             import traceback
 
             traceback.print_exc()

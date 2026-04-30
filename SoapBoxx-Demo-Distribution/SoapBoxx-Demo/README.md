@@ -6,6 +6,17 @@ Self-contained **Python + PyQt6** desktop demo: **SoapBoxx**, **Scoop**, and **R
 
 See **`docs/README_DEMO.md`** for the full, current story.
 
+## 14-day demo activation
+
+- This demo now requires an activation token at startup.
+- Tokens are time-limited (default: 14 days) and the app auto-locks after expiry.
+- Maintainers can generate tokens with:
+  - `python scripts/generate_demo_license.py --email tester@example.com --days 14`
+- Optional machine binding:
+  - `python scripts/generate_demo_license.py --email tester@example.com --bind-this-machine`
+
+If a tester has an expired token, they can paste a new one on launch.
+
 ## Quick start
 
 **Always run commands from the `SoapBoxx-Demo` folder** (the one that contains `frontend/` and `requirements_demo.txt`).

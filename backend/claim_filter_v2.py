@@ -41,6 +41,9 @@ R_STRUCTURAL_SOCIAL = "structural_social"
 R_GENERIC_NON_CLAIM = "generic_non_claim"
 R_CLAIM_SCORE = "low_claim_score"
 
+# Causal / mechanism wording (Layer 1 — optional gate)
+R_NOT_CAUSAL = "not_causal_statement"
+
 # Success
 P_PASSED = "passed_all_filters"
 
@@ -64,6 +67,7 @@ _CODE_NO_CONCRETE = "NO_CONCRETE_REFERENT"
 _CODE_MULTI_TOPIC = "MULTI_TOPIC_SENTENCE"
 _CODE_CONTEXT_NOISE = "CONTEXTUAL_NOISE"
 _CODE_SCORE_BELOW = "SCORE_BELOW_MINIMUM"  # calibration gate
+_CODE_NON_CAUSAL = "NON_CAUSAL_STATEMENT"
 _CODE_HIGH_INFO = "HIGH_INFORMATION_WEIGHT"
 _CODE_SPECIFIC_ATOMIC = "SPECIFIC_AND_ATOMIC"
 _CODE_CLEAR_ASSERTION = "CLEAR_ASSERTION"
@@ -198,6 +202,13 @@ _RE_ABSTRACTION = re.compile(
     r"is\s+the\s+greatest|is\s+the\s+biggest|everyone\s+knows|the\s+world\s+is"
     r")\b"
 )
+
+
+def _claim_require_causal() -> bool:
+    v = (os.environ.get("SOAPBOXX_CLAIM_REQUIRE_CAUSAL") or "1").strip().lower()
+    if v in ("0", "false", "no", "off"):
+        return False
+    return True
 
 
 def _norm_text(s: str) -> str:
@@ -429,6 +440,7 @@ _INTERNAL_TO_PUBLIC_PRIMARY: Dict[str, str] = {
     R_HARD_EMOTIONAL_FILLER: _CODE_FILLER,
     R_STRUCTURAL_SOCIAL: _CODE_PODCAST_SCAFFOLD,
     R_GENERIC_NON_CLAIM: _CODE_GENERIC,
+    R_NOT_CAUSAL: _CODE_NON_CAUSAL,
 }
 
 
@@ -642,6 +654,15 @@ def _validate_one(
         details["all_internal_reasons"] = [R_CLAIM_SCORE]
         return False, R_CLAIM_SCORE, R_CLAIM_SCORE, details
 
+    if _claim_require_causal():
+        try:
+            from .causal_claim import is_causal_claim
+        except ImportError:  # pragma: no cover
+            from causal_claim import is_causal_claim  # type: ignore
+        if not is_causal_claim(s, score_breakdown=sc):
+            details["all_internal_reasons"] = [R_NOT_CAUSAL]
+            return False, R_NOT_CAUSAL, R_NOT_CAUSAL, details
+
     details["claim_kind"] = _infer_claim_kind(s, sc)
     details["all_internal_reasons"] = []
     return True, P_PASSED, P_PASSED, details
@@ -731,6 +752,9 @@ def apply_claim_filter_v2_to_brief(
 
     * Off when ``SOAPBOXX_CLAIM_FILTER_V2`` is ``0``/``false``/``off`` (default: **on**).
     * ``SOAPBOXX_CLAIM_FILTER_MODE`` = ``debug`` | ``production`` (default ``production``).
+    * ``SOAPBOXX_CLAIM_REQUIRE_CAUSAL`` (default ``1``): reject claims with no explicit mechanism/causal
+      language unless falsifiability scored at the top tier (reportative / numeric anchor); see
+      :mod:`causal_claim`. Set ``0`` to restore pre–Layer-1 behavior.
     * ``SOAPBOXX_CLAIM_FILTER_DEBUG_TRACE=1`` forces full filter JSON under ``_claim_filter_v2`` in production
       (and ``_claim_filter_debug_full`` on the return payload).
     * Stores summary on ``data[\"_claim_filter_v2\"]``; may append to ``data[\"_quality_warnings\"]`` if all
@@ -798,6 +822,10 @@ def explain_verdict(text: str, *, transcript_context: Optional[str] = None) -> D
     s = _norm_text(text)
     hard = _hard_rejection(s)
     sc = score_claim(s)
+    try:
+        from .causal_claim import is_causal_claim as _is_causal
+    except ImportError:  # pragma: no cover
+        from causal_claim import is_causal_claim as _is_causal  # type: ignore
     return {
         "text": s,
         "hard_rejection": hard,
@@ -811,6 +839,7 @@ def explain_verdict(text: str, *, transcript_context: Optional[str] = None) -> D
         "removal_not_redundant": not (bool(transcript_context) and _removal_redundant_in_context(s, transcript_context or "")),
         "score_breakdown": sc,
         "claim_kind": _infer_claim_kind(s, sc),
+        "is_causal_claim": bool(_is_causal(s, score_breakdown=sc)),
     }
 
 
@@ -831,6 +860,7 @@ __all__ = [
     "R_STRUCTURAL_SOCIAL",
     "R_GENERIC_NON_CLAIM",
     "R_CLAIM_SCORE",
+    "R_NOT_CAUSAL",
     "score_claim",
     "filter_claim_candidates",
     "apply_claim_filter_v2_to_brief",
