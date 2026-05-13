@@ -10,7 +10,14 @@ from pathlib import Path
 
 def setup_openai_api_key():
     """Set up OpenAI API key in configuration"""
-    config_file = Path("soapboxx_config.json")
+    try:
+        from backend.config import default_config_path_for_bucket, get_runtime_bucket
+
+        config_file = default_config_path_for_bucket()
+        bucket = get_runtime_bucket()
+    except Exception:
+        config_file = Path("soapboxx_config.json")
+        bucket = (os.getenv("SOAPBOXX_BUCKET") or "production").strip().lower()
 
     # Load existing config
     if config_file.exists():
@@ -21,6 +28,8 @@ def setup_openai_api_key():
 
     print("🔑 OpenAI API Key Setup")
     print("=" * 40)
+    print(f"Runtime bucket: {bucket}")
+    print(f"Config file: {config_file}")
 
     # Check if API key already exists
     current_key = config.get("openai_api_key", "")

@@ -23,28 +23,21 @@ This tutorial will walk you through using the **fully functional SoapBoxx demo**
 
 ## 🚀 **Getting Started**
 
-### **Prerequisites:**
-- Python 3.8+ installed
-- Basic understanding of desktop applications
-- No internet connection required! 🎉
+### **For Testers (Packaged Release):**
+- Download and unzip the latest demo package.
+- Run `Launch SoapBoxx Production Studio Demo.bat`.
+- Confirm the window title includes `Production Studio Demo`.
 
-### **Installation:**
-```bash
-# 1. Switch to demo branch
-git checkout demo/soapboxx-barebones
-
-# 2. Install minimal dependencies
-pip install PyQt6 numpy requests python-dotenv
-
-# 3. Run SoapBoxx Demo
-python frontend/main_window.py
+### **For Maintainers (Build New Demo Package):**
+```powershell
+./package_demo_release.ps1 -Version "1.1.0" -ExpiresOn "2026-05-20"
 ```
 
 ### **First Launch:**
 When you first launch SoapBoxx Demo, you'll see:
 - **Modern interface** with three main tabs
 - **Welcome message** explaining demo features
-- **Status bar** showing "Demo Mode - Offline Capable"
+- **Demo branding** indicating this is not production
 
 ---
 
