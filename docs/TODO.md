@@ -10,7 +10,7 @@
 - [x] Phase 3: Move News API calls out of `frontend/scoop_tab.py` → `backend/scoop_news.py`
 - [x] Phase 3: Route Reverb search-summary LLM through `backend/llm_service.py`
 - [ ] Phase 4: Migrate remaining AI callers to `llm_service` (feedback_engine, guest_research, episode_intelligence, v3 internals)
-- [ ] Phase 5: Unified episode/session object across tabs
+- [x] Phase 5: RecordingSession extended (audio_path, metadata, to_dict); handoff SoapBoxx → Reverb
 - [ ] Phase 6: v1 freeze smoke test + production tag
 
 ## Optional enhancements (later)

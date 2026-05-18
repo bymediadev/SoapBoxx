@@ -480,6 +480,7 @@ class ReverbTab(QWidget):
         self.uploaded_episodes = []
         self.analysis_thread = None
         self._session_feedback_thread = None
+        self._last_episode_session = None
         # Defer UI setup until widget is shown
         self._ui_initialized = False
 

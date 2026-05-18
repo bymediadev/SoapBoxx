@@ -2699,7 +2699,16 @@ class SoapBoxxTab(QWidget):
                 transcript_done = ui_t if len(ui_t) >= len(buf) else buf
                 if self._session_feedback_callback and transcript_done:
                     try:
-                        self._session_feedback_callback(transcript_done)
+                        payload = transcript_done
+                        if self.core and getattr(
+                            self.core, "get_current_episode_session", None
+                        ):
+                            session = self.core.get_current_episode_session()
+                            if session:
+                                if not (session.transcript or "").strip():
+                                    session.transcript = transcript_done
+                                payload = session
+                        self._session_feedback_callback(payload)
                     except Exception as cb_err:
                         print(f"Session feedback callback error: {cb_err}")
 

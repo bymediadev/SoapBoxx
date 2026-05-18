@@ -744,9 +744,20 @@ class MainWindow(QMainWindow):
             break
         return None
 
-    def _deliver_session_feedback_to_reverb(self, transcript: str):
-        """After SoapBoxx recording: open Reverb and run FeedbackEngine on the transcript."""
-        text = (transcript or "").strip()
+    def _deliver_session_feedback_to_reverb(self, payload):
+        """After SoapBoxx recording: open Reverb and run FeedbackEngine on the episode transcript."""
+        text = ""
+        try:
+            from backend.soapboxx_core import RecordingSession
+        except ImportError:
+            RecordingSession = None  # type: ignore
+
+        if RecordingSession is not None and isinstance(payload, RecordingSession):
+            text = (payload.transcript or "").strip()
+        elif hasattr(payload, "transcript"):
+            text = (getattr(payload, "transcript", None) or "").strip()
+        else:
+            text = (payload or "").strip()
         if not text:
             return
         try:
@@ -756,6 +767,12 @@ class MainWindow(QMainWindow):
                 return
             if hasattr(reverb, "run_session_feedback_from_transcript"):
                 reverb.run_session_feedback_from_transcript(text)
+            if (
+                RecordingSession is not None
+                and isinstance(payload, RecordingSession)
+                and hasattr(reverb, "_last_episode_session")
+            ):
+                reverb._last_episode_session = payload
             idx = self.tab_widget.indexOf(reverb)
             if idx >= 0:
                 self.tab_widget.setCurrentIndex(idx)

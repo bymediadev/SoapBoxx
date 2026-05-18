@@ -3,7 +3,7 @@ import os
 import threading
 import time
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable, Dict, List, Optional
 
@@ -74,15 +74,30 @@ except ImportError:
 
 @dataclass
 class RecordingSession:
-    """Data class for recording session information"""
+    """Episode/session: audio, transcript, analysis, metadata for one recording."""
 
     session_id: str
     start_time: datetime
     end_time: Optional[datetime] = None
     transcript: str = ""
-    feedback: Dict = None
-    audio_chunks: List = None
-    performance_metrics: Dict = None
+    audio_path: Optional[str] = None
+    feedback: Dict = field(default_factory=dict)
+    metadata: Dict = field(default_factory=dict)
+    audio_chunks: List = field(default_factory=list)
+    performance_metrics: Dict = field(default_factory=dict)
+
+    def to_dict(self) -> Dict:
+        """JSON-friendly snapshot (excludes raw audio chunks)."""
+        return {
+            "session_id": self.session_id,
+            "start_time": self.start_time.isoformat() if self.start_time else None,
+            "end_time": self.end_time.isoformat() if self.end_time else None,
+            "transcript": self.transcript,
+            "audio_path": self.audio_path,
+            "feedback": self.feedback,
+            "metadata": self.metadata,
+            "performance_metrics": self.performance_metrics,
+        }
 
 
 class PerformanceMonitor:
@@ -208,6 +223,10 @@ class SoapBoxxCore:
         self.feedback_callback: Optional[Callable] = None
         self.error_callback: Optional[Callable] = None
 
+    def get_current_episode_session(self) -> Optional[RecordingSession]:
+        """Return the in-memory episode for the active or last-completed recording."""
+        return self.current_session
+
         self.logger.logger.info(
             f"SoapBoxxCore initialized with transcription service: {transcription_service}"
         )
@@ -232,8 +251,6 @@ class SoapBoxxCore:
             self.current_session = RecordingSession(
                 session_id=session_id,
                 start_time=datetime.now(),
-                audio_chunks=[],
-                performance_metrics={},
             )
 
             # Start audio recording
@@ -280,7 +297,13 @@ class SoapBoxxCore:
             if self.current_session:
                 self.current_session.end_time = datetime.now()
                 self.current_session.transcript = results.get("transcript", "")
-                self.current_session.feedback = results.get("feedback", {})
+                self.current_session.feedback = results.get("feedback", {}) or {}
+                ap = results.get("audio_path") or results.get("audio_file")
+                if ap:
+                    self.current_session.audio_path = str(ap)
+                meta = results.get("metadata")
+                if isinstance(meta, dict):
+                    self.current_session.metadata.update(meta)
                 self.current_session.performance_metrics = (
                     self.performance_monitor.get_performance_summary()
                 )
