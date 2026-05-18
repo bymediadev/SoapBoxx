@@ -14,7 +14,7 @@ Record → Transcribe → Improve. Changes must improve recording, transcription
 ## Branches
 
 - Active development: **`production`** only
-- **`demo-release`**: fast-forward from `production` before demo packages; no feature commits on demo branch alone
+- **`demo`**: fast-forward from `production` before demo packages; no feature commits on demo branch alone
 - Do not use `main`, `Local`, or `demo/soapboxx-barebones` for new work
 
 ## Code paths

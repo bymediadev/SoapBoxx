@@ -6,7 +6,7 @@ Use this before tagging a **production** release on branch `production`.
 
 - [ ] Default branch on GitHub is `production`
 - [ ] Working tree clean on `production`
-- [ ] `demo-release` fast-forwarded from `production` if shipping a demo build
+- [ ] `demo` fast-forwarded from `production` if shipping a demo build
 - [ ] Legacy branches (`main`, `Local`, `demo/soapboxx-barebones`) not used for this release
 
 ## Automated tests
@@ -49,12 +49,12 @@ CI ([`.github/workflows/build.yml`](../.github/workflows/build.yml)) builds on `
 
 ## Demo package (optional)
 
-On `demo-release` after `git merge --ff-only production`:
+On `demo` after `git merge --ff-only production`:
 
 ```powershell
 ./package_demo_release.ps1 -Version "1.0.0" -ExpiresOn "YYYY-MM-DD"
 git tag demo-v1.0.0
-git push origin demo-release --tags
+git push origin demo --tags
 ```
 
 ## v1 scope (frozen)

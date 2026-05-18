@@ -7,9 +7,7 @@ SoapBoxx uses **two active branches**. All other branches are archived.
 | Branch | Role | Who commits here |
 |--------|------|------------------|
 | **`production`** | Product integration line; default for development | Feature PRs merge here only |
-| **`demo-release`** | Tester release pointer; same code as production at each demo drop | **No feature commits** — fast-forward from `production` only |
-
-> **Note:** Branch name is `demo-release` (not `demo`) because `demo/soapboxx-barebones` still exists on the remote and Git cannot create a `demo` ref until that branch is deleted. After deleting `demo/soapboxx-barebones` on GitHub, you may rename: `git branch -m demo-release demo`.
+| **`demo`** | Tester release pointer; same code as production at each demo drop | **No feature commits** — fast-forward from `production` only |
 
 Short-lived `feature/*` branches off `production` are normal and are not a third product line.
 
@@ -19,7 +17,7 @@ Short-lived `feature/*` branches off `production` are normal and are not a third
 |--------|---------------|-------|
 | `main` | `production` | Legacy default |
 | `Local` | `production` | Former active dev line |
-| `demo/soapboxx-barebones` | `demo-release` | Barebones fork; use full app + demo env instead |
+| `demo/soapboxx-barebones` | `demo` | Deleted — barebones fork retired |
 
 Optional archive tags: `archive/main-last`, `archive/local-last`, `archive/demo-barebones-last`.
 
@@ -46,11 +44,11 @@ Tags `v*` trigger [`.github/workflows/build.yml`](.github/workflows/build.yml) (
 ### Demo release
 
 ```bash
-git checkout demo-release
+git checkout demo
 git merge --ff-only production
 ./package_demo_release.ps1 -Version "1.2.0" -ExpiresOn "YYYY-MM-DD"
 git tag demo-v1.2.0
-git push origin demo-release --tags
+git push origin demo --tags
 ```
 
 Demo builds use the **full app** with `SOAPBOXX_DEMO_EXPIRES_ON` and Production Studio Demo branding — not the old barebones modules.
@@ -59,11 +57,11 @@ See [`DEMO_INSTRUCTIONS.md`](DEMO_INSTRUCTIONS.md) and [`package_demo_release.ps
 
 ## Rules
 
-1. Never commit features only on `demo-release` — fix on `production`, then fast-forward `demo-release`.
+1. Never commit features only on `demo` — fix on `production`, then fast-forward `demo`.
 2. Never revive `Local` or `demo/soapboxx-barebones` for new features.
 3. Do not edit artifact trees (`releases/`, `*-Distribution*/`, `reports/`) as source code.
 
 ## GitHub setup
 
 - **Default branch:** `production`
-- **Optional protection:** require PR + CI on `production`; restrict direct pushes to `demo-release`
+- **Optional protection:** require PR + CI on `production`; restrict direct pushes to `demo`

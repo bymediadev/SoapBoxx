@@ -12,7 +12,7 @@ Read these first (in order):
 
 - Core loop: **Record → Transcribe → Improve**
 - Do not invent new architecture patterns or parallel AI layers
-- Develop on branch **`production`** only; update **`demo-release`** via fast-forward before demo releases
+- Develop on branch **`production`** only; update **`demo`** via fast-forward before demo releases
 - Do not edit `releases/`, `*-Distribution*/`, or `reports/` as product code
 - Desktop canonical path: `SoapBoxxCore` + `transcriber` + `FeedbackEngine`
 
