@@ -3490,6 +3490,18 @@ class SoapBoxxTab(QWidget):
             self._reset_stt_ui()
 
 
+def _transcription_result_is_error(result: str) -> bool:
+    """True when transcriber returned an error string (not transcript text)."""
+    r = (result or "").strip()
+    if not r:
+        return True
+    if r.startswith("Error:"):
+        return True
+    if "transcription failed" in r.lower():
+        return True
+    return False
+
+
 class TranscriptionThread(QThread):
     """Thread for handling transcription operations without freezing the UI"""
 
@@ -3557,7 +3569,7 @@ class TranscriptionThread(QThread):
                 else:
                     raise e
 
-            if result and not result.startswith("Error:"):
+            if result and not _transcription_result_is_error(result):
                 elapsed = time.time() - start_time
                 print(f"✅ Transcription completed in {elapsed:.1f}s: {result[:100]}...")
                 self.transcription_completed.emit(result)

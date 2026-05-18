@@ -65,6 +65,33 @@ def _whisper_use_fp16() -> bool:
 _LOCAL_WHISPER_LOCK = threading.Lock()
 _LOCAL_WHISPER_MODEL_CACHE: dict[str, Any] = {}
 
+# ~0.1s at 16 kHz — below this Whisper often throws reshape errors on empty mel batches.
+_MIN_WHISPER_SAMPLES = max(800, int(os.getenv("SOAPBOXX_MIN_WHISPER_SAMPLES", "1600")))
+
+
+def _is_raw_pcm_s16le(audio_data: bytes) -> bool:
+    """Live mic path sends mono s16le @ 16 kHz without a container header."""
+    if len(audio_data) < 320 or len(audio_data) % 2 != 0:
+        return False
+    head = audio_data[:4]
+    if head.startswith(b"RIFF") or head.startswith(b"ID3") or head.startswith(b"fLaC"):
+        return False
+    if head.startswith(b"OggS") or audio_data[:2] in (b"\xff\xfb", b"\xff\xf3", b"\xff\xf2"):
+        return False
+    return True
+
+
+def _pcm_s16le_to_wav_bytes(pcm: bytes, sample_rate: int = 16000) -> bytes:
+    import wave
+
+    wav_io = io.BytesIO()
+    with wave.open(wav_io, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm)
+    return wav_io.getvalue()
+
 
 def _get_or_load_local_whisper_model(model_size: str) -> Any:
     """
@@ -207,9 +234,10 @@ class Transcriber:
         """Convert audio data to WAV format for OpenAI.
         Falls back to wrapping raw PCM as WAV if decoding fails.
         """
-        try:
-            import io
+        if _is_raw_pcm_s16le(audio_data):
+            return _pcm_s16le_to_wav_bytes(audio_data)
 
+        try:
             from pydub import AudioSegment
 
             # Try to load input via pydub/ffmpeg
@@ -415,10 +443,15 @@ class Transcriber:
         if not self.local_model:
             return "Error: Local Whisper model not loaded"
 
+        min_bytes = _MIN_WHISPER_SAMPLES * 2
+        if len(audio_data) < min_bytes:
+            return (
+                "Error: Audio too short for local Whisper "
+                f"(need at least ~{_MIN_WHISPER_SAMPLES / 16000:.1f}s)"
+            )
+
         try:
-            # Live mic chunks are raw PCM s16le mono @16kHz with no RIFF header. Saving that as
-            # "*.wav" makes ffmpeg probe incorrectly (often as broken MP3). Same path as OpenAI:
-            # normalize to real WAV bytes first (includes PCM→WAV wrap fallback).
+            # Live mic chunks are raw PCM s16le mono @16kHz with no RIFF header.
             wav_bytes = self._convert_audio_to_wav(audio_data)
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
                 temp_file.write(wav_bytes)
@@ -428,14 +461,24 @@ class Transcriber:
                 _kw: Any = {"fp16": _whisper_use_fp16()}
                 if self.language:
                     _kw["language"] = self.language
-                result = self.local_model.transcribe(temp_path, **_kw)
-                return result.get("text", "").strip()
+                # Serialize local Whisper — live recording fires overlapping windows;
+                # concurrent transcribe() calls corrupt the mel pipeline (0-element reshape).
+                with _LOCAL_WHISPER_LOCK:
+                    audio_np = whisper.load_audio(temp_path)
+                    if audio_np is None or len(audio_np) < _MIN_WHISPER_SAMPLES:
+                        return (
+                            "Error: Audio too short or silent for local Whisper "
+                            "(check mic level and recording duration)"
+                        )
+                    audio_np = whisper.pad_or_trim(audio_np)
+                    result = self.local_model.transcribe(audio_np, **_kw)
+                return (result.get("text") or "").strip()
             finally:
                 if os.path.exists(temp_path):
                     os.unlink(temp_path)
 
         except Exception as e:
-            return f"Local Whisper transcription failed: {str(e)}"
+            return f"Error: Local Whisper transcription failed: {str(e)}"
 
     def get_available_services(self) -> list:
         """Get list of available transcription services"""
