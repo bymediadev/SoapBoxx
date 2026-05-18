@@ -8,12 +8,16 @@
 
 ## How To Run (Tester)
 
-1. Download and unzip the demo release from GitHub.
-2. Open the unzipped folder.
-3. Run:
+1. Download the demo zip from GitHub.
+2. **Extract the entire zip** to a folder (e.g. right-click → Extract All).  
+   **Do not** double-click the `.bat` from inside WinRAR or 7-Zip — that only extracts the launcher to a temp folder and the app will not start.
+3. Open the extracted folder (read `00_EXTRACT_THIS_ZIP_FIRST.txt` if unsure).
+4. Run:
    - `Launch SoapBoxx Production Studio Demo.bat` (Windows), or
    - `Launch SoapBoxx Production Studio Demo.ps1`.
-4. Verify the window title includes `Production Studio Demo`.
+5. Verify the window title includes `Production Studio Demo`.
+
+Alternative: open the `SoapBoxxProductionStudioDemo` subfolder and run `SoapBoxx Production Studio Demo.bat`, or run `SoapBoxxProductionStudioDemo.exe` directly.
 
 ## Quick Smoke Test Checklist
 

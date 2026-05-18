@@ -94,20 +94,72 @@ Copy-Item $builtAppDir -Destination $releaseDir -Recurse -Force
 Copy-Item "README_DEMO.md" -Destination (Join-Path $releaseDir "README_DEMO.md") -Force
 Copy-Item "DEMO_INSTRUCTIONS.md" -Destination (Join-Path $releaseDir "DEMO_INSTRUCTIONS.md") -Force
 
+$extractFirstPath = Join-Path $releaseDir "00_EXTRACT_THIS_ZIP_FIRST.txt"
+@"
+SoapBoxx Production Studio Demo
+==============================
+
+IMPORTANT (Windows / WinRAR / 7-Zip):
+  Extract the ENTIRE zip to a folder on your PC before launching.
+  Do NOT double-click the .bat file from inside the archive viewer.
+  If you do, Windows will only extract the .bat to a temp folder and the app will not start.
+
+Steps:
+  1. Right-click the zip -> Extract All... (or drag the folder out of WinRAR).
+  2. Open the extracted folder.
+  3. Double-click: Launch SoapBoxx Production Studio Demo.bat
+     OR open SoapBoxxProductionStudioDemo and run SoapBoxx Production Studio Demo.bat
+"@ | Out-File -FilePath $extractFirstPath -Encoding utf8
+
+$exeRel = "$exeName\$exeName.exe"
 $launcherBat = Join-Path $releaseDir "Launch SoapBoxx Production Studio Demo.bat"
 @"
 @echo off
 setlocal
+set "EXE=%~dp0$exeRel"
+if not exist "%EXE%" (
+    echo.
+    echo  SoapBoxx Demo could not start.
+    echo  Extract the ENTIRE zip to a folder first — do not run this file from inside WinRAR.
+    echo.
+    echo  Missing: %EXE%
+    echo.
+    pause
+    exit /b 1
+)
 set "SOAPBOXX_BUCKET=demo"
-start "" "%~dp0$exeName\$exeName.exe"
+start "" "%EXE%"
 endlocal
 "@ | Out-File -FilePath $launcherBat -Encoding ascii
+
+$innerLauncherBat = Join-Path $releaseDir "$exeName\SoapBoxx Production Studio Demo.bat"
+@"
+@echo off
+setlocal
+cd /d "%~dp0"
+set "EXE=%~dp0$exeName.exe"
+if not exist "%EXE%" (
+    echo Missing demo executable: %EXE%
+    pause
+    exit /b 1
+)
+set "SOAPBOXX_BUCKET=demo"
+start "" "%EXE%"
+endlocal
+"@ | Out-File -FilePath $innerLauncherBat -Encoding ascii
 
 $launcherPs1 = Join-Path $releaseDir "Launch SoapBoxx Production Studio Demo.ps1"
 @"
 \$ErrorActionPreference = "Stop"
+\$exe = Join-Path \$PSScriptRoot "$exeRel"
+if (-not (Test-Path \$exe)) {
+    Write-Host ""
+    Write-Host "Extract the ENTIRE zip to a folder first — do not run from inside WinRAR."
+    Write-Host "Missing: \$exe"
+    exit 1
+}
 \$env:SOAPBOXX_BUCKET = "demo"
-Start-Process -FilePath (Join-Path \$PSScriptRoot "$exeName\$exeName.exe")
+Start-Process -FilePath \$exe
 "@ | Out-File -FilePath $launcherPs1 -Encoding utf8
 
 $metaPath = Join-Path $releaseDir "demo_release.json"
@@ -120,15 +172,21 @@ $metaPath = Join-Path $releaseDir "demo_release.json"
 "@ | Out-File -FilePath $metaPath -Encoding utf8
 
 Write-Host "Creating zip archive..."
-for ($i = 1; $i -le 6; $i++) {
-    try {
-        if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
-        Compress-Archive -Path "$releaseDir\*" -DestinationPath $zipPath -Force
-        break
-    } catch {
-        if ($i -eq 6) { throw }
-        Start-Sleep -Seconds 2
-    }
+if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+$releaseParent = (Resolve-Path $releaseRoot).Path
+$releaseLeaf = Split-Path $releaseDir -Leaf
+$zipFull = Join-Path $releaseParent "$releaseLeaf.zip"
+Push-Location $releaseParent
+try {
+    # tar -a creates a zip with one top-level folder (more reliable than Compress-Archive on locked files).
+    tar.exe -a -c -f $zipFull $releaseLeaf
+} finally {
+    Pop-Location
+}
+if (-not (Test-Path $zipFull)) {
+    Write-Host "tar zip failed; falling back to Compress-Archive..."
+    Start-Sleep -Seconds 3
+    Compress-Archive -Path "$releaseDir\*" -DestinationPath $zipFull -Force
 }
 
 if (-not (Test-Path $zipPath)) {
