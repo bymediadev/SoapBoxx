@@ -2592,7 +2592,14 @@ class SoapBoxxTab(QWidget):
         try:
             if not text:
                 return
-            # Simple keyword-based matcher (extendable)
+            # Optional canned hints (off by default — they are not transcript-grounded).
+            if (os.getenv("SOAPBOXX_KEYWORD_QUESTION_HINTS") or "").strip().lower() not in (
+                "1",
+                "true",
+                "yes",
+                "on",
+            ):
+                return
             keywords_to_questions = {
                 "sponsor": "Can you tell us about your current sponsors and partnerships?",
                 "launch": "What’s the launch timeline and what milestones are you targeting?",
@@ -2840,7 +2847,11 @@ class SoapBoxxTab(QWidget):
                 from question_extraction import extract_questions_from_transcript  # type: ignore
 
             mode = self._question_extraction_backend()
-            raw = extract_questions_from_transcript(transcript, backend=mode)
+            raw = extract_questions_from_transcript(
+                transcript,
+                backend=mode,
+                known=list(self._known_questions),
+            )
             if not raw:
                 return False
             new_questions_found = self._extract_questions_from_llm_text(raw)
@@ -2852,33 +2863,47 @@ class SoapBoxxTab(QWidget):
             return False
 
     def _extract_questions_from_llm_text(self, text: str) -> bool:
-        """Parse newline LLM output and append questions."""
-        extracted_questions = [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
+        """Parse framed LLM output and append host-ready questions."""
+        try:
+            from backend.question_framing import parse_question_lines
+        except ImportError:
+            from question_framing import parse_question_lines  # type: ignore
+
+        extracted_questions = parse_question_lines(
+            text, known=list(self._known_questions)
+        )
         new_questions_found = False
         for question in extracted_questions:
-            if len(question) <= 10:
-                continue
-            if question not in self._known_questions:
-                if not question.endswith("?"):
-                    question += "?"
-                if self._append_question_row(question):
-                    self._known_questions.add(question)
-                    new_questions_found = True
+            if self._append_question_row(question):
+                self._known_questions.add(question)
+                new_questions_found = True
         return new_questions_found
 
     def _basic_question_extraction(self, transcript: str):
-        """Basic question extraction as fallback when OpenAI is not available."""
+        """Heuristic fallback: reframe transcript fragments via framing parser only."""
         try:
-            parts = transcript.split("?")
-            for p in parts:
+            try:
+                from backend.question_framing import parse_question_lines
+            except ImportError:
+                from question_framing import parse_question_lines  # type: ignore
+
+            # Take last sentence before each ? as a crude candidate line
+            candidates = []
+            for p in transcript.split("?"):
                 p = p.strip()
                 if len(p) < 8:
                     continue
-                q = p + "?"
-                if q not in self._known_questions:
-                    if self._append_question_row(q):
-                        self._known_questions.add(q)
-                        print(f"✅ Basic extraction found question: {q}")
+                # Use last ~12 words before the question mark (avoid huge clauses)
+                words = p.split()
+                snippet = " ".join(words[-12:]) if len(words) > 12 else p
+                candidates.append(snippet + "?")
+
+            for q in parse_question_lines(
+                "\n".join(candidates), known=list(self._known_questions), max_items=3
+            ):
+                if self._append_question_row(q):
+                    self._known_questions.add(q)
+                    print(f"✅ Basic extraction found question: {q}")
         except Exception as e:
             print(f"❌ Basic question extraction failed: {e}")
 

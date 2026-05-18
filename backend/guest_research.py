@@ -1601,7 +1601,12 @@ Information about {company_name}'s notable achievements or challenges is not cur
 
     def _create_research_prompt(self, guest_name: str, guest_info: str) -> str:
         """Create a detailed prompt for guest research"""
-        return f"""
+        try:
+            from .question_framing import SCOOP_QUESTION_RULES
+        except ImportError:
+            from question_framing import SCOOP_QUESTION_RULES  # type: ignore
+
+        prompt = f"""
 Research this podcast guest and provide comprehensive information for the host:
 
 GUEST INFORMATION:
@@ -1618,11 +1623,11 @@ Please provide research in the following JSON format:
         "Key topic or achievement 5"
     ],
     "questions": [
-        "Engaging question about their background or expertise 1",
-        "Engaging question about their background or expertise 2",
-        "Engaging question about their background or expertise 3",
-        "Engaging question about their background or expertise 4",
-        "Engaging question about their background or expertise 5"
+        "One specific open-ended host question ending with ?",
+        "Second specific open-ended host question ending with ?",
+        "Third specific open-ended host question ending with ?",
+        "Fourth specific open-ended host question ending with ?",
+        "Fifth specific open-ended host question ending with ?"
     ],
     "recent_work": "Any recent projects, publications, or notable work",
     "controversies": "Any known controversies or sensitive topics to avoid",
@@ -1630,7 +1635,9 @@ Please provide research in the following JSON format:
 }}
 
 Focus on creating engaging, relevant talking points and questions that would make for an interesting podcast conversation.
+{SCOOP_QUESTION_RULES}
 """
+        return prompt
 
     def _parse_research_response(self, response_text: str, guest_name: str) -> Dict:
         """Parse the AI response into structured research"""
@@ -1660,6 +1667,17 @@ Focus on creating engaging, relevant talking points and questions that would mak
                         ]
                     else:
                         research[key] = []
+
+                try:
+                    from .question_framing import parse_question_lines
+                except ImportError:
+                    from question_framing import parse_question_lines  # type: ignore
+
+                q_raw = research.get("questions") or []
+                if q_raw:
+                    research["questions"] = parse_question_lines(
+                        "\n".join(q_raw), max_items=8
+                    )
 
                 return research
             else:

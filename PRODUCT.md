@@ -48,3 +48,4 @@ A user should be able to say:
 1. Recording quality and simplicity
 2. AI transcription and structuring
 3. Feedback-driven improvement loop
+4. **Host-ready questions** — framed for the mic, not raw transcript fragments (see `backend/question_framing.py`)

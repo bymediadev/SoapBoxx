@@ -1,31 +1,20 @@
 """
-Extract interview/research questions from a transcript (OpenAI or Ollama).
+Extract and frame host-ready interview questions from a transcript.
 """
 
 from __future__ import annotations
 
 import os
-from typing import Literal, Optional
+from typing import List, Literal, Optional, Sequence
+
+from .question_framing import (
+    build_live_capture_prompt,
+    format_questions_for_display,
+    parse_question_lines,
+    question_style_from_env,
+)
 
 QuestionBackend = Literal["auto", "offline", "openai"]
-
-_OPENAI_PROMPT = """Analyze the following transcript and extract all questions that would be valuable for research or discussion.
-Focus on:
-- Direct questions (ending with ?)
-- Implicit questions or topics that could be phrased as questions
-- Questions that would benefit from further research
-
-Transcript: {transcript}
-
-Return only the questions, one per line, without numbering or additional text.
-"""
-
-_OFFLINE_SYSTEM = "You extract podcast guest questions. Be concise and grounded in the transcript."
-_OFFLINE_USER = (
-    "Extract useful guest-interview questions from this transcript.\n"
-    "Return only one question per line, no numbering, no extra text.\n\n"
-    "TRANSCRIPT:\n{transcript}"
-)
 
 
 def extract_questions_from_transcript(
@@ -33,9 +22,11 @@ def extract_questions_from_transcript(
     *,
     backend: QuestionBackend = "auto",
     min_chars: int = 50,
+    known: Optional[Sequence[str]] = None,
+    max_questions: int = 5,
 ) -> Optional[str]:
     """
-    Return newline-separated questions, or None if extraction failed or skipped.
+    Return newline-separated host-ready questions, or None if extraction failed.
     """
     text = (transcript or "").strip()
     if len(text) < min_chars:
@@ -45,12 +36,44 @@ def extract_questions_from_transcript(
     if mode not in ("auto", "offline", "openai"):
         mode = "auto"
 
+    raw: Optional[str] = None
     if mode == "offline":
-        return _extract_offline(text)
-    if mode == "openai":
-        return _extract_openai(text)
-    # auto: offline first, then openai
-    return _extract_offline(text) or _extract_openai(text)
+        raw = _extract_offline(text)
+    elif mode == "openai":
+        raw = _extract_openai(text)
+    else:
+        raw = _extract_offline(text) or _extract_openai(text)
+
+    if not raw:
+        return None
+
+    questions = parse_question_lines(
+        raw, known=known, max_items=max(1, min(12, int(max_questions)))
+    )
+    if not questions:
+        return None
+    return format_questions_for_display(questions)
+
+
+def extract_questions_list(
+    transcript: str,
+    *,
+    backend: QuestionBackend = "auto",
+    min_chars: int = 50,
+    known: Optional[Sequence[str]] = None,
+    max_questions: int = 5,
+) -> List[str]:
+    """Structured list API for UI."""
+    raw = extract_questions_from_transcript(
+        transcript,
+        backend=backend,
+        min_chars=min_chars,
+        known=known,
+        max_questions=max_questions,
+    )
+    if not raw:
+        return []
+    return parse_question_lines(raw, known=known, max_items=max_questions)
 
 
 def _extract_openai(transcript: str) -> Optional[str]:
@@ -67,13 +90,19 @@ def _extract_openai(transcript: str) -> Optional[str]:
         except Exception:
             client = OpenAI(api_key=api_key)
 
+        system, user = build_live_capture_prompt(
+            transcript,
+            style=question_style_from_env(),
+            max_questions=int(os.getenv("SOAPBOXX_QUESTION_MAX", "5")),
+        )
         response = client.chat.completions.create(
             model=os.getenv("SOAPBOXX_QUESTION_EXTRACT_MODEL", "gpt-3.5-turbo"),
             messages=[
-                {"role": "user", "content": _OPENAI_PROMPT.format(transcript=transcript)}
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
             ],
-            max_tokens=200,
-            temperature=0.3,
+            max_tokens=int(os.getenv("SOAPBOXX_QUESTION_MAX_TOKENS", "400")),
+            temperature=float(os.getenv("SOAPBOXX_QUESTION_TEMPERATURE", "0.35")),
         )
         content = (response.choices[0].message.content or "").strip()
         return content or None
@@ -90,12 +119,17 @@ def _extract_offline(transcript: str) -> Optional[str]:
         except ImportError:
             from episode_intelligence import _ollama_chat_invoke  # type: ignore
 
+        system, user = build_live_capture_prompt(
+            transcript,
+            style=question_style_from_env(),
+            max_questions=int(os.getenv("SOAPBOXX_QUESTION_MAX", "5")),
+        )
         raw = _ollama_chat_invoke(
-            _OFFLINE_SYSTEM,
-            _OFFLINE_USER.format(transcript=transcript),
-            max_tokens=512,
-            temperature=0.2,
-            stage="question_extraction.offline",
+            system,
+            user,
+            max_tokens=int(os.getenv("SOAPBOXX_QUESTION_MAX_TOKENS", "512")),
+            temperature=float(os.getenv("SOAPBOXX_QUESTION_TEMPERATURE", "0.25")),
+            stage="question_extraction.framed",
             append_brief_envelope_suffix=False,
         )
         content = str(raw or "").strip()
