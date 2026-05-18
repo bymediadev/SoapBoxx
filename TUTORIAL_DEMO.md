@@ -30,7 +30,7 @@ This tutorial will walk you through using the **fully functional SoapBoxx demo**
 
 ### **For Maintainers (Build New Demo Package):**
 ```powershell
-./package_demo_release.ps1 -Version "1.1.0" -ExpiresOn "2026-05-20"
+./package_demo_release.ps1 -Version "1.1.0"
 ```
 
 ### **First Launch:**

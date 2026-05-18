@@ -46,12 +46,12 @@ Tags `v*` trigger [`.github/workflows/build.yml`](.github/workflows/build.yml) (
 ```bash
 git checkout demo
 git merge --ff-only production
-./package_demo_release.ps1 -Version "1.2.0" -ExpiresOn "YYYY-MM-DD"
+./package_demo_release.ps1 -Version "1.2.0"
 git tag demo-v1.2.0
 git push origin demo --tags
 ```
 
-Demo builds use the **full app** with `SOAPBOXX_DEMO_EXPIRES_ON` and Production Studio Demo branding — not the old barebones modules.
+Demo builds use the **full app** with `SOAPBOXX_BUCKET=demo` and Production Studio Demo branding — not the old barebones modules.
 
 See [`DEMO_INSTRUCTIONS.md`](DEMO_INSTRUCTIONS.md) and [`package_demo_release.ps1`](package_demo_release.ps1).
 

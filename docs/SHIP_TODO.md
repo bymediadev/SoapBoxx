@@ -62,7 +62,7 @@ Use **v1.2.0** (not v1.0.0) — `production` is ahead of existing tags.
 On `demo` after ff-merge from `production`:
 
 ```powershell
-./package_demo_release.ps1 -Version "1.0.0" -ExpiresOn "YYYY-MM-DD"
+./package_demo_release.ps1 -Version "1.0.0"
 git tag demo-v1.0.0
 git push origin demo --tags
 ```

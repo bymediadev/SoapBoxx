@@ -4,7 +4,6 @@
 
 - A packaged desktop demo (dependencies bundled).
 - Demo-only runtime bucket (`demo`) separated from production settings/data.
-- Time-boxed access window (configured in release metadata and launcher).
 - Clear branding in-app: `SoapBoxx Production Studio Demo`.
 
 ## How To Run (Tester)
@@ -15,12 +14,6 @@
    - `Launch SoapBoxx Production Studio Demo.bat` (Windows), or
    - `Launch SoapBoxx Production Studio Demo.ps1`.
 4. Verify the window title includes `Production Studio Demo`.
-
-## 2-Week Demo Rule
-
-- The demo enforces expiry via `SOAPBOXX_DEMO_EXPIRES_ON`.
-- After expiry, app launch is blocked and the user is prompted to contact you.
-- Release metadata is stored in `demo_release.json`.
 
 ## Quick Smoke Test Checklist
 

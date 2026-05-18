@@ -52,7 +52,7 @@ CI ([`.github/workflows/build.yml`](../.github/workflows/build.yml)) builds on `
 On `demo` after `git merge --ff-only production`:
 
 ```powershell
-./package_demo_release.ps1 -Version "1.0.0" -ExpiresOn "YYYY-MM-DD"
+./package_demo_release.ps1 -Version "1.0.0"
 git tag demo-v1.0.0
 git push origin demo --tags
 ```

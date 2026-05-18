@@ -1,6 +1,5 @@
 param(
-    [string]$Version = "1.1.0-demo",
-    [string]$ExpiresOn = "2026-05-20"
+    [string]$Version = "1.1.0-demo"
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,7 +9,6 @@ Write-Host "==============================================="
 Write-Host " SoapBoxx Production Studio Demo Packager"
 Write-Host "==============================================="
 Write-Host "Version: $Version"
-Write-Host "Expires: $ExpiresOn"
 Write-Host ""
 
 if (-not (Test-Path "frontend\main_window.py")) {
@@ -53,7 +51,6 @@ $runtimeHookPath = Join-Path $buildRoot "demo_runtime_env.py"
 import os
 
 os.environ.setdefault("SOAPBOXX_BUCKET", "demo")
-os.environ.setdefault("SOAPBOXX_DEMO_EXPIRES_ON", "$ExpiresOn")
 "@ | Out-File -FilePath $runtimeHookPath -Encoding utf8
 
 Write-Host "Installing packaging dependency (PyInstaller)..."
@@ -102,7 +99,6 @@ $launcherBat = Join-Path $releaseDir "Launch SoapBoxx Production Studio Demo.bat
 @echo off
 setlocal
 set "SOAPBOXX_BUCKET=demo"
-set "SOAPBOXX_DEMO_EXPIRES_ON=$ExpiresOn"
 start "" "%~dp0$exeName\$exeName.exe"
 endlocal
 "@ | Out-File -FilePath $launcherBat -Encoding ascii
@@ -111,7 +107,6 @@ $launcherPs1 = Join-Path $releaseDir "Launch SoapBoxx Production Studio Demo.ps1
 @"
 \$ErrorActionPreference = "Stop"
 \$env:SOAPBOXX_BUCKET = "demo"
-\$env:SOAPBOXX_DEMO_EXPIRES_ON = "$ExpiresOn"
 Start-Process -FilePath (Join-Path \$PSScriptRoot "$exeName\$exeName.exe")
 "@ | Out-File -FilePath $launcherPs1 -Encoding utf8
 
@@ -120,7 +115,6 @@ $metaPath = Join-Path $releaseDir "demo_release.json"
 {
   "name": "SoapBoxx Production Studio Demo",
   "version": "$Version",
-  "expires_on": "$ExpiresOn",
   "bucket": "demo"
 }
 "@ | Out-File -FilePath $metaPath -Encoding utf8

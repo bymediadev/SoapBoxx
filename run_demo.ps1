@@ -1,10 +1,10 @@
 $ErrorActionPreference = "Stop"
 
-# Demo launcher: isolated bucket + 2-week runtime window
+# Demo launcher: isolated bucket (no expiry)
 $env:SOAPBOXX_BUCKET = "demo"
-
-# Preferred fixed cutoff date for this demo build
-$env:SOAPBOXX_DEMO_EXPIRES_ON = "2026-05-20"
+Remove-Item Env:SOAPBOXX_DEMO_EXPIRES_ON -ErrorAction SilentlyContinue
+Remove-Item Env:SOAPBOXX_DEMO_START_ON -ErrorAction SilentlyContinue
+Remove-Item Env:SOAPBOXX_DEMO_DURATION_DAYS -ErrorAction SilentlyContinue
 
 # Optional explicit isolation paths (uncomment if you want custom folders)
 # $env:SOAPBOXX_CONFIG_FILE = "soapboxx_config.demo.json"
@@ -12,6 +12,5 @@ $env:SOAPBOXX_DEMO_EXPIRES_ON = "2026-05-20"
 
 Write-Host "Launching SoapBoxx DEMO..."
 Write-Host "  bucket: $env:SOAPBOXX_BUCKET"
-Write-Host "  expires_on: $env:SOAPBOXX_DEMO_EXPIRES_ON"
 
 python "frontend/main_window.py"

@@ -9,7 +9,7 @@ import sys
 import json
 import traceback
 import webbrowser
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 # Repo root must precede backend/: imports use `from backend.*` (package), not flat `from config`.
@@ -1831,62 +1831,9 @@ class MainWindow(QMainWindow):
             event.accept()
 
 
-def _parse_iso_date(date_value: str):
-    """Parse YYYY-MM-DD and return a date object, or None."""
-    if not date_value:
-        return None
-    try:
-        return datetime.strptime(date_value.strip(), "%Y-%m-%d").date()
-    except Exception:
-        return None
-
-
-def _check_demo_runtime_window() -> bool:
-    """
-    Enforce demo expiration when running in demo bucket.
-
-    Controls:
-    - SOAPBOXX_BUCKET=demo enables checks
-    - SOAPBOXX_DEMO_EXPIRES_ON=YYYY-MM-DD (preferred)
-    - SOAPBOXX_DEMO_START_ON=YYYY-MM-DD + SOAPBOXX_DEMO_DURATION_DAYS=14 (fallback)
-    """
-    bucket = (os.getenv("SOAPBOXX_BUCKET") or "production").strip().lower()
-    if bucket not in {"demo", "dev", "development", "sandbox"}:
-        return True
-
-    today = datetime.now().date()
-    expires_on = _parse_iso_date(os.getenv("SOAPBOXX_DEMO_EXPIRES_ON", ""))
-
-    if expires_on is None:
-        start_on = _parse_iso_date(os.getenv("SOAPBOXX_DEMO_START_ON", ""))
-        duration_raw = (os.getenv("SOAPBOXX_DEMO_DURATION_DAYS") or "14").strip()
-        try:
-            duration_days = max(1, int(duration_raw))
-        except Exception:
-            duration_days = 14
-        if start_on is not None:
-            expires_on = start_on + timedelta(days=duration_days)
-
-    # No expiry config -> allow run (useful in local development).
-    if expires_on is None:
-        return True
-
-    if today > expires_on:
-        print("SoapBoxx demo period has ended.")
-        print(f"Demo expiry date: {expires_on.isoformat()}")
-        print("Please use the production version or request an updated demo build.")
-        return False
-
-    return True
-
-
 def main():
     """Main application entry point with enhanced error handling"""
     try:
-        # Enforce optional demo expiration window before launching UI.
-        if not _check_demo_runtime_window():
-            sys.exit(1)
-
         print("Starting SoapBoxx application...")
 
         print("Creating QApplication...")
