@@ -19,7 +19,9 @@ Read these first (in order):
 ## Tests
 
 ```bash
-pytest tests/
+python -m pytest tests/ -q -m "not integration"
 ```
+
+Pre-release: [`docs/V1_RELEASE_CHECKLIST.md`](docs/V1_RELEASE_CHECKLIST.md)
 
 Evaluation/hardening tasks: see [`docs/CURSOR_HARDENING_EXECUTION_PROMPT.md`](docs/CURSOR_HARDENING_EXECUTION_PROMPT.md) (scope limited to that doc).

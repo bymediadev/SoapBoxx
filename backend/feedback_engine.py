@@ -407,9 +407,9 @@ class FeedbackEngine:
         temp = 0.3 if analysis_depth in ["comprehensive", "expert"] else 0.7
 
         try:
-            from .soapboxx_v3_workflow import call_llm
+            from .llm_service import call_llm
         except ImportError:
-            from soapboxx_v3_workflow import call_llm
+            from llm_service import call_llm  # type: ignore
 
         env = call_llm(
             prompt,
@@ -417,6 +417,7 @@ class FeedbackEngine:
             temperature=temp,
             system=self._get_system_prompt(analysis_depth),
             client=None,
+            stage="feedback_engine.analyze",
         )
         analysis_text = (env.get("text") or "").strip() if isinstance(env, dict) else ""
 

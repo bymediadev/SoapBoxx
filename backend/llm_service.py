@@ -44,7 +44,33 @@ def call_llm_json(
     max_tokens: int = 2000,
     temperature: float = 0.2,
     client: Any = None,
+    system: Optional[str] = None,
 ) -> Any:
+    # Workflow JSON path uses call_llm_with_retry internally; pass system via call_llm when set.
+    if system is not None:
+        env = _workflow_call_llm(
+            prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            system=system,
+            client=client,
+            json_format=True,
+            stage="llm_service.json",
+        )
+        raw_data = env.get("data") if isinstance(env, dict) else None
+        if raw_data:
+            return raw_data
+        import json
+
+        text = (env.get("text") or "").strip() if isinstance(env, dict) else ""
+        if text:
+            return json.loads(text)
+        return _workflow_call_llm_json(
+            prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            client=client,
+        )
     return _workflow_call_llm_json(
         prompt,
         max_tokens=max_tokens,

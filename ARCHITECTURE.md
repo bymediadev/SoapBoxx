@@ -86,11 +86,15 @@ Today: [`RecordingSession`](backend/soapboxx_core.py) plus separate v3/strict JS
 - No cross-module circular dependencies
 - Git: see [`BRANCHES.md`](BRANCHES.md)
 
-## v1 freeze scope
+## v1 freeze scope (active)
 
 **In scope:** record, transcribe, Scoop prep, Reverb feedback, export.
 
 **Out of scope for desktop v1:** new tabs, extending blueprint/atomic pipelines in UI, physical folder moves to `/studio` without a planned migration.
+
+**Pre-release checklist:** [`docs/V1_RELEASE_CHECKLIST.md`](docs/V1_RELEASE_CHECKLIST.md)
+
+**LLM callers (facade):** `feedback_engine` and `blueprint_v1/llm_runner` use [`backend/llm_service.py`](backend/llm_service.py). Episode briefs remain on `episode_intelligence` (Ollama). Workflow internals still implement `call_llm` inside `soapboxx_v3_workflow`.
 
 ## Ignore paths (not source code)
 

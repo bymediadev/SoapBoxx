@@ -64,6 +64,15 @@ def _strip_json_fence(raw: str) -> str:
     return s.strip()
 
 
+def _use_llm_service() -> bool:
+    return (os.getenv("SOAPBOXX_BLUEPRINT_LLM_SERVICE") or "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )
+
+
 def run_json_prompt(
     user_prompt: str,
     *,
@@ -72,8 +81,27 @@ def run_json_prompt(
     temperature: float = 0.2,
 ) -> Optional[Dict[str, Any]]:
     """
-    Call Ollama ``/api/chat`` with JSON-shaped reply. Returns None if model unset or call fails.
+    Call workflow LLM (via ``llm_service`` when enabled) or Ollama ``/api/chat`` with JSON reply.
+    Returns None if model unset or call fails.
     """
+    if _use_llm_service():
+        try:
+            try:
+                from ..llm_service import call_llm_json
+            except ImportError:
+                from llm_service import call_llm_json  # type: ignore
+
+            data = call_llm_json(
+                user_prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=system,
+            )
+            if isinstance(data, dict) and data:
+                return data
+        except Exception:
+            pass
+
     model = os.getenv("SOAPBOXX_OLLAMA_MODEL", "").strip()
     if not model:
         return None
@@ -120,10 +148,29 @@ def run_text_prompt(
     temperature: float = 0.2,
 ) -> Optional[str]:
     """
-    Call Ollama ``/api/chat`` for plain-text / markdown output (no ``format: json``).
+    Call workflow LLM (via ``llm_service`` when enabled) or Ollama for plain-text output.
 
     Use for network-facing editorial prompts; use ``run_json_prompt`` for JSON contracts.
     """
+    if _use_llm_service():
+        try:
+            try:
+                from ..llm_service import call_llm_text
+            except ImportError:
+                from llm_service import call_llm_text  # type: ignore
+
+            text = call_llm_text(
+                user_prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=system,
+                stage="blueprint_v1.text",
+            )
+            if text:
+                return text
+        except Exception:
+            pass
+
     model = os.getenv("SOAPBOXX_OLLAMA_MODEL", "").strip()
     if not model:
         return None

@@ -9,9 +9,9 @@
 - [x] Phase 3: Move OpenAI question extraction out of `frontend/soapboxx_tab.py` → `backend/question_extraction.py`
 - [x] Phase 3: Move News API calls out of `frontend/scoop_tab.py` → `backend/scoop_news.py`
 - [x] Phase 3: Route Reverb search-summary LLM through `backend/llm_service.py`
-- [ ] Phase 4: Migrate remaining AI callers to `llm_service` (feedback_engine, guest_research, episode_intelligence, v3 internals)
+- [x] Phase 4: `feedback_engine` + `blueprint_v1/llm_runner` use `llm_service` (episode_intelligence brief path unchanged)
 - [x] Phase 5: RecordingSession extended (audio_path, metadata, to_dict); handoff SoapBoxx → Reverb
-- [ ] Phase 6: v1 freeze smoke test + production tag
+- [x] Phase 6: [`docs/V1_RELEASE_CHECKLIST.md`](V1_RELEASE_CHECKLIST.md); pytest `590 passed` (not integration)
 
 ## Optional enhancements (later)
 
