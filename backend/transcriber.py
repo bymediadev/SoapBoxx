@@ -2,6 +2,7 @@
 import io
 import os
 import tempfile
+import threading
 import time
 from typing import Any, Optional, Union
 
@@ -61,6 +62,28 @@ def _whisper_use_fp16() -> bool:
         return False
 
 
+_LOCAL_WHISPER_LOCK = threading.Lock()
+_LOCAL_WHISPER_MODEL_CACHE: dict[str, Any] = {}
+
+
+def _get_or_load_local_whisper_model(model_size: str) -> Any:
+    """
+    Load Whisper once per model size. Live recording spawns many TranscriptionThread runs;
+    without this cache each call would reload weights and stall the UI for minutes.
+    """
+    if not WHISPER_AVAILABLE:
+        return None
+    key = (model_size or "base").strip() or "base"
+    with _LOCAL_WHISPER_LOCK:
+        if key in _LOCAL_WHISPER_MODEL_CACHE:
+            return _LOCAL_WHISPER_MODEL_CACHE[key]
+        print(f"Initializing local Whisper model ({key}) — one-time load…")
+        model = whisper.load_model(key)
+        _LOCAL_WHISPER_MODEL_CACHE[key] = model
+        print(f"✅ Local Whisper model ready: {key}")
+        return model
+
+
 class Transcriber:
     def __init__(
         self, model="whisper-1", api_key: Optional[str] = None, service="openai"
@@ -69,6 +92,14 @@ class Transcriber:
         self.service = service.lower()
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.local_model = None
+        # Default English: short mic windows are often mis-detected as French without this.
+        _lang = (os.getenv("SOAPBOXX_TRANSCRIPTION_LANGUAGE") or "en").strip().lower()
+        if _lang in ("auto", "detect"):
+            self.language: Optional[str] = None
+        elif _lang:
+            self.language = _lang[:8]
+        else:
+            self.language = "en"
 
         # Initialize based on service
         if self.service == "openai" and OPENAI_AVAILABLE:
@@ -87,12 +118,11 @@ class Transcriber:
                 print("Warning: No Azure Speech key provided.")
         elif self.service == "local":
             if WHISPER_AVAILABLE:
-                print("Initializing local Whisper model...")
                 try:
-                    # Use a smaller model for faster loading (tiny, base, small, medium, large)
-                    model_size = "base"  # You can change this to "tiny", "small", "medium", "large"
-                    self.local_model = whisper.load_model(model_size)
-                    print(f"✅ Local Whisper model loaded: {model_size}")
+                    model_size = (
+                        os.getenv("SOAPBOXX_LOCAL_WHISPER_MODEL", "base").strip() or "base"
+                    )
+                    self.local_model = _get_or_load_local_whisper_model(model_size)
                 except Exception as e:
                     print(f"Warning: Failed to load local Whisper model: {e}")
                     self.local_model = None
@@ -255,46 +285,40 @@ class Transcriber:
             # Convert audio to WAV format for OpenAI
             wav_data = self._convert_audio_to_wav(audio_data)
 
-            # Ensure the BytesIO object has a name attribute for OpenAI
-            audio_file = io.BytesIO(wav_data)
-            audio_file.name = "audio.wav"
-
-            # CRITICAL: Make OpenAI Whisper API call (v1 client if available)
+            # OpenAI Python SDK >= 1.0: use client.audio.transcriptions (openai.Audio was removed).
             print("🔑 CRITICAL: Making OpenAI Whisper API call...")
-            response = None
             try:
-                from openai import OpenAI  # v1 client
+                from openai import OpenAI
+            except ImportError:
+                error_msg = "CRITICAL ERROR: OpenAI package not installed"
+                track_transcription_error(error_msg, service="openai", critical=True)
+                return f"Error: {error_msg}"
 
-                client = OpenAI(api_key=self.api_key)
-                resp = client.audio.transcriptions.create(
-                    model=self.model,
-                    file=audio_file,
-                    response_format="text",
-                )
-                response = {"text": resp if isinstance(resp, str) else str(resp)}
-            except Exception:
-                # Fallback to legacy API
-                response = openai.Audio.transcribe(
-                    model=self.model, file=audio_file, language="en", temperature=0.0
-                )
+            client = OpenAI(api_key=self.api_key)
+            wav_buf = io.BytesIO(wav_data)
+            create_kw: dict[str, Any] = {
+                "model": self.model,
+                "file": ("audio.wav", wav_buf),
+            }
+            if self.language:
+                create_kw["language"] = self.language
+
+            resp = client.audio.transcriptions.create(**create_kw)
+            if isinstance(resp, str):
+                transcript = resp.strip()
+            else:
+                transcript = (getattr(resp, "text", None) or "").strip()
 
             # Validate response
-            if not response or not response.get("text"):
+            if not transcript:
                 error_msg = "CRITICAL ERROR: OpenAI returned empty transcription"
                 track_transcription_error(error_msg, service="openai", critical=True)
                 return f"Error: {error_msg} - Try again or check audio quality"
 
-            transcript = response["text"].strip()
-
-            if transcript:
-                print(
-                    f"✅ CRITICAL SUCCESS: OpenAI transcription completed ({len(transcript)} characters)"
-                )
-                return transcript
-            else:
-                error_msg = "CRITICAL ERROR: OpenAI returned empty transcript"
-                track_transcription_error(error_msg, service="openai", critical=True)
-                return f"Error: {error_msg} - Check audio quality or try again"
+            print(
+                f"✅ CRITICAL SUCCESS: OpenAI transcription completed ({len(transcript)} characters)"
+            )
+            return transcript
 
         except Exception as api_error:
             error_str = str(api_error)
@@ -402,6 +426,8 @@ class Transcriber:
 
             try:
                 _kw: Any = {"fp16": _whisper_use_fp16()}
+                if self.language:
+                    _kw["language"] = self.language
                 result = self.local_model.transcribe(temp_path, **_kw)
                 return result.get("text", "").strip()
             finally:

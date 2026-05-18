@@ -329,11 +329,11 @@ class ThemeManager(QObject):
         return list(self.themes.keys())
 
     def toggle_dark_mode(self):
-        """Toggle between light and dark themes"""
-        if self.current_theme == "dark":
-            self.apply_theme("light")
+        """Toggle between default light and modern dark chrome."""
+        if self.current_theme in ("modern_dark", "dark"):
+            self.apply_theme("modern_light")
         else:
-            self.apply_theme("dark")
+            self.apply_theme("modern_dark")
 
     def get_theme_colors(self, theme_name: str = None) -> dict:
         """Get colors for a specific theme"""

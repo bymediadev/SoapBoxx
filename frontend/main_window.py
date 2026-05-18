@@ -28,6 +28,16 @@ try:
 except ImportError:
     pass
 
+try:
+    from backend.user_api_secrets import load_user_api_secrets
+except ImportError:
+    try:
+        from user_api_secrets import load_user_api_secrets  # type: ignore
+    except ImportError:
+        load_user_api_secrets = lambda **_: None  # type: ignore[misc, assignment]
+
+load_user_api_secrets(override=True)
+
 # Use package-relative imports to support `python -m frontend.main_window`
 try:
     from .batch_processor import BatchProcessorDialog
@@ -323,8 +333,8 @@ class MainWindow(QMainWindow):
             self.setWindowTitle(app_title)
             self.setGeometry(100, 100, 1200, 800)
 
-            # Apply modern theme
-            self._apply_modern_theme()
+            # Application palette + main chrome (tabs, window) from ThemeManager
+            self._init_application_theme()
 
             # Setup central widget
             central_widget = QWidget()
@@ -358,44 +368,122 @@ class MainWindow(QMainWindow):
             )
             self._track_error("UISetupError", f"Failed to setup UI: {str(e)}")
 
-    def _apply_modern_theme(self):
-        """Apply modern theme to the application"""
+    def _init_application_theme(self):
+        """Palette + stylesheet; from config (ui_settings.theme) then SOAPBOXX_UI_THEME."""
         try:
-            # Modern application style
+            self.theme_manager = ThemeManager(self)
+            self.theme_manager.theme_changed.connect(self._apply_chrome_stylesheet)
+            key = self._resolve_startup_ui_theme_key(self.theme_manager)
+            self.theme_manager.apply_theme(key)
+        except Exception as e:
+            print(f"Theme manager unavailable, using built-in light chrome: {e}")
+            self.theme_manager = None
+            self._apply_chrome_stylesheet("modern_light")
+
+    def _resolve_startup_ui_theme_key(self, tm: ThemeManager) -> str:
+        """Pick initial theme id: saved config, then SOAPBOXX_UI_THEME, then modern_light."""
+        valid = frozenset(tm.themes.keys())
+        try:
+            try:
+                from backend.config import Config
+            except ImportError:  # pragma: no cover
+                from config import Config  # type: ignore
+
+            cfg = Config()
+            cfg_t = str(cfg.get("ui_settings.theme", "") or "").strip()
+        except Exception:
+            cfg_t = ""
+        if cfg_t in ("default", ""):
+            cfg_t = ""
+        env_t = (os.getenv("SOAPBOXX_UI_THEME") or "").strip()
+        for candidate in (cfg_t, env_t):
+            if candidate and candidate in valid:
+                return candidate
+        return "modern_light"
+
+    def _all_ui_theme_ids(self):
+        tm = getattr(self, "theme_manager", None)
+        if tm and tm.themes:
+            return list(tm.themes.keys())
+        return [
+            "modern_light",
+            "modern_dark",
+            "dark",
+            "modern_blue",
+            "modern_green",
+            "light",
+            "blue",
+            "green",
+        ]
+
+    def _apply_chrome_stylesheet(self, theme_name: str):
+        """Main window + tab bar look; individual cards may still use light styles until refactored."""
+        try:
+            tm = getattr(self, "theme_manager", None)
+            if tm is None:
+                t = {
+                    "background": "#F8F9FA",
+                    "surface": "#FFFFFF",
+                    "border": "#E0E0E0",
+                    "alternate_base": "#F1F3F4",
+                    "primary": "#3498DB",
+                    "card": "#FFFFFF",
+                }
+                darkish = False
+            else:
+                t = tm.get_theme_colors(theme_name)
+                darkish = theme_name in ("modern_dark", "dark")
+            win_bg = t.get("background", "#F8F9FA")
+            surface = t.get("surface", "#FFFFFF")
+            border = t.get("border", "#E0E0E0")
+            tab_bg = t.get("alternate_base", "#F1F3F4")
+            accent = t.get("primary", "#3498DB")
+            tab_hover = "#3D3D45" if darkish else "#E8EAED"
+            tab_selected_bg = t.get("card", surface)
             self.setStyleSheet(
-                """
-                QMainWindow {
-                    background-color: #F8F9FA;
-                }
-                QTabWidget::pane {
-                    border: 1px solid #E0E0E0;
+                f"""
+                QMainWindow {{
+                    background-color: {win_bg};
+                }}
+                QTabWidget::pane {{
+                    border: 1px solid {border};
                     border-radius: 8px;
-                    background-color: white;
-                }
-                QTabBar::tab {
-                    background-color: #F1F3F4;
-                    border: 1px solid #E0E0E0;
+                    background-color: {surface};
+                }}
+                QTabBar::tab {{
+                    background-color: {tab_bg};
+                    border: 1px solid {border};
                     border-bottom: none;
                     border-top-left-radius: 8px;
                     border-top-right-radius: 8px;
                     padding: 12px 24px;
                     margin-right: 2px;
-                }
-                QTabBar::tab:selected {
-                    background-color: white;
-                    border-bottom: 2px solid #3498DB;
-                }
-                QTabBar::tab:hover {
-                    background-color: #E8EAED;
-                }
-                QStatusBar {
-                    background-color: #F8F9FA;
-                    border-top: 1px solid #E0E0E0;
-                }
+                }}
+                QTabBar::tab:selected {{
+                    background-color: {tab_selected_bg};
+                    border-bottom: 2px solid {accent};
+                }}
+                QTabBar::tab:hover {{
+                    background-color: {tab_hover};
+                }}
+                QStatusBar {{
+                    background-color: {win_bg};
+                    border-top: 1px solid {border};
+                }}
             """
             )
         except Exception as e:
-            print(f"Failed to apply theme: {e}")
+            print(f"Failed to apply chrome stylesheet: {e}")
+
+    def _set_ui_theme(self, name: str):
+        tm = getattr(self, "theme_manager", None)
+        if tm and name in tm.themes:
+            tm.apply_theme(name)
+
+    def _toggle_ui_dark(self):
+        tm = getattr(self, "theme_manager", None)
+        if tm:
+            tm.toggle_dark_mode()
 
     def _setup_header(self, layout):
         """Setup modern header with error handling"""
@@ -612,7 +700,10 @@ class MainWindow(QMainWindow):
         """Create SoapBoxx tab with error handling"""
         try:
             print("MainWindow: Creating SoapBoxx tab...")
-            tab = SoapBoxxTab(open_settings_callback=self._show_settings)
+            tab = SoapBoxxTab(
+                open_settings_callback=self._show_settings,
+                session_feedback_callback=self._deliver_session_feedback_to_reverb,
+            )
             self._loaded_tabs["SoapBoxx"] = tab
             print("MainWindow: SoapBoxx tab created successfully")
             return tab
@@ -626,6 +717,53 @@ class MainWindow(QMainWindow):
             )
             # Return a placeholder tab instead
             return self._create_placeholder_tab("SoapBoxx", f"Failed to load: {str(e)}")
+
+    def ensure_tab_created(self, tab_name: str):
+        """Create a lazy tab by name without switching away from the current tab."""
+        if self._tabs_loaded.get(tab_name) and tab_name in self._loaded_tabs:
+            return self._loaded_tabs[tab_name]
+        creator = getattr(self, "_tab_creators", {}).get(tab_name)
+        if not creator:
+            return None
+        for i in range(self.tab_widget.count()):
+            if self.tab_widget.tabText(i) != tab_name:
+                continue
+            try:
+                self._is_switching_tab = True
+                self.tab_widget.blockSignals(True)
+                w = creator()
+                if w:
+                    self.tab_widget.removeTab(i)
+                    self.tab_widget.insertTab(i, w, tab_name)
+                    self._tabs_loaded[tab_name] = True
+                    self._loaded_tabs[tab_name] = w
+                    return w
+            finally:
+                self.tab_widget.blockSignals(False)
+                self._is_switching_tab = False
+            break
+        return None
+
+    def _deliver_session_feedback_to_reverb(self, transcript: str):
+        """After SoapBoxx recording: open Reverb and run FeedbackEngine on the transcript."""
+        text = (transcript or "").strip()
+        if not text:
+            return
+        try:
+            reverb = self.ensure_tab_created("Reverb")
+            if reverb is None:
+                print("MainWindow: Reverb tab could not be created for session feedback")
+                return
+            if hasattr(reverb, "run_session_feedback_from_transcript"):
+                reverb.run_session_feedback_from_transcript(text)
+            idx = self.tab_widget.indexOf(reverb)
+            if idx >= 0:
+                self.tab_widget.setCurrentIndex(idx)
+        except Exception as e:
+            print(f"MainWindow: session feedback delivery failed: {e}")
+            import traceback
+
+            traceback.print_exc()
 
     def _create_scoop_tab(self):
         """Create Scoop tab with error handling"""
@@ -671,6 +809,86 @@ class MainWindow(QMainWindow):
             hint.setWordWrap(True)
             hint.setStyleSheet("color: #6C757D;")
             layout.addWidget(hint)
+
+            appear = ModernCard()
+            appear_form = QFormLayout(appear)
+            self.settings_theme_combo = QComboBox()
+            for tid in self._all_ui_theme_ids():
+                self.settings_theme_combo.addItem(tid.replace("_", " ").title(), tid)
+            cur_theme = str(cfg.get("ui_settings.theme", "modern_light") or "modern_light")
+            if cur_theme == "default":
+                cur_theme = "modern_light"
+            ix = self.settings_theme_combo.findData(cur_theme)
+            if ix < 0:
+                ix = self.settings_theme_combo.findData("modern_light")
+            if ix >= 0:
+                self.settings_theme_combo.setCurrentIndex(ix)
+            appear_form.addRow("Application theme:", self.settings_theme_combo)
+            theme_hint = QLabel(
+                "Chooses the app palette and window/tab chrome. "
+                "Changing the dropdown applies immediately; Save persists it to your SoapBoxx config."
+            )
+            theme_hint.setWordWrap(True)
+            theme_hint.setStyleSheet("color: #6C757D; font-size: 11px;")
+            appear_form.addRow(theme_hint)
+            layout.addWidget(appear)
+            self.settings_theme_combo.currentIndexChanged.connect(
+                self._on_settings_theme_changed
+            )
+
+            byok = ModernCard()
+            byok_form = QFormLayout(byok)
+            byok_title = QLabel("Your AI API key (optional)")
+            byok_title.setStyleSheet("font-weight: bold; color: #2C3E50;")
+            byok_form.addRow(byok_title)
+            byok_intro = QLabel(
+                "Paste one key from OpenAI, Claude (Anthropic), Groq, or Google. "
+                "We pick the provider from the key shape when we can; otherwise choose it in the dropdown. "
+                "It is stored only on this computer. Save applies it to this session."
+            )
+            byok_intro.setWordWrap(True)
+            byok_intro.setStyleSheet("color: #6C757D; font-size: 12px;")
+            byok_form.addRow(byok_intro)
+
+            self.settings_byok_unified = QLineEdit()
+            self.settings_byok_unified.setEchoMode(QLineEdit.EchoMode.Password)
+            self.settings_byok_unified.setPlaceholderText(
+                "Paste your API key (OpenAI sk-…, Claude sk-ant-…, Groq gsk_…, Google AIza…)"
+            )
+            byok_form.addRow("API key:", self.settings_byok_unified)
+
+            self.settings_byok_kind = QComboBox()
+            for label, data in (
+                ("Auto-detect from key shape", "auto"),
+                ("OpenAI", "openai"),
+                ("Google API", "google"),
+                ("Groq", "groq"),
+                ("Anthropic (Claude)", "anthropic"),
+            ):
+                self.settings_byok_kind.addItem(label, data)
+            byok_form.addRow("Provider:", self.settings_byok_kind)
+
+            self.settings_byok_unified_hint = QLabel("")
+            self.settings_byok_unified_hint.setWordWrap(True)
+            self.settings_byok_unified_hint.setStyleSheet("color: #6C757D; font-size: 11px;")
+            byok_form.addRow(self.settings_byok_unified_hint)
+
+            self.settings_byok_status = QLabel("")
+            self.settings_byok_status.setWordWrap(True)
+            self.settings_byok_status.setStyleSheet("color: #6C757D; font-size: 11px;")
+            byok_form.addRow("Storage status:", self.settings_byok_status)
+
+            clear_byok = ModernButton("Clear saved user API keys…", style="secondary")
+            clear_byok.clicked.connect(self._clear_user_api_keys_clicked)
+            byok_form.addRow(clear_byok)
+
+            layout.addWidget(byok)
+            self.settings_byok_unified.textChanged.connect(self._byok_refresh_unified_hint)
+            self.settings_byok_unified.textChanged.connect(self._refresh_settings_validation_status)
+            self.settings_byok_kind.currentIndexChanged.connect(self._byok_refresh_unified_hint)
+            self.settings_byok_kind.currentIndexChanged.connect(self._refresh_settings_validation_status)
+            self._byok_refresh_unified_hint()
+            self._refresh_byok_status_label()
 
             card = ModernCard()
             form = QFormLayout(card)
@@ -745,23 +963,190 @@ class MainWindow(QMainWindow):
             self._track_error("SettingsTabError", f"Failed to create settings tab: {e}")
             return self._create_placeholder_tab("Settings", f"Failed to load: {e}")
 
+    def _byok_unified_target_env(self) -> str | None:
+        """Return env var name for the unified BYOK field, or None if empty / unknown in auto mode."""
+        if not hasattr(self, "settings_byok_unified"):
+            return None
+        raw = (self.settings_byok_unified.text() or "").strip()
+        if not raw:
+            return None
+        mode = self.settings_byok_kind.currentData()
+        mode_s = (mode if isinstance(mode, str) else str(mode or "")).strip().lower()
+        if mode_s in {"", "auto"}:
+            try:
+                from backend.user_api_secrets import classify_api_key_secret
+            except ImportError:
+                from user_api_secrets import classify_api_key_secret  # type: ignore
+            return classify_api_key_secret(raw)
+        mapping = {
+            "openai": "OPENAI_API_KEY",
+            "google": "GOOGLE_API_KEY",
+            "groq": "GROQ_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+        }
+        return mapping.get(mode_s)
+
+    def _byok_refresh_unified_hint(self):
+        if not hasattr(self, "settings_byok_unified_hint"):
+            return
+        raw = (self.settings_byok_unified.text() or "").strip()
+        if not raw:
+            self.settings_byok_unified_hint.setText(
+                "Typical shapes: sk-… (OpenAI), sk-ant-… (Claude), gsk_… (Groq), AIza… (Google). "
+                "If yours looks different, pick the provider above."
+            )
+            return
+        env = self._byok_unified_target_env()
+        names = {
+            "OPENAI_API_KEY": "OpenAI",
+            "GOOGLE_API_KEY": "Google API",
+            "GROQ_API_KEY": "Groq",
+            "ANTHROPIC_API_KEY": "Anthropic (Claude)",
+        }
+        if env:
+            self.settings_byok_unified_hint.setText(
+                f"Will save as {names.get(env, env)}. Change the provider only if that is wrong."
+            )
+        else:
+            self.settings_byok_unified_hint.setText(
+                "Could not guess the provider from this key — pick OpenAI / Google / Groq / Anthropic above, then Save."
+            )
+
+    def _refresh_byok_status_label(self):
+        """Show where optional user API keys are stored and what is currently visible in env."""
+        if not hasattr(self, "settings_byok_status"):
+            return
+        try:
+            try:
+                from backend.user_api_secrets import user_api_secrets_path
+            except ImportError:
+                from user_api_secrets import user_api_secrets_path  # type: ignore
+            p = user_api_secrets_path()
+            exists = p.is_file()
+            lines = [
+                f"Storage: {p}",
+                f"File present: {'yes' if exists else 'no'}",
+                "",
+                f"OPENAI_API_KEY: {'set' if (os.getenv('OPENAI_API_KEY') or '').strip() else 'not set'}",
+                f"GOOGLE_API_KEY: {'set' if (os.getenv('GOOGLE_API_KEY') or '').strip() else 'not set'}",
+                f"GROQ_API_KEY: {'set' if (os.getenv('GROQ_API_KEY') or os.getenv('SOAPBOXX_GROQ_API_KEY') or '').strip() else 'not set'}",
+                f"ANTHROPIC_API_KEY: {'set' if (os.getenv('ANTHROPIC_API_KEY') or '').strip() else 'not set'}",
+            ]
+            self.settings_byok_status.setText("\n".join(lines))
+        except Exception as e:
+            self.settings_byok_status.setText(f"(Could not read user secrets path: {e})")
+
+    def _clear_user_api_keys_clicked(self):
+        """Remove saved user API keys and reload bundled .env defaults."""
+        reply = QMessageBox.question(
+            self,
+            "Clear user API keys",
+            "Delete the saved user API key file and reload the demo .env?\n\n"
+            "This removes keys you pasted in Settings (not keys only set outside SoapBoxx).",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            try:
+                from backend.user_api_secrets import clear_user_api_secrets_file
+            except ImportError:
+                from user_api_secrets import clear_user_api_secrets_file  # type: ignore
+            clear_user_api_secrets_file()
+            for k in (
+                "OPENAI_API_KEY",
+                "GOOGLE_API_KEY",
+                "GROQ_API_KEY",
+                "SOAPBOXX_GROQ_API_KEY",
+                "ANTHROPIC_API_KEY",
+            ):
+                os.environ.pop(k, None)
+            try:
+                from dotenv import load_dotenv
+
+                load_dotenv(Path(_repo_root) / ".env", override=True)
+            except ImportError:
+                pass
+            try:
+                from backend.user_api_secrets import load_user_api_secrets
+            except ImportError:
+                from user_api_secrets import load_user_api_secrets  # type: ignore
+            load_user_api_secrets(override=True)
+            for w in (getattr(self, "settings_byok_unified", None),):
+                if w is not None:
+                    w.clear()
+            if hasattr(self, "settings_byok_kind"):
+                self.settings_byok_kind.setCurrentIndex(0)
+            self._byok_refresh_unified_hint()
+            self._refresh_byok_status_label()
+            self._refresh_settings_validation_status()
+            QMessageBox.information(
+                self,
+                "User API keys",
+                "Saved user API keys were cleared. Bundled .env values were reloaded where present.",
+            )
+        except Exception as e:
+            self._show_user_friendly_error("User API keys", "Failed to clear user keys.", str(e))
+
     def _validate_settings_inputs(self):
         """Return (errors, warnings) for current Settings selections."""
         errors = []
         warnings = []
 
+        if hasattr(self, "settings_byok_unified"):
+            raw = (self.settings_byok_unified.text() or "").strip()
+            if raw:
+                tgt = self._byok_unified_target_env()
+                if not tgt:
+                    errors.append(
+                        "Optional API key: choose a provider (OpenAI, Google, Groq, or Anthropic) "
+                        "in the dropdown — this key shape is not recognized on its own."
+                    )
+                elif tgt == "OPENAI_API_KEY" and raw.lower().startswith("sk-ant"):
+                    errors.append(
+                        "That looks like an Anthropic (Claude) key — choose Anthropic (Claude) in the provider dropdown."
+                    )
+                elif tgt == "OPENAI_API_KEY" and not raw.startswith("sk-"):
+                    errors.append("OpenAI keys should start with sk-.")
+                elif tgt == "GOOGLE_API_KEY" and len(raw) < 12:
+                    errors.append("That Google API key looks too short.")
+                elif tgt == "GROQ_API_KEY" and len(raw) < 8:
+                    errors.append("That Groq key looks too short.")
+                elif tgt == "ANTHROPIC_API_KEY" and len(raw) < 10:
+                    errors.append("That Anthropic key looks too short.")
+                elif tgt == "ANTHROPIC_API_KEY" and not raw.startswith("sk-ant"):
+                    warnings.append(
+                        "Anthropic keys usually start with sk-ant-; confirm if the API rejects the key."
+                    )
+
         qllm = str(self.settings_question_combo.currentText() or "").strip().lower()
         om = (self.settings_ollama_model.text() or "").strip()
-        openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+        openai_env = (os.getenv("OPENAI_API_KEY") or "").strip()
+        pending_oai = ""
+        if hasattr(self, "settings_byok_unified"):
+            u_raw = (self.settings_byok_unified.text() or "").strip()
+            if (
+                u_raw
+                and self._byok_unified_target_env() == "OPENAI_API_KEY"
+                and u_raw.startswith("sk-")
+                and not u_raw.lower().startswith("sk-ant")
+            ):
+                pending_oai = u_raw
+
+        openai_effective = openai_env or (
+            pending_oai if pending_oai.startswith("sk-") else ""
+        )
 
         if qllm == "offline" and not om:
             errors.append(
                 "Question backend is set to 'offline' but Ollama model is empty."
             )
 
-        if qllm == "openai" and not openai_key:
+        if qllm == "openai" and not openai_effective:
             warnings.append(
-                "Question backend is set to 'openai' but OPENAI_API_KEY is not set in env."
+                "Question backend is set to 'openai' but OPENAI_API_KEY is not set in env "
+                "(paste your API key in Settings, choose OpenAI if needed, save, or set .env)."
             )
 
         uses_openai = any(
@@ -772,9 +1157,10 @@ class MainWindow(QMainWindow):
                 self.settings_tts_combo,
             )
         )
-        if uses_openai and not openai_key:
+        if uses_openai and not openai_effective:
             warnings.append(
-                "One or more services use OpenAI, but OPENAI_API_KEY is not set in env."
+                "One or more services use OpenAI, but OPENAI_API_KEY is not set in env "
+                "(paste your API key in Settings, choose OpenAI if needed, save, or set .env)."
             )
 
         if om and ":" not in om:
@@ -843,8 +1229,34 @@ class MainWindow(QMainWindow):
             cfg.set("ui_settings.soapbox.tts_service", tts)
             cfg.set("ui_settings.soapbox.question_llm_backend", qllm)
             cfg.set("ui_settings.soapbox.ollama_model", om)
+            tid = self.settings_theme_combo.currentData()
+            if tid:
+                cfg.set("ui_settings.theme", str(tid))
             if om:
                 os.environ["SOAPBOXX_OLLAMA_MODEL"] = om
+
+            try:
+                try:
+                    from backend.user_api_secrets import persist_user_api_secret
+                except ImportError:
+                    from user_api_secrets import persist_user_api_secret  # type: ignore
+
+                if hasattr(self, "settings_byok_unified"):
+                    raw = (self.settings_byok_unified.text() or "").strip()
+                    if raw:
+                        tgt = self._byok_unified_target_env()
+                        if tgt:
+                            persist_user_api_secret(tgt, raw)
+                    self.settings_byok_unified.clear()
+                    self._byok_refresh_unified_hint()
+                    self._refresh_byok_status_label()
+            except Exception as e:
+                self._track_error("BYOKPersistError", f"Failed to persist user API keys: {e}")
+                QMessageBox.warning(
+                    self,
+                    "User API keys",
+                    "Settings were saved, but storing optional user API keys failed:\n\n" + str(e),
+                )
 
             tab = self._loaded_tabs.get("SoapBoxx")
             if tab:
@@ -864,6 +1276,18 @@ class MainWindow(QMainWindow):
             self._track_error("SettingsSaveError", f"Failed to save settings: {e}")
             self._show_user_friendly_error("Settings Error", "Failed to save settings.", str(e))
 
+    def _on_settings_theme_changed(self, index: int):
+        """Live-apply theme from Settings combo (persist on Save)."""
+        try:
+            if index < 0 or not hasattr(self, "settings_theme_combo"):
+                return
+            tid = self.settings_theme_combo.itemData(index)
+            tm = getattr(self, "theme_manager", None)
+            if tid and tm and str(tid) in tm.themes:
+                tm.apply_theme(str(tid))
+        except Exception as e:
+            self._track_error("ThemePreviewError", f"Theme preview failed: {e}")
+
     def _reset_settings_tab_values(self):
         """Reset SoapBoxx settings to safe defaults."""
         try:
@@ -872,6 +1296,9 @@ class MainWindow(QMainWindow):
             self.settings_tts_combo.setCurrentText("openai")
             self.settings_question_combo.setCurrentText("auto")
             self.settings_ollama_model.setText("")
+            ix = self.settings_theme_combo.findData("modern_light")
+            if ix >= 0:
+                self.settings_theme_combo.setCurrentIndex(ix)
             self._refresh_settings_validation_status()
             self._save_settings_tab_values()
             self._show_status_message("Settings reset to defaults.")
@@ -890,6 +1317,18 @@ class MainWindow(QMainWindow):
         lines.append(f"SOAPBOXX_RUNS_DIR: {(os.getenv('SOAPBOXX_RUNS_DIR') or '(default by bucket)').strip() or '(default by bucket)'}")
         lines.append(f"SOAPBOXX_OLLAMA_MODEL: {(os.getenv('SOAPBOXX_OLLAMA_MODEL') or '').strip() or '(not set)'}")
         lines.append(f"OPENAI_API_KEY set: {'yes' if (os.getenv('OPENAI_API_KEY') or '').strip() else 'no'}")
+        try:
+            try:
+                from backend.user_api_secrets import user_api_secrets_path
+            except ImportError:
+                from user_api_secrets import user_api_secrets_path  # type: ignore
+            sp = user_api_secrets_path()
+            lines.append(
+                f"SOAPBOXX_USER_SECRETS_FILE / user api_keys.env: {sp} "
+                f"({'exists' if sp.is_file() else 'missing'})"
+            )
+        except Exception as e:
+            lines.append(f"User secrets path: (error: {e})")
         lines.append("")
         if hasattr(self, "_tabs_loaded"):
             lines.append("Tab health:")
@@ -907,6 +1346,9 @@ class MainWindow(QMainWindow):
             lines.append(f"  - tts_service: {self.settings_tts_combo.currentText()}")
             lines.append(f"  - question_llm_backend: {self.settings_question_combo.currentText()}")
             lines.append(f"  - ollama_model_field: {(self.settings_ollama_model.text() or '').strip() or '(empty)'}")
+            if hasattr(self, "settings_theme_combo"):
+                td = self.settings_theme_combo.currentData()
+                lines.append(f"  - ui_settings.theme (preview): {td or '(n/a)'}")
         lines.append("")
         lines.extend(self._build_latest_run_quality_block())
         lines.append("")
@@ -1169,6 +1611,31 @@ class MainWindow(QMainWindow):
             exit_action.setShortcut(QKeySequence.StandardKey.Quit)
             exit_action.triggered.connect(self.close)
             file_menu.addAction(exit_action)
+
+            # View menu (appearance)
+            view_menu = menubar.addMenu("View")
+            theme_menu = view_menu.addMenu("Theme")
+            theme_ids = [
+                "modern_light",
+                "modern_dark",
+                "dark",
+                "modern_blue",
+                "modern_green",
+                "light",
+                "blue",
+                "green",
+            ]
+            for tid in theme_ids:
+                label = tid.replace("_", " ").title()
+                act = QAction(label, self)
+                act.triggered.connect(
+                    lambda checked=False, name=tid: self._set_ui_theme(name)
+                )
+                theme_menu.addAction(act)
+            view_menu.addSeparator()
+            toggle_dark = QAction("Toggle dark / light", self)
+            toggle_dark.triggered.connect(self._toggle_ui_dark)
+            view_menu.addAction(toggle_dark)
 
             # Help menu
             help_menu = menubar.addMenu("Help")

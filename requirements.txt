@@ -3,6 +3,7 @@ openai
 sounddevice
 numpy
 requests
+certifi
 python-dotenv
 openai-whisper
 pydub

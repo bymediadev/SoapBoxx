@@ -28,7 +28,12 @@ except ImportError:
 
 
 def _ollama_llm_configured() -> bool:
-    return bool(os.getenv("SOAPBOXX_OLLAMA_MODEL", "").strip())
+    try:
+        from .ollama_resolve import resolved_ollama_model
+    except ImportError:
+        from ollama_resolve import resolved_ollama_model  # type: ignore
+
+    return bool(resolved_ollama_model())
 
 
 def _master_blueprint_v1_enabled() -> bool:

@@ -1,12 +1,16 @@
 # CURSOR EXECUTION PROMPT — FINAL 10% HARDENING PLAN
 
+> **Scope:** Evaluation pipeline, Ollama retry/cancellation, and schema safety only.
+> **Product structure and branches:** repo root `ARCHITECTURE.md`, `RULES.md`, `BRANCHES.md`.
+> "Do not refactor architecture" here means **no unplanned refactors outside this hardening scope** — not "never align with ARCHITECTURE.md".
+
 ## SYSTEM INSTRUCTIONS (DO NOT IGNORE)
 
 You are operating inside a production-grade Python backend system with a fully working evaluation architecture.
 
 ### HARD CONSTRAINTS
 
-* Do NOT refactor architecture
+* Do NOT refactor architecture **outside this hardening plan**
 * Do NOT rename existing core entities unless explicitly listed
 * Do NOT change snapshot/evaluator/finalizer structure
 * Do NOT modify passing tests unless required for new fields

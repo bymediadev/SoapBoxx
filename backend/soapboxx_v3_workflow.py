@@ -4958,7 +4958,159 @@ Rules: {count_rule} "data" must be an object. Do NOT return a top-level JSON arr
             if r:
                 g["title"] = r
     _align_guest_ids_to_evidence_map(evidence_map, out)
-    return [g for g in out if _guest_name_is_plausible_booking(g)] or out
+    filtered = [g for g in out if _guest_name_is_plausible_booking(g)]
+    if filtered:
+        return filtered
+    backup = _generate_guest_recommendations_transcript_backup(
+        evidence_map,
+        transcript=transcript or "",
+        episode_meta=episode_meta,
+        client=client,
+        grounded_name_allowlist=grounded_name_allowlist,
+    )
+    if backup:
+        return backup
+    if grounded_name_allowlist:
+        backup2 = _generate_guest_recommendations_transcript_backup(
+            evidence_map,
+            transcript=transcript or "",
+            episode_meta=episode_meta,
+            client=client,
+            grounded_name_allowlist=None,
+        )
+        if backup2:
+            return backup2
+    return out
+
+
+def _generate_guest_recommendations_transcript_backup(
+    evidence_map: List[Dict[str, Any]],
+    *,
+    transcript: str,
+    episode_meta: Optional[Dict[str, Any]] = None,
+    client: Any = None,
+    grounded_name_allowlist: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Second LLM pass when claim-/quote-led guest suggestions return no plausible booking rows.
+    Puts the workflow transcript excerpt first so themes and domain come from spoken text.
+    """
+    excerpt = _workflow_transcript_excerpt(transcript or "").strip()
+    if len(excerpt) < 120:
+        return []
+    excerpt = excerpt[:12000]
+    ctx = _episode_context_block(episode_meta)
+    allow = [str(x).strip() for x in (grounded_name_allowlist or []) if str(x).strip()]
+    allow_json = json.dumps(allow[:24], ensure_ascii=False)
+    booking_name_policy = """
+- **`name` (booking target):** A **real, publicly known** figure — format **Firstname Lastname** (or a
+  widely recognized public name such as **Pekka Hämäläinen**). Prefer authors, journalists, academics,
+  or practitioners **you know from verifiable public biography** in the episode's domain. **Do not**
+  fabricate plausible-sounding fake people.
+- **`title`:** Their credential or role (e.g. "Professor of History, Yale"; "Staff writer, The Atlantic").
+- **Forbidden in `name`:** generic job labels alone ("Historian", "Skeptical expert", "Domain practitioner"),
+  pure archetypes, or bracket-only role descriptions.
+"""
+    if allow:
+        name_rules = f"""
+EPISODE_FIGURES_MENTIONED (verbatim strings from the transcript — **do not** use as guest `name`):
+{allow_json}
+- Those strings are **subjects inside the story**, not outreach targets. Recommend **outside** experts
+  (real named figures) who could contextualize, fact-check, or debate the same themes.
+{booking_name_policy}
+- `topic_focus` and `angle` must tie each expert to themes spoken in the TRANSCRIPT.
+"""
+    else:
+        name_rules = booking_name_policy
+    count_rule = (
+        "Return 3–4 guests when you can do so without inventing names; fewer is acceptable when the allowlist is short."
+        if allow
+        else "Return 3–4 guests."
+    )
+    claim_labels = [
+        str(e.get("claim"))
+        for e in evidence_map
+        if isinstance(e, dict) and e.get("claim")
+    ]
+    prompt = f"""
+TASK — SECOND PASS (transcript-primary): Suggest guests for THIS episode only.
+
+The first pass (evidence-label-led) did not return usable names. Use the **TRANSCRIPT** below as the
+primary signal: industries, geography, named institutions, conflicts, technical jargon, product names,
+and stakes actually spoken. Propose **outside** experts (real named figures) who deepen those exact threads.
+
+{ctx}TRANSCRIPT (read closely; anchor every `topic_focus` to phrases or domains that appear):
+{excerpt}
+
+STRICT RULES:
+- Each guest must map to **concrete language, domain, or tension** from the transcript (not generic podcast advice).
+- **Forbidden:** vague archetypes with no tie to this transcript ("communications expert", "life coach").
+{name_rules}
+- `title`: short professional title aligned with that domain.
+- `angle`: one sentence: what they add to **this** conversation (mechanism, institution, or stake from the transcript).
+- Map `maps_to_claim_id` to c1, c2, … when those ids exist in the episode claim list; else c1.
+- `relevance`: 0–10.
+
+CLAIM LIST (for id mapping only — do **not** ignore the transcript):
+{json.dumps(claim_labels[:14], ensure_ascii=False)}
+
+Response contract (mandatory): reply with ONE JSON object with top-level keys "text" and "data" only.
+Put the payload below inside "data" as a JSON object (not a top-level array). "text" may be "" or a one-line summary.
+
+Inside "data" use exactly this shape:
+{{
+  "guests": [
+    {{
+      "name": "string",
+      "title": "string",
+      "topic_focus": "string",
+      "angle": "string",
+      "maps_to_claim_id": "c1",
+      "relevance": 9
+    }}
+  ]
+}}
+
+Rules: {count_rule} "data" must be an object. Do NOT return a top-level JSON array.
+"""
+    raw = call_llm_json(prompt, max_tokens=1400, client=client)
+    rows_in: Any
+    if isinstance(raw, list):
+        rows_in = raw
+    elif isinstance(raw, dict):
+        rows_in = raw.get("guests") or raw.get("guest_recommendations") or []
+        if not isinstance(rows_in, list):
+            rows_in = []
+    else:
+        rows_in = []
+    data = [x for x in rows_in if isinstance(x, dict)][:5]
+    primary_cid = ""
+    for e in evidence_map:
+        if isinstance(e, dict) and str(e.get("id") or "").strip():
+            primary_cid = str(e.get("id") or "").strip()
+            break
+    for g in data:
+        cid = str(g.get("maps_to_claim_id") or g.get("claim_id") or "").strip()
+        if cid:
+            g["claim_id"] = cid
+        elif not str(g.get("claim_id") or "").strip():
+            g["claim_id"] = primary_cid or "c1"
+        role = str(g.get("role") or "").strip()
+        title = str(g.get("title") or "").strip()
+        if not role and title:
+            g["role"] = title
+        tf = str(g.get("topic_focus") or "").strip()
+        ang = str(g.get("angle") or "").strip()
+        if tf and ang:
+            g["topic_angle"] = f"{tf} — {ang}"
+        else:
+            g.setdefault("topic_angle", ang or tf)
+        if not str(g.get("title") or "").strip():
+            r = str(g.get("role") or "").strip()
+            if r:
+                g["title"] = r
+    _align_guest_ids_to_evidence_map(evidence_map, data)
+    return [g for g in data if _guest_name_is_plausible_booking(g)]
 
 
 def generate_segments(

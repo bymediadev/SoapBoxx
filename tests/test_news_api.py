@@ -10,6 +10,7 @@ import requests
 from dotenv import load_dotenv
 
 
+@pytest.mark.integration
 def test_news_api():
     """Test News API functionality"""
     print("📰 Testing News API integration...")
@@ -78,6 +79,12 @@ def test_news_api():
     except requests.exceptions.Timeout:
         print("❌ News API request timed out")
         pytest.skip("News API timed out")
+    except requests.exceptions.SSLError as e:
+        print(f"❌ SSL error (often corporate CA / Python cert store): {e}")
+        pytest.skip(f"News API SSL unavailable in this environment: {e}")
+    except requests.exceptions.ConnectionError as e:
+        print(f"❌ Connection error: {e}")
+        pytest.skip(f"News API unreachable: {e}")
     except requests.exceptions.RequestException as e:
         print(f"❌ Request error: {str(e)}")
         pytest.fail(str(e))

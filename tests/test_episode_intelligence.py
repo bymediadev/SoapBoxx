@@ -1019,18 +1019,22 @@ class TestEpisodeIntelligence(unittest.TestCase):
 
     @patch.dict(
         os.environ,
-        {"OPENAI_API_KEY": "", "SOAPBOXX_OLLAMA_MODEL": "", "SOAPBOXX_OFFLINE": "0"},
+        {
+            "OPENAI_API_KEY": "",
+            "SOAPBOXX_OLLAMA_MODEL": "",
+            "SOAPBOXX_OFFLINE": "0",
+            # Prevent tag-based auto-pick when a real Ollama is running on the dev machine.
+            "OLLAMA_HOST": "http://127.0.0.1:59999",
+        },
         clear=False,
     )
     def test_generate_without_ollama_returns_empty_brief_shell(self):
-        with patch.dict(
-            os.environ,
-            {"OPENAI_API_KEY": "", "SOAPBOXX_OLLAMA_MODEL": "", "SOAPBOXX_OFFLINE": "0"},
-            clear=False,
-        ):
-            r = generate_episode_brief(
-                "hello world test transcript here.", {"title": "X"}
-            )
+        import ollama_resolve as _or
+
+        _or._OLLAMA_TAGS_CACHE = None
+        r = generate_episode_brief(
+            "hello world test transcript here.", {"title": "X"}
+        )
         self.assertTrue(r.get("brief"))
         self.assertTrue(r.get("markdown"))
         self.assertTrue(r.get("warnings"))

@@ -152,7 +152,7 @@ class Config:
                 ],
             },
             "ui_settings": {
-                "theme": "default",
+                "theme": "modern_light",
                 "auto_save": True,
                 "auto_transcribe": True,
                 "show_api_status": True,
@@ -302,9 +302,16 @@ class Config:
 
     def get_openai_api_key(self) -> Optional[str]:
         """Get OpenAI API key with validation - CRITICAL FOR SYSTEM OPERATION"""
-        api_key = self.get("openai_api_key") or os.getenv("OPENAI_API_KEY")
-        if api_key and self._validate_api_key_format(api_key, "openai"):
-            return api_key
+        # Prefer environment over JSON: saves that mask keys write ``[HIDDEN]`` placeholders
+        # which must not shadow a real ``OPENAI_API_KEY``.
+        for raw in (os.getenv("OPENAI_API_KEY"), self.get("openai_api_key")):
+            if not raw:
+                continue
+            api_key = str(raw).strip()
+            if not api_key or api_key == "[HIDDEN]" or api_key.startswith("[HIDDEN"):
+                continue
+            if self._validate_api_key_format(api_key, "openai"):
+                return api_key
         return None
 
     def set_openai_api_key(self, api_key: str):

@@ -22,7 +22,7 @@ except Exception:
     pass
 
 from dotenv import load_dotenv
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QComboBox  # Added QFrame
 from PyQt6.QtWidgets import (QAbstractScrollArea, QFrame, QGridLayout,
                              QGroupBox, QHBoxLayout, QLabel, QLineEdit,
@@ -127,11 +127,65 @@ class ModernButton(QPushButton):
             )
 
 
+class GuestResearchSearchWorker(QThread):
+    """Run GuestResearch I/O off the GUI thread (network + LLM can freeze or kill the UI)."""
+
+    guest_finished = pyqtSignal(dict, str, str)  # results, guest_name, additional_info
+    topic_finished = pyqtSignal(list, str)  # web_results, topic
+    failed = pyqtSignal(str)
+
+    def __init__(
+        self,
+        mode: str,
+        *,
+        guest_name: str = "",
+        additional_info: str = "",
+        topic: str = "",
+    ):
+        super().__init__()
+        self._mode = mode
+        self._guest_name = guest_name
+        self._additional_info = additional_info or ""
+        self._topic = topic
+
+    def run(self):
+        try:
+            try:
+                from guest_research import GuestResearch
+            except ImportError:
+                bp = os.path.join(parent_dir, "backend")
+                if bp not in sys.path:
+                    sys.path.insert(0, bp)
+                from guest_research import GuestResearch
+
+            gr = GuestResearch()
+            if self._mode == "guest":
+                kwargs = {}
+                if self._additional_info.strip():
+                    kwargs["additional_info"] = self._additional_info.strip()
+                research_results = gr.research(self._guest_name.strip(), **kwargs)
+                self.guest_finished.emit(
+                    research_results,
+                    self._guest_name.strip(),
+                    self._additional_info,
+                )
+            elif self._mode == "topic":
+                web_results = gr.search_web(self._topic.strip())
+                self.topic_finished.emit(list(web_results or []), self._topic.strip())
+            else:
+                self.failed.emit(f"Unknown worker mode: {self._mode}")
+        except Exception as e:
+            import traceback
+
+            self.failed.emit(f"{type(e).__name__}: {e}\n{traceback.format_exc()}")
+
+
 class ScoopTab(QWidget):
     def __init__(self):
         super().__init__()
         # Defer UI setup until widget is shown
         self._ui_initialized = False
+        self._guest_research_worker: Optional[GuestResearchSearchWorker] = None
 
         # Connect show event to initialize UI
         self.showEvent = self._on_show_event
@@ -464,249 +518,279 @@ class ScoopTab(QWidget):
         except Exception as e:
             self.results_text.setText(f"❌ Search error: {str(e)}")
 
-    def search_guest(self, guest_name: str):
-        """Search for guest information"""
+    def _guest_worker_cleanup(self):
+        if hasattr(self, "search_button"):
+            self.search_button.setEnabled(True)
+        w = self._guest_research_worker
+        self._guest_research_worker = None
+        if w is not None:
+            w.deleteLater()
+
+    @staticmethod
+    def _scoop_coerce_str_list(val) -> list:
+        """Normalize model output so we never iterate a string character-by-character."""
+        if val is None:
+            return []
+        if isinstance(val, str):
+            s = val.strip()
+            return [s] if s else []
+        if isinstance(val, (list, tuple)):
+            out = []
+            for x in val:
+                if x is None:
+                    continue
+                sx = str(x).strip()
+                if sx:
+                    out.append(sx)
+            return out
+        s = str(val).strip()
+        return [s] if s else []
+
+    @staticmethod
+    def _scoop_as_text(val) -> str:
+        if val is None:
+            return ""
+        if isinstance(val, (list, tuple)):
+            return "\n".join(str(x) for x in val if x is not None)
+        return str(val)
+
+    @pyqtSlot(str)
+    def _on_guest_worker_failed(self, message: str):
+        print("Guest research worker error:\n", message)
+        first_line = (message or "").split("\n", 1)[0].strip() or "Unknown error"
+        self.results_text.setText(
+            f"❌ Guest research failed (details printed to console):\n{first_line[:800]}"
+        )
+
+    @pyqtSlot(dict, str, str)
+    def _on_guest_worker_finished(
+        self, research_results: dict, guest_name: str, additional_info: str
+    ):
         try:
-            # Import guest research with robust error handling
-            guest_research = None
-
-            # Try multiple import paths for separate frontend/backend structure
-            try:
-                from guest_research import GuestResearch
-
-                guest_research = GuestResearch()
-            except ImportError:
-                try:
-                    # Try with backend path (already added to sys.path)
-                    from guest_research import GuestResearch
-
-                    guest_research = GuestResearch()
-                except ImportError:
-                    try:
-                        # Try with explicit backend path
-                        backend_path = os.path.join(
-                            os.path.dirname(os.path.dirname(__file__)), "backend"
-                        )
-                        sys.path.insert(0, backend_path)
-                        from guest_research import GuestResearch
-
-                        guest_research = GuestResearch()
-                    except ImportError as e:
-                        self.results_text.setText(
-                            f"❌ Error: Could not import GuestResearch module. Please check backend installation. Error: {e}"
-                        )
-                        return
-
-            if guest_research is None:
-                self.results_text.setText(
-                    "❌ Error: Could not import GuestResearch module. Please check backend installation."
-                )
-                return
-
-            self.results_text.setText(
-                f"🔍 Researching guest: {guest_name}...\n\nThis may take a moment..."
+            self._render_guest_research_results(
+                research_results, guest_name, additional_info or None
             )
-
-            # Get additional info if provided
-            additional_info = (
-                self.additional_info_input.text().strip()
-                if self.additional_info_input.isVisible()
-                else None
-            )
-
-            # Perform research
-            research_results = guest_research.research(
-                guest_name, additional_info=additional_info
-            )
-
-            if "error" in research_results:
-                self.results_text.setText(
-                    f"❌ Guest research error: {research_results['error']}"
-                )
-                return
-
-            # Format results
-            results = [f"🔍 Guest Research Results\n"]
-            results.append(
-                f"📅 Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-            )
-            results.append(f"👤 Guest: {guest_name}")
-            if additional_info:
-                results.append(f"📝 Additional Info: {additional_info}")
-            results.append("─" * 50 + "\n")
-
-            # Profile
-            if research_results.get("profile"):
-                results.append("📋 Profile:")
-                results.append(research_results["profile"])
-                results.append("")
-
-            # Talking points
-            if research_results.get("talking_points"):
-                results.append("💬 Talking Points:")
-                for i, point in enumerate(research_results["talking_points"], 1):
-                    results.append(f"  {i}. {point}")
-                results.append("")
-
-            # Questions
-            if research_results.get("questions"):
-                results.append("❓ Suggested Questions:")
-                for i, question in enumerate(research_results["questions"], 1):
-                    results.append(f"  {i}. {question}")
-                results.append("")
-
-            # Recent work
-            if research_results.get("recent_work"):
-                results.append("📈 Recent Work:")
-                results.append(research_results["recent_work"])
-                results.append("")
-
-            # Controversies
-            if research_results.get("controversies"):
-                results.append("⚠️ Controversies/Sensitive Topics:")
-                results.append(research_results["controversies"])
-                results.append("")
-
-            # Interests
-            if research_results.get("interests"):
-                results.append("🎯 Interests/Hobbies:")
-                results.append(research_results["interests"])
-                results.append("")
-
-            # If no results found, provide fallback
-            if not any(
-                [
-                    research_results.get("profile"),
-                    research_results.get("talking_points"),
-                    research_results.get("questions"),
-                    research_results.get("recent_work"),
-                    research_results.get("controversies"),
-                    research_results.get("interests"),
-                ]
-            ):
-                results.append("📋 Basic Profile:")
-                results.append(
-                    f"{guest_name} is a notable guest with expertise in their field."
-                )
-                results.append("")
-                results.append("💬 Suggested Talking Points:")
-                results.append("  • Professional background and experience")
-                results.append("  • Current projects and interests")
-                results.append("  • Industry insights and trends")
-                results.append("")
-                results.append("❓ Suggested Questions:")
-                results.append("  • What inspired your career path?")
-                results.append("  • Can you tell us about your current projects?")
-                results.append(
-                    "  • What advice would you give to someone starting out?"
-                )
-                results.append("")
-
-            results.append("✨ Powered by AI-powered guest research!")
-
-            self.results_text.setText("\n".join(results))
-
         except Exception as e:
-            self.results_text.setText(f"❌ Error researching guest: {str(e)}")
-            print(f"Guest research error: {e}")
+            self.results_text.setText(f"❌ Error displaying guest research: {str(e)}")
             import traceback
 
             traceback.print_exc()
+
+    def _render_guest_research_results(
+        self,
+        research_results: dict,
+        guest_name: str,
+        additional_info: Optional[str],
+    ):
+        if "error" in research_results:
+            self.results_text.setText(
+                f"❌ Guest research error: {research_results.get('error', 'Unknown error')}"
+            )
+            return
+
+        talking_points = self._scoop_coerce_str_list(research_results.get("talking_points"))
+        questions = self._scoop_coerce_str_list(research_results.get("questions"))
+        profile = self._scoop_as_text(research_results.get("profile")).strip()
+        recent_work = self._scoop_as_text(research_results.get("recent_work")).strip()
+        controversies = self._scoop_as_text(research_results.get("controversies")).strip()
+        interests = self._scoop_as_text(research_results.get("interests")).strip()
+
+        results = [f"🔍 Guest Research Results\n"]
+        results.append(f"📅 Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        results.append(f"👤 Guest: {guest_name}")
+        if additional_info:
+            results.append(f"📝 Additional Info: {additional_info}")
+        results.append("─" * 50 + "\n")
+
+        if profile:
+            results.append("📋 Profile:")
+            results.append(profile)
+            results.append("")
+
+        if talking_points:
+            results.append("💬 Talking Points:")
+            for i, point in enumerate(talking_points, 1):
+                results.append(f"  {i}. {point}")
+            results.append("")
+
+        if questions:
+            results.append("❓ Suggested Questions:")
+            for i, question in enumerate(questions, 1):
+                results.append(f"  {i}. {question}")
+            results.append("")
+
+        if recent_work:
+            results.append("📈 Recent Work:")
+            results.append(recent_work)
+            results.append("")
+
+        if controversies:
+            results.append("⚠️ Controversies/Sensitive Topics:")
+            results.append(controversies)
+            results.append("")
+
+        if interests:
+            results.append("🎯 Interests/Hobbies:")
+            results.append(interests)
+            results.append("")
+
+        if not any(
+            [
+                profile,
+                talking_points,
+                questions,
+                recent_work,
+                controversies,
+                interests,
+            ]
+        ):
+            results.append("📋 Basic Profile:")
+            results.append(
+                f"{guest_name} is a notable guest with expertise in their field."
+            )
+            results.append("")
+            results.append("💬 Suggested Talking Points:")
+            results.append("  • Professional background and experience")
+            results.append("  • Current projects and interests")
+            results.append("  • Industry insights and trends")
+            results.append("")
+            results.append("❓ Suggested Questions:")
+            results.append("  • What inspired your career path?")
+            results.append("  • Can you tell us about your current projects?")
+            results.append("  • What advice would you give to someone starting out?")
+            results.append("")
+
+        results.append("✨ Powered by AI-powered guest research!")
+        self.results_text.setText("\n".join(results))
+
+    @pyqtSlot(list, str)
+    def _on_topic_worker_finished(self, web_results: list, topic: str):
+        try:
+            self._render_topic_research_results(web_results, topic)
+        except Exception as e:
+            self.results_text.setText(f"❌ Error displaying topic research: {str(e)}")
+            import traceback
+
+            traceback.print_exc()
+
+    def _render_topic_research_results(self, web_results: list, topic: str):
+        rows = list(web_results or [])
+        if not rows:
+            self.results_text.setText(
+                "⚠️ Real-time search returned no results. Showing sample data..."
+            )
+            rows = [
+                {
+                    "title": f"Sample result for {topic}",
+                    "snippet": f"This is a sample search result for the topic '{topic}'. In a real implementation, this would show actual web search results from Google Custom Search API.",
+                    "link": "https://example.com",
+                    "displayLink": "example.com",
+                },
+                {
+                    "title": f"Another result for {topic}",
+                    "snippet": f"Additional information about {topic} would appear here. This helps users understand the topic better for podcast content planning.",
+                    "link": "https://example2.com",
+                    "displayLink": "example2.com",
+                },
+            ]
+
+        results = [f"🔍 Topic Research Results\n"]
+        results.append(f"📅 Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        results.append(f"🔍 Topic: {topic}")
+        results.append(f"📊 Found {len(rows)} results")
+        results.append("─" * 50 + "\n")
+
+        shown = 0
+        for result in rows:
+            if shown >= 5:
+                break
+            if not isinstance(result, dict):
+                continue
+            shown += 1
+            title = result.get("title") or "No title"
+            snippet = result.get("snippet") or "No description available"
+            snippet = str(snippet)
+            results.append(f"{shown}. {title}")
+            results.append(
+                f"   {snippet[:200]}{'...' if len(snippet) > 200 else ''}"
+            )
+            results.append(f"   🔗 {result.get('link', 'No link')}")
+            results.append("")
+
+        results.append("✨ Powered by Google Custom Search API!")
+        self.results_text.setText("\n".join(results))
+
+    def search_guest(self, guest_name: str):
+        """Search for guest information (background thread — keeps UI responsive)."""
+        if (
+            self._guest_research_worker is not None
+            and self._guest_research_worker.isRunning()
+        ):
+            self.results_text.setText(
+                "⏳ A search is already in progress. Wait for it to finish before starting another."
+            )
+            return
+
+        additional_info = (
+            self.additional_info_input.text().strip()
+            if self.additional_info_input.isVisible()
+            else ""
+        )
+
+        self.results_text.setText(
+            f"🔍 Researching guest: {guest_name}...\n\n"
+            "Running in the background so the window stays responsive (this can take up to a few minutes)."
+        )
+        if hasattr(self, "search_button"):
+            self.search_button.setEnabled(False)
+
+        worker = GuestResearchSearchWorker(
+            "guest",
+            guest_name=guest_name,
+            additional_info=additional_info,
+        )
+        worker.guest_finished.connect(
+            self._on_guest_worker_finished, Qt.ConnectionType.QueuedConnection
+        )
+        worker.failed.connect(
+            self._on_guest_worker_failed, Qt.ConnectionType.QueuedConnection
+        )
+        worker.finished.connect(
+            self._guest_worker_cleanup, Qt.ConnectionType.QueuedConnection
+        )
+        self._guest_research_worker = worker
+        worker.start()
 
     def search_topic(self, topic: str):
-        """Search for topic information"""
-        try:
-            # Import guest research for web search functionality with robust error handling
-            guest_research = None
-
-            # Try multiple import paths for separate frontend/backend structure
-            try:
-                from guest_research import GuestResearch
-
-                guest_research = GuestResearch()
-            except ImportError:
-                try:
-                    # Try with backend path (already added to sys.path)
-                    from guest_research import GuestResearch
-
-                    guest_research = GuestResearch()
-                except ImportError:
-                    try:
-                        # Try with explicit backend path
-                        backend_path = os.path.join(
-                            os.path.dirname(os.path.dirname(__file__)), "backend"
-                        )
-                        sys.path.insert(0, backend_path)
-                        from guest_research import GuestResearch
-
-                        guest_research = GuestResearch()
-                    except ImportError as e:
-                        self.results_text.setText(
-                            f"❌ Error: Could not import GuestResearch module. Please check backend installation. Error: {e}"
-                        )
-                        return
-
-            if guest_research is None:
-                self.results_text.setText(
-                    "❌ Error: Could not import GuestResearch module. Please check backend installation."
-                )
-                return
-
+        """Search for topic information (background thread — keeps UI responsive)."""
+        if (
+            self._guest_research_worker is not None
+            and self._guest_research_worker.isRunning()
+        ):
             self.results_text.setText(
-                f"🔍 Researching topic: {topic}...\n\nThis may take a moment..."
+                "⏳ A search is already in progress. Wait for it to finish before starting another."
             )
+            return
 
-            # Use the public web search functionality from guest research
-            web_results = guest_research.search_web(topic)
+        self.results_text.setText(
+            f"🔍 Researching topic: {topic}...\n\n"
+            "Running in the background so the window stays responsive."
+        )
+        if hasattr(self, "search_button"):
+            self.search_button.setEnabled(False)
 
-            if not web_results:
-                # If web search fails, provide mock data
-                self.results_text.setText(
-                    "⚠️ Real-time search failed. Showing sample data..."
-                )
-                web_results = [
-                    {
-                        "title": f"Sample result for {topic}",
-                        "snippet": f"This is a sample search result for the topic '{topic}'. In a real implementation, this would show actual web search results from Google Custom Search API.",
-                        "link": "https://example.com",
-                        "displayLink": "example.com",
-                    },
-                    {
-                        "title": f"Another result for {topic}",
-                        "snippet": f"Additional information about {topic} would appear here. This helps users understand the topic better for podcast content planning.",
-                        "link": "https://example2.com",
-                        "displayLink": "example2.com",
-                    },
-                ]
-
-            # Format results
-            results = [f"🔍 Topic Research Results\n"]
-            results.append(
-                f"📅 Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-            )
-            results.append(f"🔍 Topic: {topic}")
-            results.append(f"📊 Found {len(web_results)} results")
-            results.append("─" * 50 + "\n")
-
-            for i, result in enumerate(web_results[:5], 1):
-                results.append(f"{i}. {result.get('title', 'No title')}")
-                snippet = result.get("snippet", "No description available")
-                results.append(
-                    f"   {snippet[:200]}{'...' if len(snippet) > 200 else ''}"
-                )
-                results.append(f"   🔗 {result.get('link', 'No link')}")
-                results.append("")
-
-            results.append("✨ Powered by Google Custom Search API!")
-
-            self.results_text.setText("\n".join(results))
-
-        except Exception as e:
-            self.results_text.setText(f"❌ Error researching topic: {str(e)}")
-            print(f"Topic research error: {e}")
-            import traceback
-
-            traceback.print_exc()
+        worker = GuestResearchSearchWorker("topic", topic=topic)
+        worker.topic_finished.connect(
+            self._on_topic_worker_finished, Qt.ConnectionType.QueuedConnection
+        )
+        worker.failed.connect(
+            self._on_guest_worker_failed, Qt.ConnectionType.QueuedConnection
+        )
+        worker.finished.connect(
+            self._guest_worker_cleanup, Qt.ConnectionType.QueuedConnection
+        )
+        self._guest_research_worker = worker
+        worker.start()
 
     def search_news(self, query: str):
         """Search for news articles"""

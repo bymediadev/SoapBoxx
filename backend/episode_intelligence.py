@@ -1889,8 +1889,8 @@ def _scrub_slop(text: str) -> str:
 
 
 def _model_name() -> str:
-    """LLM label for exports; runtime uses ``SOAPBOXX_OLLAMA_MODEL`` (Ollama-only)."""
-    return os.getenv("SOAPBOXX_OLLAMA_MODEL", "ollama").strip() or "ollama"
+    """LLM label for exports; uses resolved Ollama model when available."""
+    return _ollama_resolved_model() or "ollama"
 
 
 def _max_transcript_single_pass_chars() -> int:
@@ -1901,8 +1901,8 @@ def _max_transcript_single_pass_chars() -> int:
 
 
 def _brief_backend_label() -> str:
-    o = os.getenv("SOAPBOXX_OLLAMA_MODEL", "").strip()
-    return f"ollama:{o}" if o else _model_name()
+    o = _ollama_resolved_model()
+    return f"ollama:{o}" if o else "ollama"
 
 
 def _brief_envelope_retries_max() -> int:
@@ -1931,6 +1931,16 @@ def _log_envelope_coerce_preview(content: Any, err: Exception) -> None:
     _LOG.warning("envelope coerce debug (%s): %s", err, s)
 
 
+def _ollama_resolved_model() -> str:
+    """``SOAPBOXX_OLLAMA_MODEL`` or auto-pick from local Ollama ``/api/tags``."""
+    try:
+        from .ollama_resolve import resolved_ollama_model
+    except ImportError:
+        from ollama_resolve import resolved_ollama_model  # type: ignore
+
+    return resolved_ollama_model()
+
+
 def _ollama_chat_invoke(
     system: str,
     user: str,
@@ -1942,9 +1952,12 @@ def _ollama_chat_invoke(
 ) -> Any:
     """HTTP POST to Ollama /api/chat; returns raw assistant ``message.content`` (no envelope coercion)."""
     host = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
-    model = os.getenv("SOAPBOXX_OLLAMA_MODEL", "").strip()
+    model = _ollama_resolved_model()
     if not model:
-        raise RuntimeError("SOAPBOXX_OLLAMA_MODEL is not set")
+        raise RuntimeError(
+            "No Ollama model available: set SOAPBOXX_OLLAMA_MODEL or run `ollama pull` "
+            "and ensure the Ollama daemon is running (see OLLAMA_HOST)."
+        )
     o_opts: Dict[str, Any] = {
         "num_predict": max_tokens,
         "temperature": temperature,
@@ -2076,10 +2089,11 @@ def _openai_chat(
     max_tokens: int = 4_096,
     temperature: float = 0.25,
 ) -> Dict[str, Any]:
-    """Ollama-only: ``SOAPBOXX_OLLAMA_MODEL`` must be set (see ``_ollama_chat``)."""
-    if not os.getenv("SOAPBOXX_OLLAMA_MODEL", "").strip():
+    """Ollama-only: a resolvable local model is required (see ``_ollama_chat``)."""
+    if not _ollama_resolved_model():
         raise RuntimeError(
-            "SOAPBOXX_OLLAMA_MODEL is not set — LLM brief generation requires a local Ollama model."
+            "No Ollama model available — set SOAPBOXX_OLLAMA_MODEL or run `ollama pull` "
+            "so /api/tags lists a model, and ensure the Ollama daemon is running."
         )
     return _ollama_chat(
         system, user, max_tokens=max_tokens, temperature=temperature
@@ -3178,7 +3192,7 @@ def generate_episode_brief(
         }
 
     offline = os.getenv("SOAPBOXX_OFFLINE", "").strip().lower() in ("1", "true", "yes")
-    use_ollama = bool(os.getenv("SOAPBOXX_OLLAMA_MODEL", "").strip())
+    use_ollama = bool(_ollama_resolved_model())
     if offline:
         warnings.append(
             "SOAPBOXX_OFFLINE is set; LLM brief generation was skipped (no episode JSON brief; v3 report will be a shell)."
@@ -3194,10 +3208,13 @@ def generate_episode_brief(
 
     if not use_ollama:
         warnings.append(
-            "SOAPBOXX_OLLAMA_MODEL is not set; no LLM brief was produced. "
-            "Install Ollama, pull a model, and set SOAPBOXX_OLLAMA_MODEL for strict episode brief extraction (v3 report)."
+            "No Ollama model resolved (set SOAPBOXX_OLLAMA_MODEL, or run `ollama pull` "
+            "so /api/tags lists a model, and ensure Ollama is running). No LLM brief was produced."
         )
-        print("[episode_intelligence] SOAPBOXX_OLLAMA_MODEL not set; returning empty brief shell.")
+        print(
+            "[episode_intelligence] No Ollama model; returning empty brief shell "
+            f"(host={os.getenv('OLLAMA_HOST', 'http://127.0.0.1:11434')})."
+        )
         nb = _normalize_brief(_minimal_brief(meta), meta)
         return {
             "brief": nb,
@@ -3209,7 +3226,7 @@ def generate_episode_brief(
 
     try:
         print(
-            f"[episode_intelligence] Generating brief via Ollama model={os.getenv('SOAPBOXX_OLLAMA_MODEL','') or '(unset)'} "
+            f"[episode_intelligence] Generating brief via Ollama model={_ollama_resolved_model() or '(unset)'} "
             f"host={os.getenv('OLLAMA_HOST','http://127.0.0.1:11434')} "
             f"timeout={os.getenv('SOAPBOXX_OLLAMA_HTTP_TIMEOUT','900')}s"
         )

@@ -3,10 +3,15 @@ import json
 import os
 import time
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote, urlparse
 
 import requests
+
+try:
+    from .http_verify import requests_verify_arg
+except ImportError:
+    from http_verify import requests_verify_arg
 
 # Try to import error tracker
 try:
@@ -48,6 +53,81 @@ except Exception:
         SocialMediaScraper = None
 
 
+def _guest_research_timeout_tuple(
+    connect_env: str,
+    read_env: str,
+    connect_default: float,
+    read_default: float,
+) -> Tuple[float, float]:
+    """(connect, read) seconds for ``requests``; read covers TLS + response body on slow links."""
+
+    def _f(name: str, default: float) -> float:
+        raw = os.getenv(name)
+        if raw is None or not str(raw).strip():
+            return default
+        try:
+            return max(0.5, float(str(raw).strip()))
+        except ValueError:
+            return default
+
+    return (
+        _f(connect_env, connect_default),
+        _f(read_env, read_default),
+    )
+
+
+def _openai_sdk_retryable_types() -> Tuple[type, ...]:
+    try:
+        from openai import APIConnectionError, APITimeoutError, InternalServerError
+
+        return (APIConnectionError, APITimeoutError, InternalServerError)
+    except ImportError:
+        return ()
+
+
+def _is_retryable_openai_error(exc: BaseException) -> bool:
+    return isinstance(exc, _openai_sdk_retryable_types())
+
+
+try:
+    from .ollama_resolve import ollama_host_base, resolved_ollama_model
+except ImportError:
+    from ollama_resolve import ollama_host_base, resolved_ollama_model  # type: ignore
+
+
+def _build_openai_sdk_client(api_key: str):
+    """OpenAI SDK client with long read timeout and same TLS bundle as ``requests`` (Windows-friendly)."""
+    from openai import OpenAI
+
+    read_t = float(os.getenv("SOAPBOXX_OPENAI_READ_TIMEOUT", "180"))
+    connect_t = float(os.getenv("SOAPBOXX_OPENAI_CONNECT_TIMEOUT", "45"))
+    pool_t = float(os.getenv("SOAPBOXX_OPENAI_POOL_TIMEOUT", "45"))
+    max_retries = max(0, int(os.getenv("SOAPBOXX_OPENAI_MAX_RETRIES", "5")))
+
+    try:
+        import httpx
+
+        timeout = httpx.Timeout(
+            connect=connect_t,
+            read=read_t,
+            write=connect_t,
+            pool=pool_t,
+        )
+        verify = requests_verify_arg()
+        http_client = httpx.Client(
+            timeout=timeout,
+            verify=verify,
+            limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+        )
+        return OpenAI(api_key=api_key, http_client=http_client, max_retries=max_retries)
+    except Exception:
+        return OpenAI(
+            api_key=api_key,
+            timeout=read_t,
+            max_retries=max_retries,
+        )
+
+
 class GuestResearch:
     def __init__(
         self, openai_api_key: Optional[str] = None, google_cse_id: Optional[str] = None
@@ -60,12 +140,12 @@ class GuestResearch:
 
         if self.api_key and OPENAI_AVAILABLE:
             try:
-                # Try new OpenAI client first
-                self.client = openai.OpenAI(api_key=self.api_key)
+                self.client = _build_openai_sdk_client(self.api_key)
                 self.use_new_api = True
             except Exception:
                 # Fallback to old API
                 openai.api_key = self.api_key
+                self.client = None
                 self.use_new_api = False
         else:
             print("Warning: No OpenAI API key provided. Research will be limited.")
@@ -79,8 +159,293 @@ class GuestResearch:
         else:
             print("Warning: No Google CSE ID provided. Web search will be limited.")
 
+        self._http = requests.Session()
+        self._http.verify = requests_verify_arg()
+        self._http_timeout = _guest_research_timeout_tuple(
+            "SOAPBOXX_GUEST_HTTP_CONNECT_TIMEOUT",
+            "SOAPBOXX_GUEST_HTTP_READ_TIMEOUT",
+            15.0,
+            90.0,
+        )
+        self._http_timeout_test = _guest_research_timeout_tuple(
+            "SOAPBOXX_GUEST_HTTP_TEST_CONNECT_TIMEOUT",
+            "SOAPBOXX_GUEST_HTTP_TEST_READ_TIMEOUT",
+            10.0,
+            30.0,
+        )
+
         if not self.google_api_key:
             print("Warning: No Google API key provided. Web search will be limited.")
+
+    def _http_get(
+        self,
+        url: str,
+        *,
+        params=None,
+        timeout=None,
+        quick: bool = False,
+        max_attempts: Optional[int] = None,
+    ):
+        """GET with split connect/read timeouts and bounded retries on read timeouts."""
+        if timeout is None:
+            timeout = self._http_timeout_test if quick else self._http_timeout
+        if max_attempts is None:
+            max_attempts = 1 if quick else 3
+        max_attempts = max(1, max_attempts)
+        for attempt in range(max_attempts):
+            try:
+                return self._http.get(url, params=params, timeout=timeout)
+            except requests.exceptions.Timeout:
+                if attempt + 1 >= max_attempts:
+                    raise
+                time.sleep(min(2.0, 0.5 * (2**attempt)))
+        raise RuntimeError("guest_research HTTP retry loop exited unexpectedly")  # pragma: no cover
+
+    def _run_openai_guest_research_chat(self, research_prompt: str) -> str:
+        """Call OpenAI chat for guest research with extra retries on transient transport errors."""
+        messages = [
+            {
+                "role": "system",
+                "content": "You are an expert podcast researcher and interviewer.",
+            },
+            {"role": "user", "content": research_prompt},
+        ]
+        model = (os.getenv("SOAPBOXX_OPENAI_MODEL") or "gpt-3.5-turbo").strip()
+        extra = max(0, int(os.getenv("SOAPBOXX_GUEST_RESEARCH_OPENAI_EXTRA_RETRIES", "3")))
+        delays = (0.8, 1.6, 3.2, 6.4, 10.0)
+        attempts = 1 + extra
+        last_err: Optional[BaseException] = None
+
+        for attempt in range(attempts):
+            try:
+                if self.use_new_api and self.client:
+                    response = self.client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        max_tokens=800,
+                        temperature=0.7,
+                    )
+                    return (response.choices[0].message.content or "").strip()
+
+                response = openai.ChatCompletion.create(
+                    model=model,
+                    messages=messages,
+                    max_tokens=800,
+                    temperature=0.7,
+                )
+                return (response.choices[0].message.content or "").strip()
+
+            except Exception as e:
+                last_err = e
+                if (
+                    _is_retryable_openai_error(e)
+                    and attempt + 1 < attempts
+                ):
+                    wait_s = delays[min(attempt, len(delays) - 1)]
+                    print(
+                        f"OpenAI transient error ({type(e).__name__}: {e}); "
+                        f"retry {attempt + 1}/{attempts - 1} in {wait_s:.1f}s..."
+                    )
+                    time.sleep(wait_s)
+                    continue
+                raise
+
+        if last_err is not None:
+            raise last_err
+        raise RuntimeError("guest_research OpenAI retry loop exited unexpectedly")  # pragma: no cover
+
+    def _llm_backend(self) -> str:
+        """LLM for guest/business Scoop research: ``ollama`` | ``openai`` | ``none``.
+
+        ``SOAPBOXX_GUEST_RESEARCH_LLM_BACKEND`` = ``auto`` (default), ``ollama``, or ``openai``.
+        In ``auto``, Ollama wins when a model is available (``SOAPBOXX_OLLAMA_MODEL`` or tags from
+        ``OLLAMA_HOST``/api/tags), else OpenAI when configured.
+        """
+        raw = (os.getenv("SOAPBOXX_GUEST_RESEARCH_LLM_BACKEND") or "auto").strip().lower()
+        if raw not in ("openai", "ollama", "auto"):
+            raw = "auto"
+        if raw == "openai":
+            return "openai"
+        if raw == "ollama":
+            return "ollama"
+        if resolved_ollama_model():
+            return "ollama"
+        if self.api_key and OPENAI_AVAILABLE:
+            return "openai"
+        return "none"
+
+    def _ollama_model_configured(self) -> bool:
+        return bool(resolved_ollama_model())
+
+    def _ollama_plain_chat(
+        self,
+        system: str,
+        user: str,
+        *,
+        max_tokens: int,
+        temperature: float,
+        stage: str,
+    ) -> str:
+        """Plain-text Ollama ``/api/chat`` (no JSON mode) via shared HTTP stack."""
+        host = ollama_host_base()
+        model = resolved_ollama_model()
+        if not model:
+            raise RuntimeError(
+                "No Ollama model available: set SOAPBOXX_OLLAMA_MODEL or run "
+                "`ollama pull <model>` so /api/tags lists at least one model."
+            )
+
+        o_opts: Dict[str, Any] = {
+            "num_predict": max_tokens,
+            "temperature": temperature,
+        }
+        _ctx = (
+            os.getenv("SOAPBOXX_GUEST_RESEARCH_OLLAMA_NUM_CTX")
+            or os.getenv("SOAPBOXX_OLLAMA_NUM_CTX")
+            or os.getenv("OLLAMA_NUM_CTX", "")
+        ).strip()
+        if _ctx:
+            try:
+                o_opts["num_ctx"] = int(_ctx)
+            except ValueError:
+                pass
+        _tp = (os.getenv("SOAPBOXX_OLLAMA_TOP_P", "") or "").strip()
+        if _tp:
+            try:
+                o_opts["top_p"] = float(_tp)
+            except ValueError:
+                pass
+        _seed = (os.getenv("SOAPBOXX_OLLAMA_SEED", "") or "").strip()
+        if _seed:
+            try:
+                o_opts["seed"] = int(_seed)
+            except ValueError:
+                pass
+
+        payload_obj: Dict[str, Any] = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system.rstrip()},
+                {"role": "user", "content": user},
+            ],
+            "stream": False,
+            "options": o_opts,
+        }
+        try:
+            try:
+                from .ollama_chat_http import ollama_api_chat
+                from .ollama_heartbeat import ollama_blocking_heartbeat
+            except ImportError:
+                from ollama_chat_http import ollama_api_chat  # type: ignore
+                from ollama_heartbeat import ollama_blocking_heartbeat  # type: ignore
+
+            data = ollama_api_chat(
+                host,
+                payload_obj,
+                stage=stage,
+                component="guest_research",
+                heartbeat_cm=ollama_blocking_heartbeat,
+            )
+        except Exception as e:
+            try:
+                from .ollama_chat_http import OllamaTransportError
+            except ImportError:
+                from ollama_chat_http import OllamaTransportError  # type: ignore
+            if isinstance(e, OllamaTransportError):
+                raise RuntimeError(str(e)) from e
+            raise
+
+        return str((data.get("message") or {}).get("content") or "").strip()
+
+    def _run_ollama_guest_research_chat(self, research_prompt: str) -> str:
+        """Local Ollama for guest JSON (no ``format: json`` — response is parsed as in OpenAI path)."""
+        max_tokens = int(os.getenv("SOAPBOXX_GUEST_RESEARCH_OLLAMA_NUM_PREDICT", "1200"))
+        temp = float(os.getenv("SOAPBOXX_GUEST_RESEARCH_OLLAMA_TEMPERATURE", "0.7"))
+        system = (
+            "You are an expert podcast researcher and interviewer. "
+            "Follow the user's instructions exactly. Output a single JSON object only "
+            "(no markdown code fences, no commentary before or after the JSON)."
+        )
+        return self._ollama_plain_chat(
+            system,
+            research_prompt,
+            max_tokens=max_tokens,
+            temperature=temp,
+            stage="guest_research.profile",
+        )
+
+    def _openai_plain_chat_with_retry(
+        self,
+        system: str,
+        user: str,
+        *,
+        max_tokens: int,
+        temperature: float,
+    ) -> str:
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
+        model = (os.getenv("SOAPBOXX_OPENAI_MODEL") or "gpt-3.5-turbo").strip()
+        extra = max(0, int(os.getenv("SOAPBOXX_GUEST_RESEARCH_OPENAI_EXTRA_RETRIES", "3")))
+        delays = (0.8, 1.6, 3.2, 6.4, 10.0)
+        attempts = 1 + extra
+        last_err: Optional[BaseException] = None
+        for attempt in range(attempts):
+            try:
+                if self.use_new_api and self.client:
+                    response = self.client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                    )
+                    return (response.choices[0].message.content or "").strip()
+                response = openai.ChatCompletion.create(
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+                return (response.choices[0].message.content or "").strip()
+            except Exception as e:
+                last_err = e
+                if _is_retryable_openai_error(e) and attempt + 1 < attempts:
+                    wait_s = delays[min(attempt, len(delays) - 1)]
+                    print(
+                        f"OpenAI transient error ({type(e).__name__}: {e}); "
+                        f"retry {attempt + 1}/{attempts - 1} in {wait_s:.1f}s..."
+                    )
+                    time.sleep(wait_s)
+                    continue
+                raise
+        if last_err is not None:
+            raise last_err
+        raise RuntimeError("guest_research OpenAI plain chat retry exhausted")  # pragma: no cover
+
+    def _llm_complete_plain(
+        self,
+        *,
+        system: str,
+        user: str,
+        max_tokens: int,
+        temperature: float,
+        stage: str,
+    ) -> str:
+        backend = self._llm_backend()
+        if backend == "ollama":
+            return self._ollama_plain_chat(
+                system,
+                user,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                stage=stage,
+            )
+        if backend == "openai":
+            return self._openai_plain_chat_with_retry(
+                system, user, max_tokens=max_tokens, temperature=temperature
+            )
+        raise RuntimeError("No LLM backend configured for guest_research")
 
     def research(
         self, guest_name: str, website: str = None, additional_info: str = None
@@ -104,7 +469,20 @@ class GuestResearch:
                 "questions": [],
             }
 
-        if not self.api_key or not OPENAI_AVAILABLE:
+        backend = self._llm_backend()
+        if backend == "openai" and (not self.api_key or not OPENAI_AVAILABLE):
+            print(
+                "Guest research: SOAPBOXX_GUEST_RESEARCH_LLM_BACKEND=openai but "
+                "OPENAI_API_KEY is missing or the openai package is unavailable; using fallback."
+            )
+            return self._get_fallback_research(guest_name, website)
+        if backend == "ollama" and not self._ollama_model_configured():
+            print(
+                "Guest research: Ollama was chosen but no model is available "
+                f"(check Ollama at {ollama_host_base()} and `ollama list`). Using fallback."
+            )
+            return self._get_fallback_research(guest_name, website)
+        if backend == "none":
             return self._get_fallback_research(guest_name, website)
 
         try:
@@ -117,45 +495,24 @@ class GuestResearch:
             # Generate research using AI
             research_prompt = self._create_research_prompt(guest_name, guest_info)
 
-            # Call OpenAI API using appropriate method
-            if self.use_new_api and self.client:
-                response = self.client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are an expert podcast researcher and interviewer.",
-                        },
-                        {"role": "user", "content": research_prompt},
-                    ],
-                    max_tokens=800,
-                    temperature=0.7,
-                )
-                research_text = response.choices[0].message.content.strip()
+            if backend == "ollama":
+                research_text = self._run_ollama_guest_research_chat(research_prompt)
             else:
-                # Fallback to old API (only if new API is not available)
-                try:
-                    response = openai.ChatCompletion.create(
-                        model="gpt-3.5-turbo",
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": "You are an expert podcast researcher and interviewer.",
-                            },
-                            {"role": "user", "content": research_prompt},
-                        ],
-                        max_tokens=800,
-                        temperature=0.7,
-                    )
-                    research_text = response.choices[0].message.content.strip()
-                except Exception as old_api_error:
-                    print(f"Old API failed: {old_api_error}")
-                    return self._get_fallback_research(guest_name, website)
+                research_text = self._run_openai_guest_research_chat(research_prompt)
+            if not research_text:
+                return self._get_fallback_research(guest_name, website)
 
             return self._parse_research_response(research_text, guest_name)
 
         except Exception as e:
-            print(f"Guest research error: {e}")
+            print(
+                f"Guest research error: {e}\n"
+                "If this is a network issue: check VPN/proxy/firewall; ensure `pip install certifi`. "
+                "OpenAI: SOAPBOXX_OPENAI_READ_TIMEOUT (default 180), "
+                "SOAPBOXX_GUEST_RESEARCH_OPENAI_EXTRA_RETRIES (default 3). "
+                "Local: start Ollama, run `ollama pull` for a model (or set SOAPBOXX_OLLAMA_MODEL); "
+                "optional OLLAMA_HOST if not on localhost:11434."
+            )
             track_api_error(
                 f"Guest research error: {e}", component="guest_research", exception=e
             )
@@ -217,7 +574,7 @@ class GuestResearch:
                 results["results"].extend(news_results)
 
             # Generate summary using AI if available
-            if self.api_key and OPENAI_AVAILABLE:
+            if self._llm_backend() != "none":
                 summary = self._generate_business_summary(company_name, results)
                 results["summary"] = summary
 
@@ -720,36 +1077,17 @@ Please provide a summary that includes:
 Format the response as a well-structured business summary.
 """
 
-            # Call OpenAI API
-            if self.use_new_api and self.client:
-                response = self.client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are an expert business analyst and researcher. When information is limited, provide industry context and educated insights based on company name analysis and industry knowledge.",
-                        },
-                        {"role": "user", "content": summary_prompt},
-                    ],
-                    max_tokens=600,  # Allow more tokens for fallback summaries
-                    temperature=0.7,
-                )
-                summary = response.choices[0].message.content.strip()
-            else:
-                # Fallback to old API
-                response = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are an expert business analyst and researcher. When information is limited, provide industry context and educated insights based on company name analysis and industry knowledge.",
-                        },
-                        {"role": "user", "content": summary_prompt},
-                    ],
-                    max_tokens=600,  # Allow more tokens for fallback summaries
-                    temperature=0.7,
-                )
-                summary = response.choices[0].message.content.strip()
+            # Call LLM (OpenAI or local Ollama per SOAPBOXX_GUEST_RESEARCH_LLM_BACKEND / auto)
+            summary = self._llm_complete_plain(
+                system=(
+                    "You are an expert business analyst and researcher. When information is limited, "
+                    "provide industry context and educated insights based on company name analysis and industry knowledge."
+                ),
+                user=summary_prompt,
+                max_tokens=600,
+                temperature=0.7,
+                stage="guest_research.business_summary",
+            )
 
             return summary
 
@@ -801,7 +1139,7 @@ Information about {company_name}'s notable achievements or challenges is not cur
                 "num": 5,  # Limit to 5 results
             }
 
-            response = requests.get(url, params=params, timeout=10)
+            response = self._http_get(url, params=params)
 
             # Enhanced error handling
             if response.status_code == 403:
@@ -891,7 +1229,7 @@ Information about {company_name}'s notable achievements or challenges is not cur
         # 1) Enhanced Wikipedia search with better parsing
         try:
             # Try open search first
-            wiki_resp = requests.get(
+            wiki_resp = self._http_get(
                 "https://en.wikipedia.org/w/api.php",
                 params={
                     "action": "opensearch",
@@ -900,7 +1238,6 @@ Information about {company_name}'s notable achievements or challenges is not cur
                     "namespace": 0,
                     "format": "json",
                 },
-                timeout=8,
             )
             if wiki_resp.status_code == 200:
                 data = wiki_resp.json()
@@ -923,7 +1260,7 @@ Information about {company_name}'s notable achievements or challenges is not cur
 
             # If no results from open search, try page content search
             if not results:
-                wiki_content_resp = requests.get(
+                wiki_content_resp = self._http_get(
                     "https://en.wikipedia.org/w/api.php",
                     params={
                         "action": "query",
@@ -932,7 +1269,6 @@ Information about {company_name}'s notable achievements or challenges is not cur
                         "srsearch": query,
                         "srlimit": 3,
                     },
-                    timeout=8,
                 )
                 if wiki_content_resp.status_code == 200:
                     content_data = wiki_content_resp.json()
@@ -1190,7 +1526,9 @@ Information about {company_name}'s notable achievements or challenges is not cur
                     "num": 1,
                 }
 
-                response = requests.get(test_url, params=test_params, timeout=5)
+                response = self._http_get(
+                    test_url, params=test_params, quick=True, max_attempts=2
+                )
 
                 if response.status_code == 200:
                     print("✅ Google API test successful")
@@ -1208,8 +1546,18 @@ Information about {company_name}'s notable achievements or challenges is not cur
                     recommendations.append("Check API configuration")
 
             except Exception as e:
+                err = str(e)
                 issues.append(f"Google API test error: {e}")
-                recommendations.append("Check network connectivity")
+                if "CERTIFICATE_VERIFY_FAILED" in err or "SSLCertVerificationError" in err:
+                    recommendations.append(
+                        "TLS certificate verification failed: run `pip install certifi` "
+                        "or install your corporate/root CA into the system trust store."
+                    )
+                    recommendations.append(
+                        "Dev-only: set SOAPBOXX_SSL_VERIFY=0 to disable TLS verification (insecure)."
+                    )
+                else:
+                    recommendations.append("Check network connectivity")
 
         return {
             "valid": len(issues) == 0,
@@ -1299,6 +1647,19 @@ Focus on creating engaging, relevant talking points and questions that would mak
                 for field in required_fields:
                     if field not in research:
                         research[field] = []
+
+                # Coerce list-shaped fields (models sometimes return a single string)
+                for key in ("talking_points", "questions"):
+                    val = research.get(key)
+                    if isinstance(val, str):
+                        s = val.strip()
+                        research[key] = [s] if s else []
+                    elif isinstance(val, list):
+                        research[key] = [
+                            str(x).strip() for x in val if x is not None and str(x).strip()
+                        ]
+                    else:
+                        research[key] = []
 
                 return research
             else:

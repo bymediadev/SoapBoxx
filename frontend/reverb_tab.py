@@ -30,7 +30,72 @@ except Exception:
 
 
 def _reverb_ollama_model_configured() -> bool:
-    return bool((os.getenv("SOAPBOXX_OLLAMA_MODEL") or "").strip())
+    try:
+        from ollama_resolve import resolved_ollama_model
+    except ImportError:
+        return bool((os.getenv("SOAPBOXX_OLLAMA_MODEL") or "").strip())
+    return bool(resolved_ollama_model())
+
+
+def _config_soapbox_stt_service() -> str:
+    """STT from persisted SoapBoxx Settings (same keys MainWindow saves)."""
+    try:
+        from config import Config
+    except ImportError:
+        try:
+            from backend.config import Config  # type: ignore
+        except ImportError:
+            return ""
+    try:
+        cfg = Config()
+        for key in (
+            "ui_settings.soapbox.transcription_service",
+            "ui_settings.soapbox.stt_service",
+        ):
+            v = str(cfg.get(key, "") or "").strip().lower()
+            if v in ("openai", "local", "assemblyai", "azure"):
+                return v
+    except Exception:
+        pass
+    return ""
+
+
+def _episode_analysis_stt_service() -> str:
+    """Transcription backend for Reverb episode upload analysis (env-overridable).
+
+    If ``SOAPBOXX_TRANSCRIPTION_SERVICE`` / ``SOAPBOXX_EPISODE_ANALYSIS_STT`` are unset,
+    prefer **local** Whisper when an Ollama model is available (same local demo stack as
+    the rest of the app); otherwise fall back to OpenAI Whisper API.
+    """
+    raw = (
+        os.getenv("SOAPBOXX_TRANSCRIPTION_SERVICE")
+        or os.getenv("SOAPBOXX_EPISODE_ANALYSIS_STT")
+        or _config_soapbox_stt_service()
+        or ""
+    ).strip().lower()
+    if raw in ("openai", "local", "assemblyai", "azure"):
+        return raw
+    if _reverb_ollama_model_configured():
+        return "local"
+    return "openai"
+
+
+def _episode_analysis_stt_max_file_mb() -> float:
+    """Upload size guard (MB). OpenAI Whisper API caps near 25 MB; other backends stay relaxed."""
+    return 25.0 if _episode_analysis_stt_service() == "openai" else 2048.0
+
+
+def _episode_upload_size_hint() -> str:
+    svc = _episode_analysis_stt_service()
+    if svc == "openai":
+        return (
+            "💡 Transcription uses the OpenAI API (Whisper). Maximum file size is 25 MB; "
+            "compress larger episodes first."
+        )
+    return (
+        f"💡 Transcription uses «{svc}» (not the OpenAI 25 MB cap). "
+        "Very large files may still be slow or memory-heavy with local Whisper."
+    )
 
 
 def _reverb_clip_corpus(text: str, limit: int = 14000) -> str:
@@ -107,7 +172,7 @@ def _append_reverb_llm_block(lines: List[str], heading: str, corpus: str) -> Non
         )
 
 
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (QButtonGroup, QComboBox, QFileDialog, QGridLayout,
                              QGroupBox, QHBoxLayout, QLabel, QLineEdit,
                              QListWidget, QListWidgetItem, QMessageBox,
@@ -135,6 +200,8 @@ class EpisodeAnalysisThread(QThread):
             # Import analysis modules with robust error handling
             feedback_engine = None
             transcriber = None
+            stt = _episode_analysis_stt_service()
+            limit_mb = _episode_analysis_stt_max_file_mb()
 
             # Try multiple import paths
             try:
@@ -142,7 +209,7 @@ class EpisodeAnalysisThread(QThread):
                 from transcriber import Transcriber
 
                 feedback_engine = FeedbackEngine()
-                transcriber = Transcriber(service="openai")
+                transcriber = Transcriber(service=stt)
             except ImportError:
                 try:
                     # Try with backend path
@@ -151,7 +218,7 @@ class EpisodeAnalysisThread(QThread):
                     from transcriber import Transcriber
 
                     feedback_engine = FeedbackEngine()
-                    transcriber = Transcriber(service="openai")
+                    transcriber = Transcriber(service=stt)
                 except ImportError:
                     try:
                         # Try with relative path
@@ -162,7 +229,7 @@ class EpisodeAnalysisThread(QThread):
                         from transcriber import Transcriber
 
                         feedback_engine = FeedbackEngine()
-                        transcriber = Transcriber(service="openai")
+                        transcriber = Transcriber(service=stt)
                     except ImportError as e:
                         self.error_occurred.emit(
                             f"Failed to import backend modules: {e}"
@@ -175,12 +242,20 @@ class EpisodeAnalysisThread(QThread):
 
             self.progress_updated.emit(20)
 
-            # Check file size again in case it was modified
+            # Check file size again in case it was modified (25 MB cap only for OpenAI STT)
             file_size = os.path.getsize(self.file_path) / (1024 * 1024)  # MB
-            if file_size > 25:
-                self.error_occurred.emit(
-                    f"File size ({file_size:.1f}MB) exceeds OpenAI's 25MB limit. Please compress the audio or use a smaller file."
-                )
+            if file_size > limit_mb:
+                if stt == "openai":
+                    self.error_occurred.emit(
+                        f"File size ({file_size:.1f}MB) exceeds OpenAI's 25MB limit. "
+                        "Compress the audio, use a smaller file, or set SOAPBOXX_EPISODE_ANALYSIS_STT=local "
+                        "with local Whisper + an Ollama model configured."
+                    )
+                else:
+                    self.error_occurred.emit(
+                        f"File size ({file_size:.1f}MB) exceeds the configured limit ({limit_mb:.0f} MB) for "
+                        f"transcription backend «{stt}»."
+                    )
                 return
 
             # Transcribe audio
@@ -193,21 +268,30 @@ class EpisodeAnalysisThread(QThread):
 
             self.progress_updated.emit(40)
 
-            # Check if audio data is too large
-            if len(audio_data) > 25 * 1024 * 1024:  # 25MB in bytes
-                self.error_occurred.emit(
-                    f"Audio file is too large ({len(audio_data) / (1024*1024):.1f}MB). OpenAI's limit is 25MB. Please compress the audio."
-                )
+            max_bytes = int(limit_mb * 1024 * 1024)
+            if len(audio_data) > max_bytes:
+                if stt == "openai":
+                    self.error_occurred.emit(
+                        f"Audio file is too large ({len(audio_data) / (1024*1024):.1f}MB). "
+                        "OpenAI's limit is 25MB — compress the audio or switch to local STT."
+                    )
+                else:
+                    self.error_occurred.emit(
+                        f"Audio file is too large ({len(audio_data) / (1024*1024):.1f}MB) for the "
+                        f"«{stt}» backend (limit {limit_mb:.0f} MB)."
+                    )
                 return
 
             transcript = transcriber.transcribe(audio_data)
             if not transcript or transcript.startswith("Error"):
                 # Check for specific OpenAI errors
-                if "413" in str(transcript) or "Maximum content size limit" in str(
-                    transcript
+                if stt == "openai" and (
+                    "413" in str(transcript)
+                    or "Maximum content size limit" in str(transcript)
                 ):
                     self.error_occurred.emit(
-                        f"File too large for OpenAI API. Please compress the audio to under 25MB or split it into smaller segments."
+                        "File too large for OpenAI API. Compress to under 25MB or use local transcription "
+                        "(Ollama model + SOAPBOXX_EPISODE_ANALYSIS_STT=local)."
                     )
                 else:
                     self.error_occurred.emit(f"Transcription failed: {transcript}")
@@ -303,6 +387,88 @@ class EpisodeAnalysisThread(QThread):
             traceback.print_exc()
 
 
+def _format_session_feedback_block(analysis: dict) -> str:
+    """Human-readable block for FeedbackEngine.analyze() results."""
+    lines = ["🎯 AI feedback (SoapBoxx recording)", "─" * 44, ""]
+    if not isinstance(analysis, dict):
+        return str(analysis)
+    lf = analysis.get("listener_feedback")
+    if lf:
+        lines.append("Listener feedback")
+        lines.append(str(lf).strip())
+        lines.append("")
+    cs = analysis.get("coaching_suggestions")
+    if isinstance(cs, (list, tuple)) and cs:
+        lines.append("Coaching suggestions")
+        for i, s in enumerate(cs, 1):
+            lines.append(f"  {i}. {s}")
+        lines.append("")
+    bm = analysis.get("benchmark")
+    if bm:
+        lines.append(f"Benchmark: {bm}")
+    conf = analysis.get("confidence")
+    if conf is not None:
+        try:
+            lines.append(f"Confidence: {float(conf):.2f}")
+        except (TypeError, ValueError):
+            lines.append(f"Confidence: {conf}")
+    return "\n".join(lines).strip()
+
+
+class SessionFeedbackThread(QThread):
+    """Run FeedbackEngine.analyze in the background (SoapBoxx → Reverb path)."""
+
+    feedback_complete = pyqtSignal(dict)
+    error_occurred = pyqtSignal(str)
+
+    def __init__(self, transcript: str, analysis_depth: str = "standard"):
+        super().__init__()
+        self.transcript = transcript
+        self.analysis_depth = analysis_depth
+
+    def run(self):
+        try:
+            feedback_engine = None
+            try:
+                from feedback_engine import FeedbackEngine
+
+                feedback_engine = FeedbackEngine()
+            except ImportError:
+                try:
+                    sys.path.insert(0, backend_dir)
+                    from feedback_engine import FeedbackEngine
+
+                    feedback_engine = FeedbackEngine()
+                except ImportError:
+                    try:
+                        sys.path.insert(
+                            0, os.path.join(os.path.dirname(__file__), "..", "backend")
+                        )
+                        from feedback_engine import FeedbackEngine
+
+                        feedback_engine = FeedbackEngine()
+                    except ImportError as e:
+                        self.error_occurred.emit(
+                            f"Could not import FeedbackEngine: {e}"
+                        )
+                        return
+
+            if feedback_engine is None:
+                self.error_occurred.emit("FeedbackEngine failed to initialize")
+                return
+
+            out = feedback_engine.analyze(
+                transcript=self.transcript,
+                analysis_depth=self.analysis_depth,
+            )
+            if isinstance(out, dict):
+                self.feedback_complete.emit(out)
+            else:
+                self.error_occurred.emit("Unexpected response from feedback engine")
+        except Exception as e:
+            self.error_occurred.emit(str(e))
+
+
 class ReverbTab(QWidget):
     """Reverb tab for podcast feedback and coaching tools"""
 
@@ -310,6 +476,7 @@ class ReverbTab(QWidget):
         super().__init__()
         self.uploaded_episodes = []
         self.analysis_thread = None
+        self._session_feedback_thread = None
         # Defer UI setup until widget is shown
         self._ui_initialized = False
 
@@ -347,10 +514,8 @@ class ReverbTab(QWidget):
         upload_group = QGroupBox("📁 Past Episodes Upload")
         upload_layout = QVBoxLayout()
 
-        # File size info
-        size_info = QLabel(
-            "💡 Note: OpenAI API has a 25MB file size limit. Larger files will need to be compressed."
-        )
+        # File size / STT backend hint (OpenAI Whisper API = 25 MB cap; local = relaxed)
+        size_info = QLabel(_episode_upload_size_hint())
         size_info.setStyleSheet("color: #666; font-size: 11px; margin: 5px;")
         upload_layout.addWidget(size_info)
 
@@ -437,6 +602,11 @@ class ReverbTab(QWidget):
         }
 
         row = 0
+        _has_openai = bool(
+            api_keys.get("OpenAI API Key")
+            and api_keys.get("OpenAI API Key") != "Not set"
+        )
+        _llm_ready = _has_openai or _reverb_ollama_model_configured()
         for key_name, value in api_keys.items():
             status = "✅ Configured" if value and value != "Not set" else "❌ Not set"
             status_label = QLabel(f"{key_name}: {status}")
@@ -453,10 +623,7 @@ class ReverbTab(QWidget):
         # Content Analysis
         content_btn = QPushButton("📊 Content Analysis")
         content_btn.clicked.connect(self.content_analysis)
-        content_btn.setEnabled(
-            api_keys.get("OpenAI API Key")
-            and api_keys.get("OpenAI API Key") != "Not set"
-        )
+        content_btn.setEnabled(_llm_ready)
         feedback_layout.addWidget(content_btn)
 
         # Video Content Analysis (NEW - YouTube Integration)
@@ -480,32 +647,50 @@ class ReverbTab(QWidget):
         # Performance Coaching
         coaching_btn = QPushButton("🎓 Performance Coaching")
         coaching_btn.clicked.connect(self.performance_coaching)
-        coaching_btn.setEnabled(
-            api_keys.get("OpenAI API Key")
-            and api_keys.get("OpenAI API Key") != "Not set"
-        )
+        coaching_btn.setEnabled(_llm_ready)
         feedback_layout.addWidget(coaching_btn)
 
         # Engagement Analysis
         engagement_btn = QPushButton("📈 Engagement Analysis")
         engagement_btn.clicked.connect(self.engagement_analysis)
-        engagement_btn.setEnabled(
-            api_keys.get("OpenAI API Key")
-            and api_keys.get("OpenAI API Key") != "Not set"
-        )
+        engagement_btn.setEnabled(_llm_ready)
         feedback_layout.addWidget(engagement_btn)
 
         # Storytelling Feedback
         storytelling_btn = QPushButton("📖 Storytelling Feedback")
         storytelling_btn.clicked.connect(self.storytelling_feedback)
-        storytelling_btn.setEnabled(
-            api_keys.get("OpenAI API Key")
-            and api_keys.get("OpenAI API Key") != "Not set"
-        )
+        storytelling_btn.setEnabled(_llm_ready)
         feedback_layout.addWidget(storytelling_btn)
 
         feedback_group.setLayout(feedback_layout)
         layout.addWidget(feedback_group)
+
+        # SoapBoxx live recording → AI feedback (moved from SoapBoxx tab)
+        session_fb_group = QGroupBox("🎙️ SoapBoxx recording — AI feedback")
+        session_fb_layout = QVBoxLayout()
+        session_hint = QLabel(
+            "When you stop recording on the SoapBoxx tab, the live transcript is sent here for "
+            "listener feedback and coaching. Uses Ollama when SOAPBOXX_OLLAMA_MODEL is set, "
+            "otherwise your OpenAI API key (same stack as FeedbackEngine)."
+        )
+        session_hint.setWordWrap(True)
+        session_hint.setStyleSheet("color: #666; font-size: 11px;")
+        session_fb_layout.addWidget(session_hint)
+        self.session_feedback_status = QLabel(
+            "Waiting for a finished SoapBoxx recording…"
+        )
+        self.session_feedback_status.setWordWrap(True)
+        self.session_feedback_status.setStyleSheet("color: #6C757D;")
+        session_fb_layout.addWidget(self.session_feedback_status)
+        self.session_feedback_output = QTextEdit()
+        self.session_feedback_output.setReadOnly(True)
+        self.session_feedback_output.setPlaceholderText(
+            "Listener feedback and coaching suggestions appear here after each session."
+        )
+        self.session_feedback_output.setMinimumHeight(200)
+        session_fb_layout.addWidget(self.session_feedback_output)
+        session_fb_group.setLayout(session_fb_layout)
+        layout.addWidget(session_fb_group)
 
         # Results section
         results_group = QGroupBox("📊 Analysis Results")
@@ -522,6 +707,48 @@ class ReverbTab(QWidget):
         layout.addWidget(results_group)
 
         self.setLayout(layout)
+
+    def run_session_feedback_from_transcript(self, transcript: str):
+        """Called from MainWindow when SoapBoxx recording stops (non-empty transcript)."""
+        if not getattr(self, "_ui_initialized", False):
+            self.init_ui()
+            self._ui_initialized = True
+        t = (transcript or "").strip()
+        if not t:
+            self.session_feedback_status.setText("No transcript text to analyze.")
+            return
+        if self._session_feedback_thread and self._session_feedback_thread.isRunning():
+            self._session_feedback_thread.wait(2000)
+        self.session_feedback_status.setText("Generating AI feedback…")
+        self.session_feedback_output.clear()
+        self._session_feedback_thread = SessionFeedbackThread(t, "standard")
+        self._session_feedback_thread.feedback_complete.connect(
+            self._on_session_feedback_complete,
+            Qt.ConnectionType.QueuedConnection,
+        )
+        self._session_feedback_thread.error_occurred.connect(
+            self._on_session_feedback_error,
+            Qt.ConnectionType.QueuedConnection,
+        )
+        self._session_feedback_thread.start()
+
+    def _on_session_feedback_complete(self, analysis: dict):
+        self.session_feedback_status.setText("Feedback ready.")
+        self.session_feedback_output.setPlainText(
+            _format_session_feedback_block(analysis)
+        )
+
+    def _on_session_feedback_error(self, err: str):
+        self.session_feedback_status.setText("Feedback failed.")
+        tip = (
+            "Tips: set SOAPBOXX_OLLAMA_MODEL and run Ollama for local feedback, "
+            "or set OPENAI_API_KEY for cloud-only use."
+            if _reverb_ollama_model_configured()
+            else "Tips: set OPENAI_API_KEY, or run Ollama with SOAPBOXX_OLLAMA_MODEL in your environment."
+        )
+        self.session_feedback_output.setPlainText(
+            f"Could not generate feedback.\n\n{err}\n\n{tip}"
+        )
 
     def select_episode_file(self):
         """Select an episode file for upload"""
@@ -547,17 +774,30 @@ class ReverbTab(QWidget):
             QMessageBox.warning(self, "Error", "Please select an episode file first.")
             return
 
-        # Check file size - OpenAI has a 25MB limit
+        limit_mb = _episode_analysis_stt_max_file_mb()
+        stt = _episode_analysis_stt_service()
         file_size = os.path.getsize(self.selected_file_path) / (1024 * 1024)  # MB
-        if file_size > 25:  # OpenAI's 25MB limit
+        if file_size > limit_mb:
+            if stt == "openai":
+                extra = (
+                    "\n\nTips:\n"
+                    "• Convert to MP3 with lower bitrate (128kbps)\n"
+                    "• Use audio compression tools\n"
+                    "• Split large files into smaller segments\n"
+                    "• Or use local transcription: configure Ollama + leave "
+                    "SOAPBOXX_EPISODE_ANALYSIS_STT unset (defaults to local when Ollama is available)"
+                )
+            else:
+                extra = (
+                    f"\n\nThis backend («{stt}») allows up to about {limit_mb:.0f} MB. "
+                    "Try a shorter file or a more compressed format."
+                )
             QMessageBox.warning(
                 self,
                 "File Too Large",
-                f"File size ({file_size:.1f}MB) exceeds OpenAI's 25MB limit. Please use a smaller file or compress the audio.\n\n"
-                f"Tips:\n"
-                f"• Convert to MP3 with lower bitrate (128kbps)\n"
-                f"• Use audio compression tools\n"
-                f"• Split large files into smaller segments",
+                f"File size ({file_size:.1f} MB) exceeds the limit ({limit_mb:.0f} MB) for "
+                f"transcription backend «{stt}»."
+                + extra,
             )
             return
 
@@ -647,7 +887,13 @@ class ReverbTab(QWidget):
                 )
                 output += f"💡 Suggestions:\n"
                 output += f"• Check if the audio file is corrupted\n"
-                output += f"• Ensure the file is under 25MB for OpenAI API\n"
+                if _episode_analysis_stt_service() == "openai":
+                    output += f"• Ensure the file is under 25MB when using OpenAI transcription\n"
+                else:
+                    output += (
+                        f"• Transcription uses «{_episode_analysis_stt_service()}» — "
+                        "check local Whisper (openai-whisper) and available RAM\n"
+                    )
                 output += f"• Try converting to a different audio format\n"
                 output += f"• Check if the audio contains speech\n\n"
 
@@ -729,7 +975,7 @@ class ReverbTab(QWidget):
 
             # This would analyze the current transcript or uploaded content
             self.results_text.setText(
-                "📊 Content Analysis\n\nThis feature analyzes your podcast content for:\n• Clarity and coherence\n• Engagement factors\n• Topic relevance\n• Audience appeal\n• Content structure\n\nUpload a transcript or use the recording from the SoapBoxx tab to get detailed feedback."
+                "📊 Content Analysis\n\nThis feature analyzes your podcast content for:\n• Clarity and coherence\n• Engagement factors\n• Topic relevance\n• Audience appeal\n• Content structure\n\nUse the buttons above with a transcript, or finish a recording on SoapBoxx — feedback is generated automatically on this tab under “SoapBoxx recording — AI feedback”."
             )
 
         except Exception as e:

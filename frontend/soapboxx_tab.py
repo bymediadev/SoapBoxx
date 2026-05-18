@@ -25,7 +25,7 @@ except Exception:
     pass
 
 from dotenv import load_dotenv
-from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QFrame, QGridLayout,
                              QGroupBox, QHBoxLayout, QLabel, QMessageBox,
                              QProgressBar, QPushButton, QScrollArea, QSlider,
@@ -371,15 +371,16 @@ class RecordingThread(QThread):
 
     transcript_updated = pyqtSignal(str)
     chunk_transcript_ready = pyqtSignal(str)
-    feedback_updated = pyqtSignal(dict)
     status_updated = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
     audio_chunk_ready = pyqtSignal(bytes)  # Signal for audio chunks
 
-    def __init__(self, core, transcription_service="openai"):
+    def __init__(self, core, transcription_service="openai", transcript_host=None):
         super().__init__()
         self.core = core
         self.transcription_service = transcription_service
+        # QObject in the GUI thread; live TranscriptionThread signals must land here so slots run.
+        self.transcript_host = transcript_host
         self.is_recording = False
         self.audio_recorder = None
         self.transcription_buffer = ""
@@ -419,6 +420,8 @@ class RecordingThread(QThread):
             # Continuous recording loop
             start_time = time.time()
             last_chunk_time = start_time
+            # Wall-clock pacing for semi-live STT (do not use 0 or first chunk fires with ~0.1s audio).
+            self.last_transcription_time = start_time
 
             while self.is_recording:
                 try:
@@ -439,24 +442,32 @@ class RecordingThread(QThread):
                                 f"🎵 Audio buffer: {len(self.audio_buffer)} chunks, latest: {chunk.shape}"
                             )
 
-                        # Check if we have enough audio to transcribe
+                        # Check if we have enough audio to transcribe (wall interval + min samples).
+                        window_start = current_time - self.window_size_seconds
+                        recent_chunks = [
+                            buf_chunk
+                            for buf_chunk, timestamp in self.audio_buffer
+                            if timestamp >= window_start
+                        ]
+                        total_frames = sum(
+                            int(c.shape[0])
+                            for c in recent_chunks
+                            if c is not None and hasattr(c, "shape")
+                        )
+                        min_frames = max(
+                            8000, int(16000 * float(self.min_audio_length))
+                        )  # ≥0.5s @16kHz mono
                         if (
                             current_time - self.last_transcription_time
                             >= self.transcription_interval
+                            and total_frames >= min_frames
                         ):
-                            # Use a sliding window: last 15s with 5s overlap
-                            window_start = current_time - self.window_size_seconds
-                            recent_chunks = [
-                                buf_chunk
-                                for buf_chunk, timestamp in self.audio_buffer
-                                if timestamp >= window_start
-                            ]
-
                             print(
-                                f"⏰ Transcription interval reached: {len(recent_chunks)} chunks ready"
+                                f"⏰ Transcription window ready: {len(recent_chunks)} chunks, "
+                                f"{total_frames} frames (~{total_frames / 16000:.1f}s)"
                             )
 
-                            if recent_chunks and len(recent_chunks) > 0:
+                            if recent_chunks:
                                 # Transcribe the recent audio
                                 self._transcribe_accumulated_audio(recent_chunks)
                                 self.last_transcription_time = current_time
@@ -518,16 +529,36 @@ class RecordingThread(QThread):
 
             print(f"🎵 Combined audio: {len(combined_audio)} bytes")
 
-            # Create transcription thread
+            # Create transcription thread (reuse core.transcriber so keys + language settings match UI)
+            shared_tb = self.core.transcriber if self.core is not None else None
             self.transcription_thread = TranscriptionThread(
-                combined_audio, self.transcription_service, "Live Recording"
+                combined_audio,
+                self.transcription_service,
+                "Live Recording",
+                transcriber=shared_tb,
             )
-            self.transcription_thread.transcription_completed.connect(
-                self._on_live_transcription_completed
-            )
-            self.transcription_thread.transcription_failed.connect(
-                self._on_live_transcription_failed
-            )
+            # Slots on RecordingThread never run: this thread blocks in run() without an event loop.
+            # Deliver completion/failure to the GUI thread instead.
+            if self.transcript_host is not None:
+                self.transcription_thread.transcription_completed.connect(
+                    self.transcript_host._on_recording_transcription_completed,
+                    Qt.ConnectionType.QueuedConnection,
+                )
+                self.transcription_thread.transcription_failed.connect(
+                    self.transcript_host._on_recording_transcription_failed,
+                    Qt.ConnectionType.QueuedConnection,
+                )
+                self.transcription_thread.status_updated.connect(
+                    self.transcript_host.update_status,
+                    Qt.ConnectionType.QueuedConnection,
+                )
+            else:
+                self.transcription_thread.transcription_completed.connect(
+                    self._on_live_transcription_completed
+                )
+                self.transcription_thread.transcription_failed.connect(
+                    self._on_live_transcription_failed
+                )
             self.transcription_thread.start()
 
         except Exception as e:
@@ -571,11 +602,16 @@ class RecordingThread(QThread):
                 print("⚠️ No chunks to combine")
                 return b""
 
-            print(f"🔧 Combining {len(chunks)} audio chunks...")
-
             # Convert numpy arrays to bytes and concatenate
             combined_bytes = []
             total_samples = 0
+            verbose_chunks = os.getenv("SOAPBOXX_DEBUG_AUDIO_CHUNKS", "").strip().lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+            if verbose_chunks:
+                print(f"🔧 Combining {len(chunks)} audio chunks (SOAPBOXX_DEBUG_AUDIO_CHUNKS=1)…")
 
             for i, chunk in enumerate(chunks):
                 if chunk is not None:
@@ -583,14 +619,16 @@ class RecordingThread(QThread):
                     chunk_bytes = chunk.tobytes()
                     combined_bytes.append(chunk_bytes)
                     total_samples += len(chunk)
-                    print(f"  Chunk {i}: {chunk.shape} -> {len(chunk_bytes)} bytes")
-                else:
+                    if verbose_chunks:
+                        print(f"  Chunk {i}: {chunk.shape} -> {len(chunk_bytes)} bytes")
+                elif verbose_chunks:
                     print(f"  Chunk {i}: None (skipped)")
 
             if combined_bytes:
                 result = b"".join(combined_bytes)
                 print(
-                    f"✅ Combined {len(combined_bytes)} chunks: {total_samples} samples -> {len(result)} bytes"
+                    f"🔧 Combined {len(combined_bytes)} mic chunk(s) → "
+                    f"{total_samples} samples (~{total_samples / 16000:.1f}s) → {len(result)} bytes PCM"
                 )
                 return result
             else:
@@ -720,10 +758,11 @@ class LoaderThread(QThread):
 
 
 class SoapBoxxTab(QWidget):
-    def __init__(self, open_settings_callback=None):
+    def __init__(self, open_settings_callback=None, session_feedback_callback=None):
         super().__init__()
         print("🔧 SoapBoxxTab: Constructor called")
         self._open_settings_callback = open_settings_callback
+        self._session_feedback_callback = session_feedback_callback
         self._startup_issue_dialog_shown = False
         self._config_mgr = None
         self._loading_saved_settings = False
@@ -736,6 +775,9 @@ class SoapBoxxTab(QWidget):
         self.obs_websocket = None
         self.last_audio_update = 0
         self.audio_update_interval = 0.1  # Update UI every 100ms
+        # Live recording STT: merged on GUI thread (TranscriptionThread signals cannot target RecordingThread.run).
+        self._accept_live_transcription_results = False
+        self._live_recording_transcript_buffer = ""
         # Guest questions state
         self.questions = (
             []
@@ -1549,46 +1591,7 @@ class SoapBoxxTab(QWidget):
 
             scroll_layout.addWidget(tts_card)
 
-            # Feedback Display - Modern Card Design
-            feedback_card = ModernCard()
-            feedback_layout = QVBoxLayout(feedback_card)
-
-            # Card header
-            feedback_header = QLabel("💡 AI Feedback")
-            feedback_header.setStyleSheet(
-                """
-                font-size: 18px; 
-                    font-weight: bold;
-                color: #2C3E50;
-                margin-bottom: 15px;
-            """
-            )
-            feedback_layout.addWidget(feedback_header)
-
-            # Feedback text area with modern styling
-            self.feedback_text = QTextEdit()
-            self.feedback_text.setPlaceholderText(
-                "AI feedback will appear here after recording..."
-            )
-            self.feedback_text.setStyleSheet(
-                """
-                QTextEdit {
-                    border: 2px solid #E0E0E0;
-                    border-radius: 8px;
-                    padding: 12px;
-                    font-size: 14px;
-                    background: white;
-                    line-height: 1.5;
-                }
-                QTextEdit:focus {
-                    border: 2px solid #3498DB;
-                }
-            """
-            )
-            self.feedback_text.setMinimumHeight(150)
-            feedback_layout.addWidget(self.feedback_text)
-
-            scroll_layout.addWidget(feedback_card)
+            # AI session feedback runs on the Reverb tab after you stop recording (see session_feedback_callback).
 
             # Guest Questions Approval - Modern Card Design
             questions_card = ModernCard()
@@ -2515,20 +2518,22 @@ class SoapBoxxTab(QWidget):
         try:
             # Clear previous results
             self.transcript_text.clear()
-            self.feedback_text.clear()
+            self._live_recording_transcript_buffer = ""
+            self._accept_live_transcription_results = True
 
             # Get selected service and ensure core is using it
             service = self.service_combo.currentText()
             self.core.set_transcription_service(service)
 
-            # Initialize recording thread
-            self.recording_thread = RecordingThread(self.core, service)
+            # Initialize recording thread (transcript_host = GUI thread for TranscriptionThread signals)
+            self.recording_thread = RecordingThread(
+                self.core, service, transcript_host=self
+            )
             self.recording_thread.transcript_updated.connect(self.update_transcript)
             # Semi-live: react to per-window transcripts
             self.recording_thread.chunk_transcript_ready.connect(
                 self._on_chunk_transcript
             )
-            self.recording_thread.feedback_updated.connect(self.update_feedback)
             self.recording_thread.status_updated.connect(self.update_status)
             self.recording_thread.error_occurred.connect(self.handle_error)
 
@@ -2589,6 +2594,29 @@ class SoapBoxxTab(QWidget):
         except Exception as e:
             print(f"Question matching error: {e}")
 
+    @pyqtSlot(str)
+    def _on_recording_transcription_completed(self, transcript: str):
+        """Handle live chunk transcription on the GUI thread (worker cannot deliver to RecordingThread.run)."""
+        if not self._accept_live_transcription_results:
+            return
+        if not transcript or not str(transcript).strip():
+            return
+        t = str(transcript).strip()
+        self._on_chunk_transcript(t)
+        if self._live_recording_transcript_buffer:
+            self._live_recording_transcript_buffer += " " + t
+        else:
+            self._live_recording_transcript_buffer = t
+        self.update_transcript(self._live_recording_transcript_buffer)
+        self.update_status("Live transcription updated")
+
+    @pyqtSlot(str)
+    def _on_recording_transcription_failed(self, error: str):
+        if not self._accept_live_transcription_results:
+            return
+        print(f"Live transcription failed: {error}")
+        self.update_status(f"Transcription error: {error}")
+
     def _reset_recording_ui(self):
         """Reset recording UI to initial state"""
         self.record_button.setEnabled(True)
@@ -2616,6 +2644,7 @@ class SoapBoxxTab(QWidget):
     def stop_recording(self):
         """Stop recording"""
         try:
+            self._accept_live_transcription_results = False
             if self.recording_thread and self.recording_thread.isRunning():
                 self.recording_thread.stop_recording()
                 self.recording_thread.wait(5000)  # Wait up to 5 seconds
@@ -2664,6 +2693,16 @@ class SoapBoxxTab(QWidget):
                 ):
                     self.transcribe_recording_btn.setEnabled(True)
 
+                # Send transcript to Reverb for AI feedback (Ollama/OpenAI per FeedbackEngine).
+                ui_t = (self.transcript_text.toPlainText() or "").strip()
+                buf = (getattr(self, "_live_recording_transcript_buffer", "") or "").strip()
+                transcript_done = ui_t if len(ui_t) >= len(buf) else buf
+                if self._session_feedback_callback and transcript_done:
+                    try:
+                        self._session_feedback_callback(transcript_done)
+                    except Exception as cb_err:
+                        print(f"Session feedback callback error: {cb_err}")
+
         except Exception as e:
             self._show_user_friendly_error(
                 "Stop Recording Error", f"Failed to stop recording: {str(e)}"
@@ -2687,22 +2726,6 @@ class SoapBoxxTab(QWidget):
     def update_transcript(self, transcript):
         """Update transcript display"""
         self.transcript_text.setText(transcript)
-
-    def update_feedback(self, feedback):
-        """Update feedback display"""
-        if isinstance(feedback, dict):
-            feedback_text = ""
-            if "listener_feedback" in feedback:
-                feedback_text += (
-                    f"Listener Feedback:\n{feedback['listener_feedback']}\n\n"
-                )
-            if "coaching_suggestions" in feedback:
-                feedback_text += f"Coaching Suggestions:\n"
-                for suggestion in feedback["coaching_suggestions"]:
-                    feedback_text += f"• {suggestion}\n"
-            self.feedback_text.setText(feedback_text)
-        else:
-            self.feedback_text.setText(str(feedback))
 
     # ----- Guest Questions Panel Logic -----
     def _add_questions_from_input(self):
@@ -3419,8 +3442,9 @@ class SoapBoxxTab(QWidget):
                 self.transcription_thread.wait(2000)  # Wait up to 2 seconds
 
             # Create and start transcription thread
+            shared_tb = self.core.transcriber if getattr(self, "core", None) else None
             self.transcription_thread = TranscriptionThread(
-                audio_data, service, source_name
+                audio_data, service, source_name, transcriber=shared_tb
             )
             self.transcription_thread.transcription_completed.connect(
                 self._on_transcription_completed
@@ -3541,13 +3565,20 @@ class TranscriptionThread(QThread):
     transcription_failed = pyqtSignal(str)
     status_updated = pyqtSignal(str)
 
-    def __init__(self, audio_data: bytes, service: str, source_name: str = "Audio"):
+    def __init__(
+        self,
+        audio_data: bytes,
+        service: str,
+        source_name: str = "Audio",
+        *,
+        transcriber=None,
+    ):
         super().__init__()
         self.audio_data = audio_data
         self.service = service
         self.source_name = source_name
+        self.transcriber_override = transcriber
         self.is_transcribing = False
-        self.timeout = 30  # Reduced timeout for live transcription
 
     def run(self):
         """Run transcription in background thread with timeout"""
@@ -3566,8 +3597,9 @@ class TranscriptionThread(QThread):
                 f"🎵 Transcribing {len(self.audio_data)} bytes of audio data using {self.service}"
             )
 
-            # Create transcriber
-            transcriber = Transcriber(service=self.service)
+            transcriber = self.transcriber_override
+            if transcriber is None:
+                transcriber = Transcriber(service=self.service)
             status = transcriber.get_available_services()
 
             if self.service not in status:
@@ -3576,26 +3608,15 @@ class TranscriptionThread(QThread):
                 )
                 return
 
-            # Transcribe audio with timeout protection
             self.status_updated.emit("Making API call...")
 
-            # Use a timer to implement timeout
             import time
 
             start_time = time.time()
 
-            # Start transcription in a way that can be interrupted
             result = None
             try:
                 result = transcriber.transcribe(self.audio_data)
-
-                # Check if we've exceeded timeout
-                if time.time() - start_time > self.timeout:
-                    self.transcription_failed.emit(
-                        "Transcription timeout - the operation took too long. Please try again."
-                    )
-                    return
-
             except Exception as e:
                 if "timeout" in str(e).lower():
                     self.transcription_failed.emit(
@@ -3605,7 +3626,8 @@ class TranscriptionThread(QThread):
                     raise e
 
             if result and not result.startswith("Error:"):
-                print(f"✅ Transcription completed: {result[:100]}...")
+                elapsed = time.time() - start_time
+                print(f"✅ Transcription completed in {elapsed:.1f}s: {result[:100]}...")
                 self.transcription_completed.emit(result)
             else:
                 error_msg = (

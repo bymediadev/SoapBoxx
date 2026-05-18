@@ -1,0 +1,32 @@
+---
+description: SoapBoxx product, architecture, and branch rules
+alwaysApply: true
+---
+
+# SoapBoxx
+
+Follow as source of truth (repo root): `PRODUCT.md`, `ARCHITECTURE.md`, `WORKFLOW.md`, `RULES.md`, `BRANCHES.md`.
+
+## Core loop
+
+Record → Transcribe → Improve. Changes must improve recording, transcription, feedback, or workflow clarity.
+
+## Branches
+
+- Active development: **`production`** only
+- **`demo`**: fast-forward from `production` before demo packages; no feature commits on `demo` alone
+- Do not use `main`, `Local`, or `demo/soapboxx-barebones` for new work
+
+## Code paths
+
+- Desktop UI: `SoapBoxxCore` → `transcriber` → `FeedbackEngine` (Reverb tab)
+- Do not extend `soapboxx_v3_workflow` / `blueprint_v1` / `atomic_pipeline` for UI unless explicitly requested
+- Do not add new AI client layers; consolidate through `backend/llm_service.py` when touching LLM code
+
+## Ignore (not source)
+
+`releases/**`, `SoapBoxx-Distribution*/**`, `SoapBoxx-Demo-Distribution/**`, `reports/**`
+
+## Refactors
+
+No drive-by refactors. No duplicate logic across modules. If a request conflicts with these rules, ask before proceeding.
