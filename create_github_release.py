@@ -53,9 +53,9 @@ def create_github_release():
         current_branch = result.stdout.strip()
         print(f"📍 Current branch: {current_branch}")
         
-        if current_branch != "demo":
+        if current_branch not in ("demo-release", "demo"):
             print("⚠️  Not on demo branch")
-            print("   Switch to demo (fast-forward from production before release)")
+            print("   Switch to demo-release (fast-forward from production before release)")
             print("   Legacy branch demo/soapboxx-barebones is archived — see BRANCHES.md")
     except subprocess.CalledProcessError:
         print("⚠️  Could not determine current branch")
@@ -294,7 +294,7 @@ try {
     gh release create v1.0.0 `
         --title "SoapBoxx Demo v1.0.0 - Offline-Capable AI Podcast Studio" `
         --notes-file "RELEASE_NOTES_v1.0.0.md" `
-        --target "demo" `
+        --target "demo-release" `
         $zip_file
     
     if ($LASTEXITCODE -eq 0) {
