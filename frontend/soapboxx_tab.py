@@ -25,6 +25,16 @@ except Exception:
     pass
 
 from dotenv import load_dotenv
+
+
+def _live_transcript_float_env(name: str, default: float, *, minimum: float = 2.0) -> float:
+    try:
+        value = float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, value)
+
+
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QFrame, QGridLayout,
                              QGroupBox, QHBoxLayout, QLabel, QMessageBox,
@@ -385,9 +395,15 @@ class RecordingThread(QThread):
         self.audio_recorder = None
         self.transcription_buffer = ""
         self.last_transcription_time = 0
-        # Chunk-based semi-live transcription configuration
-        self.window_size_seconds = 15.0  # Analyze 15s windows
-        self.window_step_seconds = 10.0  # Emit every 10s (5s overlap)
+        # Chunk-based semi-live transcription (env-tunable; restart app after .env change)
+        self.window_size_seconds = _live_transcript_float_env(
+            "SOAPBOXX_LIVE_TRANSCRIPT_WINDOW_SEC", 15.0, minimum=3.0
+        )
+        self.window_step_seconds = _live_transcript_float_env(
+            "SOAPBOXX_LIVE_TRANSCRIPT_STEP_SEC", 10.0, minimum=2.0
+        )
+        if self.window_step_seconds > self.window_size_seconds:
+            self.window_step_seconds = self.window_size_seconds
         self.transcription_interval = self.window_step_seconds
         self.audio_buffer = []  # Buffer for accumulating audio data
         self.min_audio_length = (
