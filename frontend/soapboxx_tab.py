@@ -2800,16 +2800,31 @@ class SoapBoxxTab(QWidget):
         return "auto"
 
     def _try_llm_question_extraction(self, transcript: str) -> bool:
-        """Try selected backend; auto falls back offline -> openai."""
-        mode = self._question_extraction_backend()
-        if mode == "offline":
-            return self._try_offline_question_extraction(transcript)
-        if mode == "openai":
-            return self._try_openai_question_extraction(transcript)
-        # auto
-        if self._try_offline_question_extraction(transcript):
+        """Try selected backend; auto falls back offline -> openai (backend module)."""
+        if (
+            hasattr(self, "_last_processed_transcript")
+            and transcript == self._last_processed_transcript
+        ):
             return True
-        return self._try_openai_question_extraction(transcript)
+        if len(transcript) < 50:
+            return False
+        try:
+            try:
+                from backend.question_extraction import extract_questions_from_transcript
+            except ImportError:
+                from question_extraction import extract_questions_from_transcript  # type: ignore
+
+            mode = self._question_extraction_backend()
+            raw = extract_questions_from_transcript(transcript, backend=mode)
+            if not raw:
+                return False
+            new_questions_found = self._extract_questions_from_llm_text(raw)
+            if new_questions_found:
+                self._last_processed_transcript = transcript
+            return True
+        except Exception as e:
+            print(f"Question extraction failed: {e}")
+            return False
 
     def _extract_questions_from_llm_text(self, text: str) -> bool:
         """Parse newline LLM output and append questions."""
@@ -2825,98 +2840,6 @@ class SoapBoxxTab(QWidget):
                     self._known_questions.add(question)
                     new_questions_found = True
         return new_questions_found
-
-    def _try_openai_question_extraction(self, transcript: str) -> bool:
-        """Attempt to extract questions using OpenAI."""
-        try:
-            if not self.core or not hasattr(self.core, "openai_client"):
-                print("⚠️ OpenAI client not available for question extraction")
-                return False
-
-            # Only process if transcript has changed significantly
-            if (
-                hasattr(self, "_last_processed_transcript")
-                and transcript == self._last_processed_transcript
-            ):
-                return True
-
-            # Check if transcript is long enough to warrant processing
-            if len(transcript) < 50:
-                return False
-
-            print("Using OpenAI for question extraction...")
-
-            # Create a prompt for question extraction
-            prompt = f"""
-            Analyze the following transcript and extract all questions that would be valuable for research or discussion.
-            Focus on:
-            - Direct questions (ending with ?)
-            - Implicit questions or topics that could be phrased as questions
-            - Questions that would benefit from further research
-            
-            Transcript: {transcript}
-            
-            Return only the questions, one per line, without numbering or additional text.
-            """
-
-            # Use OpenAI to extract questions
-            response = self.core.openai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=200,
-                temperature=0.3,
-            )
-
-            new_questions_found = self._extract_questions_from_llm_text(
-                response.choices[0].message.content.strip()
-            )
-
-            if new_questions_found:
-                self._last_processed_transcript = transcript
-
-            return True
-
-        except Exception as e:
-            print(f"OpenAI question extraction failed: {e}")
-            return False
-
-    def _try_offline_question_extraction(self, transcript: str) -> bool:
-        """Attempt to extract questions using local Ollama model."""
-        try:
-            if not (os.getenv("SOAPBOXX_OLLAMA_MODEL") or "").strip():
-                return False
-            if (
-                hasattr(self, "_last_processed_transcript")
-                and transcript == self._last_processed_transcript
-            ):
-                return True
-            if len(transcript) < 50:
-                return False
-            try:
-                from episode_intelligence import _ollama_chat_invoke
-            except ImportError:
-                from backend.episode_intelligence import _ollama_chat_invoke  # type: ignore
-
-            prompt = (
-                "Extract useful guest-interview questions from this transcript.\n"
-                "Return only one question per line, no numbering, no extra text.\n\n"
-                f"TRANSCRIPT:\n{transcript}"
-            )
-            raw = _ollama_chat_invoke(
-                "You extract podcast guest questions. Be concise and grounded in the transcript.",
-                prompt,
-                max_tokens=512,
-                temperature=0.2,
-                stage="soapboxx_tab.question_extract",
-                append_brief_envelope_suffix=False,
-            )
-            new_questions_found = self._extract_questions_from_llm_text(str(raw or "").strip())
-            if new_questions_found:
-                self._last_processed_transcript = transcript
-            return True
-        except Exception as e:
-            print(f"Offline question extraction failed: {e}")
-            return False
 
     def _basic_question_extraction(self, transcript: str):
         """Basic question extraction as fallback when OpenAI is not available."""

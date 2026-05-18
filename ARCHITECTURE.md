@@ -21,7 +21,9 @@ The pack describes logical `/studio`, `/scoop`, `/reverb`, and `/services/*` fol
 | Reverb | [`frontend/reverb_tab.py`](frontend/reverb_tab.py), [`backend/feedback_engine.py`](backend/feedback_engine.py) |
 | Audio service | [`backend/audio_recorder.py`](backend/audio_recorder.py) |
 | Transcription | [`backend/transcriber.py`](backend/transcriber.py) |
-| AI (target facade) | `backend/llm_service.py` (planned); today: `feedback_engine`, `episode_intelligence`, `guest_research`, `soapboxx_v3_workflow`, `blueprint_v1/llm_runner`, `ollama_chat_http` |
+| AI (facade) | [`backend/llm_service.py`](backend/llm_service.py) wraps workflow LLM; also `feedback_engine`, `episode_intelligence`, `guest_research`, `blueprint_v1/llm_runner` |
+| Question extraction | [`backend/question_extraction.py`](backend/question_extraction.py) |
+| Scoop news | [`backend/scoop_news.py`](backend/scoop_news.py) |
 
 Structural `/services/*` directories are a **target**, not the current tree.
 

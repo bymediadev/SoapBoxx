@@ -793,96 +793,17 @@ class ScoopTab(QWidget):
         worker.start()
 
     def search_news(self, query: str):
-        """Search for news articles"""
+        """Search for news articles (backend scoop_news)."""
+        self.results_text.setText(
+            f"📰 Searching news for: {query}...\n\nThis may take a moment..."
+        )
         try:
-            import requests
+            try:
+                from backend.scoop_news import fetch_news_for_query
+            except ImportError:
+                from scoop_news import fetch_news_for_query  # type: ignore
 
-            self.results_text.setText(
-                f"📰 Searching news for: {query}...\n\nThis may take a moment..."
-            )
-
-            news_api_key = os.environ.get("NEWS_API_KEY")
-            if not news_api_key or news_api_key == "Not set":
-                self.results_text.setText(
-                    "❌ News API key not configured. Please add NEWS_API_KEY to your .env file."
-                )
-                return
-
-            # News API endpoint
-            url = "https://newsapi.org/v2/everything"
-
-            # Parameters for news search
-            params = {
-                "apiKey": news_api_key,
-                "q": query,
-                "pageSize": 10,
-                "language": "en",
-                "sortBy": "relevancy",
-            }
-
-            # Make the request
-            response = requests.get(url, params=params, timeout=10)
-
-            if response.status_code == 200:
-                data = response.json()
-                articles = data.get("articles", [])
-
-                if articles:
-                    results = [f"📰 News Search Results\n"]
-                    results.append(
-                        f"📅 Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                    )
-                    results.append(f"🔍 Query: {query}")
-                    results.append(f"📊 Found {len(articles)} articles")
-                    results.append("─" * 50 + "\n")
-
-                    for i, article in enumerate(articles[:5], 1):
-                        title = article.get("title", "No title")
-                        source = article.get("source", {}).get("name", "Unknown source")
-                        description = article.get(
-                            "description", "No description available"
-                        )
-                        url = article.get("url", "#")
-                        published_at = article.get("publishedAt", "Unknown date")
-
-                        # Format the date
-                        try:
-                            date_obj = datetime.fromisoformat(
-                                published_at.replace("Z", "+00:00")
-                            )
-                            formatted_date = date_obj.strftime("%Y-%m-%d %H:%M")
-                        except:
-                            formatted_date = published_at
-
-                        results.append(f"{i}. {title}")
-                        results.append(f"   📰 Source: {source}")
-                        results.append(f"   📅 Published: {formatted_date}")
-                        results.append(
-                            f"   📝 {description[:150]}{'...' if len(description) > 150 else ''}"
-                        )
-                        results.append(f"   🔗 {url}")
-                        results.append("")
-
-                    results.append("✨ Powered by News API!")
-
-                    self.results_text.setText("\n".join(results))
-                else:
-                    self.results_text.setText(f"📰 No news articles found for: {query}")
-            else:
-                error_msg = f"❌ News API Error: {response.status_code}"
-                if response.status_code == 401:
-                    error_msg += " - Invalid API key"
-                elif response.status_code == 429:
-                    error_msg += " - Rate limit exceeded"
-                else:
-                    try:
-                        error_data = response.json()
-                        error_msg += f" - {error_data.get('message', 'Unknown error')}"
-                    except:
-                        error_msg += f" - {response.text[:100]}"
-
-                self.results_text.setText(error_msg)
-
+            self.results_text.setText(fetch_news_for_query(query))
         except Exception as e:
             self.results_text.setText(f"❌ Error searching news: {str(e)}")
             print(f"News search error: {e}")
@@ -1215,103 +1136,17 @@ class ScoopTab(QWidget):
         }
 
     def get_latest_news(self):
-        """Get latest news using News API"""
-        news_api_key = os.environ.get("NEWS_API_KEY")
-        if not news_api_key or news_api_key == "Not set":
-            self.results_text.setText(
-                "❌ News API key not configured. Please add NEWS_API_KEY to your .env file."
-            )
-            return
-
+        """Get latest news using News API (backend scoop_news)."""
+        self.results_text.setText(
+            "📰 Fetching latest news...\n\nThis may take a moment..."
+        )
         try:
-            import requests
+            try:
+                from backend.scoop_news import fetch_latest_headlines
+            except ImportError:
+                from scoop_news import fetch_latest_headlines  # type: ignore
 
-            self.results_text.setText(
-                "📰 Fetching latest news...\n\nThis may take a moment..."
-            )
-
-            # News API endpoint
-            url = "https://newsapi.org/v2/top-headlines"
-
-            # Parameters for podcast and technology related news
-            params = {
-                "apiKey": news_api_key,
-                "country": "us",
-                "category": "technology",
-                "pageSize": 10,
-                "language": "en",
-            }
-
-            # Make the request
-            response = requests.get(url, params=params, timeout=10)
-
-            if response.status_code == 200:
-                data = response.json()
-                articles = data.get("articles", [])
-
-                if articles:
-                    results = ["📰 Latest News (News API)\n"]
-                    results.append(
-                        f"📅 Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    )
-                    results.append(f"📊 Total Articles: {len(articles)}\n")
-                    results.append("─" * 50 + "\n")
-
-                    for i, article in enumerate(articles[:5], 1):
-                        title = article.get("title", "No title")
-                        source = article.get("source", {}).get("name", "Unknown source")
-                        description = article.get(
-                            "description", "No description available"
-                        )
-                        url = article.get("url", "#")
-                        published_at = article.get("publishedAt", "Unknown date")
-
-                        # Format the date
-                        try:
-                            date_obj = datetime.fromisoformat(
-                                published_at.replace("Z", "+00:00")
-                            )
-                            formatted_date = date_obj.strftime("%Y-%m-%d %H:%M")
-                        except:
-                            formatted_date = published_at
-
-                        results.append(f"{i}. {title}")
-                        results.append(f"   📰 Source: {source}")
-                        results.append(f"   📅 Published: {formatted_date}")
-                        results.append(
-                            f"   📝 {description[:150]}{'...' if len(description) > 150 else ''}"
-                        )
-                        results.append(f"   🔗 {url}")
-                        results.append("")
-
-                    results.append("✨ Powered by News API")
-
-                    self.results_text.setText("\n".join(results))
-                else:
-                    self.results_text.setText(
-                        "📰 No news articles found. Try again later."
-                    )
-            else:
-                error_msg = f"❌ News API Error: {response.status_code}"
-                if response.status_code == 401:
-                    error_msg += " - Invalid API key"
-                elif response.status_code == 429:
-                    error_msg += " - Rate limit exceeded"
-                else:
-                    try:
-                        error_data = response.json()
-                        error_msg += f" - {error_data.get('message', 'Unknown error')}"
-                    except:
-                        error_msg += f" - {response.text[:100]}"
-
-                self.results_text.setText(error_msg)
-
-        except requests.exceptions.Timeout:
-            self.results_text.setText(
-                "❌ News API request timed out. Please try again."
-            )
-        except requests.exceptions.RequestException as e:
-            self.results_text.setText(f"❌ Error fetching news: {str(e)}")
+            self.results_text.setText(fetch_latest_headlines())
         except Exception as e:
             self.results_text.setText(f"❌ Unexpected error: {str(e)}")
 

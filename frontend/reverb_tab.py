@@ -108,7 +108,7 @@ def _reverb_clip_corpus(text: str, limit: int = 14000) -> str:
 def _reverb_summarize_search_hits(heading: str, corpus: str) -> Optional[str]:
     """
     Turn API search hits (YouTube / Podchaser) into producer-facing bullets using the same
-    stack as workflow LLM calls: ``call_llm`` → Ollama when ``SOAPBOXX_OLLAMA_MODEL`` is set
+    stack as workflow LLM calls: ``llm_service.call_llm`` → Ollama when ``SOAPBOXX_OLLAMA_MODEL`` is set
     (or Groq when ``SOAPBOXX_WORKFLOW_LLM_BACKEND=groq`` and a Groq key is present).
     """
     if not _reverb_ollama_model_configured():
@@ -124,7 +124,10 @@ def _reverb_summarize_search_hits(heading: str, corpus: str) -> Optional[str]:
     if not corpus:
         return None
     try:
-        from soapboxx_v3_workflow import call_llm
+        try:
+            from backend.llm_service import call_llm
+        except ImportError:
+            from llm_service import call_llm  # type: ignore
     except ImportError:
         return None
     prompt = (

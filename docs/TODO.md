@@ -6,10 +6,10 @@
 
 ## Active engineering priorities
 
-- [ ] Phase 3: Move OpenAI question extraction out of `frontend/soapboxx_tab.py`
-- [ ] Phase 3: Move News API calls out of `frontend/scoop_tab.py`
-- [ ] Phase 3: Route Reverb LLM usage through backend facade / FeedbackEngine
-- [ ] Phase 4: Add `backend/llm_service.py` and migrate AI callers
+- [x] Phase 3: Move OpenAI question extraction out of `frontend/soapboxx_tab.py` → `backend/question_extraction.py`
+- [x] Phase 3: Move News API calls out of `frontend/scoop_tab.py` → `backend/scoop_news.py`
+- [x] Phase 3: Route Reverb search-summary LLM through `backend/llm_service.py`
+- [ ] Phase 4: Migrate remaining AI callers to `llm_service` (feedback_engine, guest_research, episode_intelligence, v3 internals)
 - [ ] Phase 5: Unified episode/session object across tabs
 - [ ] Phase 6: v1 freeze smoke test + production tag
 
