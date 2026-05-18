@@ -801,6 +801,10 @@ class SoapBoxxTab(QWidget):
         self._known_questions = set()
         # Defer timer creation until widget is shown
         self._questions_timer = None
+        self._last_question_extract_len = 0
+        self._question_extract_thread = None
+        self._question_extract_pending = False
+        self._question_extract_pending_force = False
 
         # Defer UI setup until widget is shown
         self._ui_initialized = False
@@ -944,6 +948,7 @@ class SoapBoxxTab(QWidget):
                     self._scan_transcript_for_questions
                 )
                 print("✅ SoapBoxxTab: Timer initialized")
+            self._ensure_questions_timer_started()
 
             # Mark backend as initialized
             self._backend_initialized = True
@@ -1650,7 +1655,9 @@ class SoapBoxxTab(QWidget):
             # Buttons row
             q_btn_row = QHBoxLayout()
             # Auto extract toggle
-            self.auto_extract_checkbox = QCheckBox("Auto-extract from transcript")
+            self.auto_extract_checkbox = QCheckBox(
+                "Suggest questions while recording (from transcript)"
+            )
             self.auto_extract_checkbox.setChecked(True)
             self.auto_extract_checkbox.toggled.connect(self._toggle_auto_extract)
             q_btn_row.addWidget(self.auto_extract_checkbox)
@@ -1739,9 +1746,7 @@ class SoapBoxxTab(QWidget):
             self.setLayout(layout)
             # Restore persisted service/backend defaults.
             self._load_soapbox_preferences()
-            # Start background extraction if timer is initialized
-            if self._questions_timer is not None:
-                self._questions_timer.start()
+            self._ensure_questions_timer_started()
 
             # Initialize OBS connection
             self.obs_connected = False
@@ -2535,7 +2540,9 @@ class SoapBoxxTab(QWidget):
             # Clear previous results
             self.transcript_text.clear()
             self._live_recording_transcript_buffer = ""
+            self._last_question_extract_len = 0
             self._accept_live_transcription_results = True
+            self._ensure_questions_timer_started()
 
             # Get selected service and ensure core is using it
             service = self.service_combo.currentText()
@@ -2632,6 +2639,7 @@ class SoapBoxxTab(QWidget):
             self._live_recording_transcript_buffer = t
         self.update_transcript(self._live_recording_transcript_buffer)
         self.update_status("Live transcription updated")
+        self._schedule_auto_question_extract()
 
     @pyqtSlot(str)
     def _on_recording_transcription_failed(self, error: str):
@@ -2715,6 +2723,9 @@ class SoapBoxxTab(QWidget):
                     and self.current_recording_data
                 ):
                     self.transcribe_recording_btn.setEnabled(True)
+
+                # Final pass: frame any remaining follow-ups from the full transcript.
+                self._schedule_auto_question_extract(force=True)
 
                 # Send transcript to Reverb for AI feedback (Ollama/OpenAI per FeedbackEngine).
                 ui_t = (self.transcript_text.toPlainText() or "").strip()
@@ -2806,21 +2817,120 @@ class SoapBoxxTab(QWidget):
             self, "Guest Questions", f"Added {added} question(s) from transcript."
         )
 
-    def _scan_transcript_for_questions(self):
-        """Periodic scan to auto-extract questions via selected backend, fallback to basic extraction."""
-        if not self.auto_extract_checkbox.isChecked():
+    def _ensure_questions_timer_started(self):
+        """Start periodic scan when auto-extract is on and the timer exists."""
+        if self._questions_timer is None:
             return
+        try:
+            if self.auto_extract_checkbox.isChecked():
+                if not self._questions_timer.isActive():
+                    self._questions_timer.start()
+        except Exception:
+            pass
 
+    def _auto_extract_enabled(self) -> bool:
+        try:
+            return bool(self.auto_extract_checkbox.isChecked())
+        except Exception:
+            return True
+
+    def _transcript_tail_for_questions(self, transcript: str) -> str:
+        """Recent transcript text sent to the LLM (keeps prompts bounded)."""
+        t = (transcript or "").strip()
+        if not t:
+            return ""
+        max_chars = int(os.getenv("SOAPBOXX_QUESTION_CONTEXT_CHARS", "3500"))
+        if len(t) <= max_chars:
+            return t
+        return t[-max_chars:]
+
+    def _should_run_auto_question_extract(
+        self, transcript: str, *, force: bool = False
+    ) -> bool:
+        if not self._auto_extract_enabled():
+            return False
+        t = (transcript or "").strip()
+        min_chars = int(os.getenv("SOAPBOXX_QUESTION_MIN_CHARS", "30"))
+        if len(t) < min_chars:
+            return False
+        if force:
+            return True
+        min_growth = int(os.getenv("SOAPBOXX_QUESTION_MIN_GROWTH_CHARS", "40"))
+        last_len = getattr(self, "_last_question_extract_len", 0)
+        return len(t) - last_len >= min_growth
+
+    def _schedule_auto_question_extract(self, *, force: bool = False):
+        """Queue LLM question framing when the transcript grows (live or timer)."""
+        if not self._auto_extract_enabled():
+            return
         transcript = (self.transcript_text.toPlainText() or "").strip()
-        if not transcript:
+        if not self._should_run_auto_question_extract(transcript, force=force):
             return
-
-        # Try LLM-powered extraction first (offline/openai/auto).
-        if self._try_llm_question_extraction(transcript):
+        thread = getattr(self, "_question_extract_thread", None)
+        if thread is not None and thread.isRunning():
+            self._question_extract_pending = True
+            self._question_extract_pending_force = bool(
+                force or self._question_extract_pending_force
+            )
             return
+        tail = self._transcript_tail_for_questions(transcript)
+        if not tail:
+            return
+        self._start_question_extract_thread(tail, force=force)
 
-        # Fallback to basic extraction
-        self._basic_question_extraction(transcript)
+    def _start_question_extract_thread(self, transcript: str, *, force: bool = False):
+        self._question_extract_force_run = force
+        mode = self._question_extraction_backend()
+        thread = QuestionExtractThread(
+            transcript,
+            backend=mode,
+            known=list(self._known_questions),
+        )
+        self._question_extract_thread = thread
+        thread.finished.connect(self._on_question_extract_finished)
+        thread.failed.connect(self._on_question_extract_failed)
+        thread.start()
+        try:
+            self.update_status("Suggesting questions from transcript…")
+        except Exception:
+            pass
+
+    def _mark_question_extract_attempt(self):
+        transcript = (self.transcript_text.toPlainText() or "").strip()
+        self._last_question_extract_len = len(transcript)
+
+    def _on_question_extract_finished(self, raw: str, _snapshot: str):
+        try:
+            added = False
+            if raw and raw.strip():
+                added = self._extract_questions_from_llm_text(raw)
+            if not added and getattr(self, "_question_extract_force_run", False):
+                transcript = (self.transcript_text.toPlainText() or "").strip()
+                if transcript:
+                    self._basic_question_extraction(transcript)
+            if added:
+                try:
+                    self.update_status("New guest questions suggested")
+                except Exception:
+                    pass
+        finally:
+            self._mark_question_extract_attempt()
+            if self._question_extract_pending:
+                pending_force = self._question_extract_pending_force
+                self._question_extract_pending = False
+                self._question_extract_pending_force = False
+                QTimer.singleShot(
+                    300,
+                    lambda: self._schedule_auto_question_extract(force=pending_force),
+                )
+
+    def _on_question_extract_failed(self, error: str):
+        print(f"Question extraction failed: {error}")
+        self._mark_question_extract_attempt()
+
+    def _scan_transcript_for_questions(self):
+        """Periodic backup scan while auto-extract is enabled."""
+        self._schedule_auto_question_extract()
 
     def _question_extraction_backend(self) -> str:
         try:
@@ -2831,14 +2941,12 @@ class SoapBoxxTab(QWidget):
             pass
         return "auto"
 
-    def _try_llm_question_extraction(self, transcript: str) -> bool:
+    def _try_llm_question_extraction(self, transcript: str, *, force: bool = False) -> bool:
         """Try selected backend; auto falls back offline -> openai (backend module)."""
-        if (
-            hasattr(self, "_last_processed_transcript")
-            and transcript == self._last_processed_transcript
-        ):
-            return True
-        if len(transcript) < 50:
+        min_len = 20 if force else 50
+        if len(transcript) < min_len:
+            return False
+        if not force and not self._should_run_auto_question_extract(transcript):
             return False
         try:
             try:
@@ -2847,16 +2955,17 @@ class SoapBoxxTab(QWidget):
                 from question_extraction import extract_questions_from_transcript  # type: ignore
 
             mode = self._question_extraction_backend()
+            tail = self._transcript_tail_for_questions(transcript)
             raw = extract_questions_from_transcript(
-                transcript,
+                tail or transcript,
                 backend=mode,
                 known=list(self._known_questions),
             )
             if not raw:
                 return False
             new_questions_found = self._extract_questions_from_llm_text(raw)
-            if new_questions_found:
-                self._last_processed_transcript = transcript
+            if new_questions_found or force:
+                self._mark_question_extract_attempt()
             return True
         except Exception as e:
             print(f"Question extraction failed: {e}")
@@ -2949,7 +3058,7 @@ class SoapBoxxTab(QWidget):
     def _process_manual_extraction(self, transcript: str):
         """Process manual extraction in background."""
         try:
-            if self._try_llm_question_extraction(transcript):
+            if self._try_llm_question_extraction(transcript, force=True):
                 self.status_label.setText("Questions extracted successfully!")
                 self.status_label.setStyleSheet(
                     "color: #28A745; font-weight: bold; padding: 5px 10px; background: #D4EDDA; border-radius: 4px;"
@@ -3114,6 +3223,7 @@ class SoapBoxxTab(QWidget):
         if self._questions_timer is not None:
             if checked:
                 self._questions_timer.start()
+                self._schedule_auto_question_extract()
             else:
                 self._questions_timer.stop()
 
@@ -3541,6 +3651,35 @@ def _transcription_result_is_error(result: str) -> bool:
     if "transcription failed" in r.lower():
         return True
     return False
+
+
+class QuestionExtractThread(QThread):
+    """Background host-ready question framing from transcript text."""
+
+    finished = pyqtSignal(str, str)
+    failed = pyqtSignal(str)
+
+    def __init__(self, transcript: str, *, backend: str, known: list):
+        super().__init__()
+        self.transcript = transcript
+        self.backend = backend
+        self.known = list(known)
+
+    def run(self):
+        try:
+            try:
+                from backend.question_extraction import extract_questions_from_transcript
+            except ImportError:
+                from question_extraction import extract_questions_from_transcript  # type: ignore
+
+            raw = extract_questions_from_transcript(
+                self.transcript,
+                backend=self.backend,
+                known=self.known,
+            )
+            self.finished.emit(raw or "", self.transcript)
+        except Exception as e:
+            self.failed.emit(str(e))
 
 
 class TranscriptionThread(QThread):
