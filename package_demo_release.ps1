@@ -25,7 +25,7 @@ $exeName = "SoapBoxxProductionStudioDemo"
 $repoRoot = (Get-Location).Path
 $backendData = "$repoRoot\backend;backend"
 $frontendData = "$repoRoot\frontend;frontend"
-$entryScript = "$repoRoot\frontend\main_window.py"
+$entryScript = "$repoRoot\demo_entry.py"
 
 function Remove-PathForce($path) {
     if (-not (Test-Path $path)) { return }
@@ -49,8 +49,15 @@ New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
 $runtimeHookPath = Join-Path $buildRoot "demo_runtime_env.py"
 @"
 import os
+import sys
 
 os.environ.setdefault("SOAPBOXX_BUCKET", "demo")
+
+try:
+    from backend.runtime_paths import configure_frozen_runtime
+    configure_frozen_runtime()
+except Exception as exc:
+    print(f"SoapBoxx demo runtime hook: {exc}", file=sys.stderr)
 "@ | Out-File -FilePath $runtimeHookPath -Encoding utf8
 
 Write-Host "Installing packaging dependency (PyInstaller)..."
@@ -93,6 +100,12 @@ Write-Host "Preparing release folder..."
 Copy-Item $builtAppDir -Destination $releaseDir -Recurse -Force
 Copy-Item "README_DEMO.md" -Destination (Join-Path $releaseDir "README_DEMO.md") -Force
 Copy-Item "DEMO_INSTRUCTIONS.md" -Destination (Join-Path $releaseDir "DEMO_INSTRUCTIONS.md") -Force
+if (Test-Path "soapboxx_config.demo.json") {
+    Copy-Item "soapboxx_config.demo.json" -Destination (Join-Path $releaseDir "soapboxx_config.demo.json") -Force
+}
+if (Test-Path ".env.example") {
+    Copy-Item ".env.example" -Destination (Join-Path $releaseDir ".env.example") -Force
+}
 
 $extractFirstPath = Join-Path $releaseDir "00_EXTRACT_THIS_ZIP_FIRST.txt"
 @"
@@ -128,6 +141,7 @@ if not exist "%EXE%" (
     exit /b 1
 )
 set "SOAPBOXX_BUCKET=demo"
+set "SOAPBOXX_CONFIG_FILE=%~dp0soapboxx_config.demo.json"
 start "" "%EXE%"
 endlocal
 "@ | Out-File -FilePath $launcherBat -Encoding ascii
@@ -144,6 +158,7 @@ if not exist "%EXE%" (
     exit /b 1
 )
 set "SOAPBOXX_BUCKET=demo"
+set "SOAPBOXX_CONFIG_FILE=%~dp0..\soapboxx_config.demo.json"
 start "" "%EXE%"
 endlocal
 "@ | Out-File -FilePath $innerLauncherBat -Encoding ascii
@@ -159,6 +174,7 @@ if (-not (Test-Path \$exe)) {
     exit 1
 }
 \$env:SOAPBOXX_BUCKET = "demo"
+\$env:SOAPBOXX_CONFIG_FILE = Join-Path \$PSScriptRoot "soapboxx_config.demo.json"
 Start-Process -FilePath \$exe
 "@ | Out-File -FilePath $launcherPs1 -Encoding utf8
 

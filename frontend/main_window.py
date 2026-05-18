@@ -38,6 +38,8 @@ except ImportError:
 
 load_user_api_secrets(override=True)
 
+_FRONTEND_IMPORT_ERROR = None  # type: Optional[str]
+
 # Use package-relative imports to support `python -m frontend.main_window`
 try:
     from .batch_processor import BatchProcessorDialog
@@ -47,40 +49,61 @@ try:
     from .scoop_tab import ScoopTab
     from .soapboxx_tab import SoapBoxxTab
     from .theme_manager import ThemeManager
-except ImportError:
-    # Fallback for direct script execution
+except ImportError as _rel_err:
+    _FRONTEND_IMPORT_ERROR = str(_rel_err)
     try:
-        from batch_processor import BatchProcessorDialog
-        from export_manager import ExportManager
-        from keyboard_shortcuts import ShortcutHandler
-        from reverb_tab import ReverbTab
-        from scoop_tab import ScoopTab
-        from soapboxx_tab import SoapBoxxTab
-        from theme_manager import ThemeManager
-    except ImportError as e:
-        print(f"Warning: Some frontend modules not available: {e}")
+        from frontend.batch_processor import BatchProcessorDialog
+        from frontend.export_manager import ExportManager
+        from frontend.keyboard_shortcuts import ShortcutHandler
+        from frontend.reverb_tab import ReverbTab
+        from frontend.scoop_tab import ScoopTab
+        from frontend.soapboxx_tab import SoapBoxxTab
+        from frontend.theme_manager import ThemeManager
+    except ImportError:
+        try:
+            from batch_processor import BatchProcessorDialog
+            from export_manager import ExportManager
+            from keyboard_shortcuts import ShortcutHandler
+            from reverb_tab import ReverbTab
+            from scoop_tab import ScoopTab
+            from soapboxx_tab import SoapBoxxTab
+            from theme_manager import ThemeManager
+        except ImportError as e:
+            _FRONTEND_IMPORT_ERROR = str(e)
+            print(f"Warning: Some frontend modules not available: {e}")
+            traceback.print_exc()
 
-        # Create placeholder classes for missing modules
-        class BatchProcessorDialog:
-            pass
+            class BatchProcessorDialog:  # type: ignore[no-redef]
+                def __init__(self, *args, **kwargs):
+                    pass
 
-        class ExportManager:
-            pass
+            class ExportManager:  # type: ignore[no-redef]
+                def __init__(self, *args, **kwargs):
+                    pass
 
-        class ShortcutHandler:
-            pass
+            class ShortcutHandler:  # type: ignore[no-redef]
+                def __init__(self, *args, **kwargs):
+                    pass
 
-        class ReverbTab:
-            pass
+            class ReverbTab:  # type: ignore[no-redef]
+                def __init__(self, *args, **kwargs):
+                    pass
 
-        class ScoopTab:
-            pass
+            class ScoopTab:  # type: ignore[no-redef]
+                def __init__(self, *args, **kwargs):
+                    pass
 
-        class SoapBoxxTab:
-            pass
+            class SoapBoxxTab:  # type: ignore[no-redef]
+                def __init__(self, *args, **kwargs):
+                    pass
 
-        class ThemeManager:
-            pass
+            class ThemeManager:  # type: ignore[no-redef]
+                def __init__(self, *args, **kwargs):
+                    pass
+
+
+def _soapboxx_tab_is_real() -> bool:
+    return callable(getattr(SoapBoxxTab, "setup_ui", None))
 
 
 from PyQt6.QtCore import QDate, Qt, QTime, QTimer
@@ -700,6 +723,16 @@ class MainWindow(QMainWindow):
         """Create SoapBoxx tab with error handling"""
         try:
             print("MainWindow: Creating SoapBoxx tab...")
+            if not _soapboxx_tab_is_real():
+                detail = _FRONTEND_IMPORT_ERROR or "SoapBoxx tab module did not load"
+                av_hint = (
+                    " If Norton or another antivirus blocked files in the app folder, "
+                    "add an exclusion for the extracted demo folder and reinstall."
+                )
+                return self._create_placeholder_tab(
+                    "SoapBoxx",
+                    f"SoapBoxx studio failed to load.\n\n{detail}{av_hint}",
+                )
             tab = SoapBoxxTab(
                 open_settings_callback=self._show_settings,
                 session_feedback_callback=self._deliver_session_feedback_to_reverb,
@@ -1834,6 +1867,14 @@ class MainWindow(QMainWindow):
 def main():
     """Main application entry point with enhanced error handling"""
     try:
+        if getattr(sys, "frozen", False):
+            try:
+                from backend.runtime_paths import configure_frozen_runtime
+
+                configure_frozen_runtime()
+            except Exception as exc:
+                print(f"Frozen runtime setup warning: {exc}")
+
         print("Starting SoapBoxx application...")
 
         print("Creating QApplication...")

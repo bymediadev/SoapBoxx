@@ -19,6 +19,20 @@
 
 Alternative: open the `SoapBoxxProductionStudioDemo` subfolder and run `SoapBoxx Production Studio Demo.bat`, or run `SoapBoxxProductionStudioDemo.exe` directly.
 
+## Norton / antivirus (important)
+
+PyInstaller demos are often flagged as **unknown publisher**. Norton may **block or quarantine** files under `SoapBoxxProductionStudioDemo\_internal\`, which breaks the SoapBoxx tab (you may see errors like the tab “doesn’t take arguments” or a blank studio).
+
+**Fix:**
+
+1. Extract the full zip to a folder (e.g. `C:\SoapBoxx-Demo\`).
+2. In Norton: **Settings → Antivirus → Scans and Risks → Exclusions** (wording may vary).
+3. Add an **exclusion** for that entire extracted folder.
+4. Restore any quarantined items named `SoapBoxxProductionStudioDemo` or files under `_internal\`.
+5. Launch again using the `.bat` in the extracted folder (not from inside WinRAR).
+
+Optional: copy `.env.example` to `.env` in the same folder as the launcher and add API keys for OpenAI STT / Ollama (Settings tab).
+
 ## Quick Smoke Test Checklist
 
 - App launches without installing Python or pip packages.
