@@ -10,7 +10,8 @@ builder = "RAILPACK"
 
 [deploy]
 preDeployCommand = "sh scripts/migrate_db.sh"
-startCommand = "sh scripts/start_api.sh"
+# Inline uvicorn — avoids sh script / CRLF issues; must bind Railway $PORT
+startCommand = "python -m uvicorn main:app --host 0.0.0.0 --port $PORT"
 healthcheckPath = "/health/live"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
