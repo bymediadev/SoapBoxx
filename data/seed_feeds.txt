@@ -1,0 +1,11 @@
+# SoapBoxx seed RSS feeds — one URL per line (# = comment)
+# Discover more: https://podcastindex.org
+
+# NPR News Now (short daily news — reliable public feed)
+https://feeds.npr.org/510289/podcast.xml
+
+# The Daily (NYT)
+https://rss.art19.com/the-daily
+
+# Syntax (tech)
+https://feeds.megaphone.fm/syntax

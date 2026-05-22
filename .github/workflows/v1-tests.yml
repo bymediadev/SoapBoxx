@@ -1,0 +1,77 @@
+name: V1 tests
+
+on:
+  push:
+    branches: [production, demo]
+    paths:
+      - "backend/**"
+      - "alembic/**"
+      - "main.py"
+      - "tests/test_day*.py"
+      - "tests/test_system_health.py"
+      - "tests/test_system_state.py"
+      - "tests/test_lovable_library_api.py"
+      - "tests/conftest.py"
+      - "tests/utils/**"
+      - "tests/fixtures/**"
+      - "requirements-v1-api.txt"
+  pull_request:
+    branches: [production]
+
+jobs:
+  v1-suite:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: soapboxx
+          POSTGRES_PASSWORD: soapboxx
+          POSTGRES_DB: soapboxx_v1
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U soapboxx -d soapboxx_v1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          pip install -r requirements-v1-api.txt
+          pip install pytest
+      - name: V1 Days 1–7 tests
+        env:
+          DATABASE_URL: postgresql+psycopg2://soapboxx:soapboxx@localhost:5432/soapboxx_v1
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          pytest tests/test_day1_foundation.py \
+            tests/test_day2_core_entities.py \
+            tests/test_day3_rss_ingestion.py \
+            tests/test_day4_transcription.py \
+            tests/test_day5_feature_extraction.py \
+            tests/test_day6_taxonomy.py \
+            tests/test_day7_translation.py \
+            tests/test_system_state.py \
+            tests/test_lovable_library_api.py \
+            -q
+      - name: E2E pipeline
+        env:
+          DATABASE_URL: postgresql+psycopg2://soapboxx:soapboxx@localhost:5432/soapboxx_v1
+          REDIS_URL: redis://localhost:6379/0
+          SOAPBOXX_V1_E2E: "1"
+        run: pytest tests/test_system_health.py -q

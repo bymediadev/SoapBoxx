@@ -1,0 +1,8 @@
+Host: Welcome to the SoapBoxx test episode. Today we explore how structure shows up in conversation.
+Guest: Thanks for having me. The key is measuring before judging.
+Host: What is the first metric you would track?
+Guest: Hook length and how fast you get to the guest voice.
+Host: And question density?
+Guest: Count questions, not opinions. That keeps the system honest.
+Host: Any call to action at the end?
+Guest: Subscribe if you want more episodes like this one.

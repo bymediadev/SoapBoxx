@@ -1,0 +1,7 @@
+{
+  "podcast_name": "SoapBoxx Test Show",
+  "rss_url": "https://example.com/feed.xml",
+  "episode_title": "Episode 1 — Fixture",
+  "audio_url": "https://example.com/ep1.mp3",
+  "guid": "soapboxx-fixture-ep1"
+}

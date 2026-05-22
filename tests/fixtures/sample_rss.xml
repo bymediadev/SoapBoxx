@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>SoapBoxx Test Show</title>
+    <link>https://example.com/podcast</link>
+    <description>Fixture feed for Day 3 RSS tests</description>
+    <item>
+      <title>Episode 1 — Fixture</title>
+      <link>https://example.com/ep1</link>
+      <description>First fixture episode description.</description>
+      <guid isPermaLink="false">soapboxx-fixture-ep1</guid>
+      <pubDate>Mon, 01 Jan 2024 12:00:00 GMT</pubDate>
+      <enclosure url="https://example.com/ep1.mp3" length="12345" type="audio/mpeg"/>
+    </item>
+    <item>
+      <title>Episode 2 — Fixture</title>
+      <link>https://example.com/ep2</link>
+      <description>Second fixture episode description.</description>
+      <guid isPermaLink="false">soapboxx-fixture-ep2</guid>
+      <pubDate>Mon, 08 Jan 2024 12:00:00 GMT</pubDate>
+      <enclosure url="https://example.com/ep2.mp3" length="23456" type="audio/mpeg"/>
+    </item>
+  </channel>
+</rss>
