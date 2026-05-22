@@ -19,6 +19,18 @@ Search for these lines **in order**:
 
 Copy the **last 30 lines** if still stuck.
 
+## Build log: `sh scripts/railway_start.sh` / No such file
+
+Railpack **auto-added** `railway_start.sh` to the **build** step (even after the file was deleted). That fails the build or leaves an old image running without `/ui/`.
+
+| Fix | Action |
+|-----|--------|
+| Repo | `railpack.json` sets `"steps": { "build": { "commands": [] } }` (no build script) |
+| Dashboard | **Build command** must be **empty** — remove `sh scripts/railway_start.sh` if set |
+| Redeploy | **Clear build cache** so the plan regenerates |
+
+Deploy should show **no** `▸ build $ sh scripts/railway_start.sh` line.
+
 ## Checklist (do in order)
 
 ### 1. Variables on **API** service (not only Postgres)
