@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+import os
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from backend.api.config import get_settings
 from backend.api.routes import (
@@ -17,6 +22,28 @@ from backend.api.routes import (
     system,
     taxonomy,
 )
+
+logger = logging.getLogger(__name__)
+
+
+def _find_ui_directory() -> Path | None:
+    """Locate static/v1-library (Railway cwd is usually repo root, not backend/)."""
+    roots: list[Path] = []
+    for raw in (
+        os.environ.get("SOAPBOXX_ROOT", "").strip(),
+        str(Path.cwd()),
+        str(Path(__file__).resolve().parents[2]),
+    ):
+        if not raw:
+            continue
+        root = Path(raw).resolve()
+        if root not in roots:
+            roots.append(root)
+    for root in roots:
+        ui = root / "static" / "v1-library"
+        if ui.is_dir() and (ui / "index.html").is_file():
+            return ui
+    return None
 
 
 def create_app() -> FastAPI:
@@ -52,7 +79,24 @@ def create_app() -> FastAPI:
             "service": "SoapBoxx V1 API",
             "docs": "/docs",
             "health": "/health",
+            "ui": "/ui/",
         }
+
+    ui_dir = _find_ui_directory()
+    if ui_dir is not None:
+        index_html = ui_dir / "index.html"
+
+        @app.get("/ui", include_in_schema=False)
+        @app.get("/ui/", include_in_schema=False)
+        def soapboxx_ui() -> FileResponse:
+            return FileResponse(index_html, media_type="text/html")
+
+        logger.info("Serving SoapBoxx UI from %s", ui_dir)
+    else:
+        logger.warning(
+            "SoapBoxx UI not found (no static/v1-library/index.html). cwd=%s",
+            Path.cwd(),
+        )
 
     return app
 
