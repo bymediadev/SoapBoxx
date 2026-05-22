@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 
 from backend.api.config import get_settings
+from backend.api.routes.ui import _UI_INDEX
 from backend.api.routes import (
     episodes,
     health,
@@ -21,29 +20,10 @@ from backend.api.routes import (
     podcasts,
     system,
     taxonomy,
+    ui,
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _find_ui_directory() -> Path | None:
-    """Locate v1-library UI (bundled under backend/static for Railway root=backend)."""
-    candidates = [
-        Path(__file__).resolve().parents[1] / "static" / "v1-library",
-        Path(__file__).resolve().parents[2] / "static" / "v1-library",
-    ]
-    for raw in (os.environ.get("SOAPBOXX_ROOT", "").strip(), str(Path.cwd())):
-        if raw:
-            candidates.append(Path(raw).resolve() / "static" / "v1-library")
-    seen: set[Path] = set()
-    for ui in candidates:
-        ui = ui.resolve()
-        if ui in seen:
-            continue
-        seen.add(ui)
-        if ui.is_dir() and (ui / "index.html").is_file():
-            return ui
-    return None
 
 
 def create_app() -> FastAPI:
@@ -72,6 +52,14 @@ def create_app() -> FastAPI:
     app.include_router(system.router)
     app.include_router(pipeline.router)
     app.include_router(insights.router)
+    app.include_router(ui.router)
+
+    @app.on_event("startup")
+    def _log_ui_bundle() -> None:
+        if _UI_INDEX.is_file():
+            logger.info("UI index ready at %s", _UI_INDEX)
+        else:
+            logger.error("UI index MISSING at %s (cwd=%s)", _UI_INDEX, Path.cwd())
 
     @app.get("/")
     def root() -> dict:
@@ -81,22 +69,6 @@ def create_app() -> FastAPI:
             "health": "/health",
             "ui": "/ui/",
         }
-
-    ui_dir = _find_ui_directory()
-    if ui_dir is not None:
-        index_html = ui_dir / "index.html"
-
-        @app.get("/ui", include_in_schema=False)
-        @app.get("/ui/", include_in_schema=False)
-        def soapboxx_ui() -> FileResponse:
-            return FileResponse(index_html, media_type="text/html")
-
-        logger.info("Serving SoapBoxx UI from %s", ui_dir)
-    else:
-        logger.warning(
-            "SoapBoxx UI not found (no static/v1-library/index.html). cwd=%s",
-            Path.cwd(),
-        )
 
     return app
 
