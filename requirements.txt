@@ -1,3 +1,7 @@
+# V1 API (Railpack/Railway must see fastapi+uvicorn for auto-start)
+-r requirements-v1-api.txt
+
+# Desktop app dependencies (PyQt, Whisper, etc.)
 PyQt6
 openai
 sounddevice

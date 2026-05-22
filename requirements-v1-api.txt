@@ -1,0 +1,13 @@
+# SoapBoxx V1 API stack (Day 1+). Install: pip install -r requirements-v1-api.txt
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+sqlalchemy>=2.0.36
+alembic>=1.14.0
+psycopg2-binary>=2.9.10
+redis>=5.2.0
+pydantic-settings>=2.6.0
+httpx>=0.28.0
+feedparser>=6.0.11
+
+# Day 4+ workers
+celery>=5.4.0

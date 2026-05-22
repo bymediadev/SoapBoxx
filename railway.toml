@@ -1,0 +1,12 @@
+# Railway service config — SoapBoxx V1 API
+# https://docs.railway.com/reference/config-as-code
+
+[build]
+builder = "RAILPACK"
+
+[deploy]
+startCommand = "python start.py"
+healthcheckPath = "/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

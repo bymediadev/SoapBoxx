@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "steps": {
+    "install": {
+      "commands": ["pip install -r requirements-v1-api.txt"]
+    }
+  },
+  "deploy": {
+    "startCommand": "python start.py"
+  }
+}

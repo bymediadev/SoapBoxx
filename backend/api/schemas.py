@@ -1,0 +1,114 @@
+"""Pydantic schemas for V1 API (source layer only)."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, Field
+
+
+class PodcastCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=512)
+    rss_url: Optional[str] = Field(None, max_length=2048)
+
+
+class PodcastRead(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    rss_url: Optional[str] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class EpisodeCreate(BaseModel):
+    podcast_id: int
+    title: str = Field(..., min_length=1, max_length=1024)
+    audio_url: Optional[str] = Field(None, max_length=2048)
+    duration_seconds: Optional[float] = None
+    published_at: Optional[datetime] = None
+
+
+class EpisodeRead(BaseModel):
+    id: int
+    podcast_id: int
+    title: str
+    description: Optional[str] = None
+    audio_url: Optional[str] = None
+    duration_seconds: Optional[float] = None
+    published_at: Optional[datetime] = None
+    full_transcript: Optional[str] = None
+    guid: Optional[str] = None
+    pipeline_status: str = "new"
+    pipeline_error: Optional[str] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class RssIngestRequest(BaseModel):
+    rss_url: str = Field(..., min_length=8, max_length=2048)
+    podcast_id: Optional[int] = None
+
+
+class RssIngestResponse(BaseModel):
+    podcast_id: int
+    episodes_created: int
+    episodes_skipped: int = 0
+    episode_ids: list[int] = Field(default_factory=list)
+
+
+class TranscribeRequest(BaseModel):
+    transcript: Optional[str] = Field(
+        None,
+        description="Optional paste path; skips STT when provided",
+    )
+
+
+class TranscribeResponse(BaseModel):
+    episode_id: int
+    transcript_length: int
+    segment_count: int
+
+
+class EpisodeFeaturesRead(BaseModel):
+    episode_id: int
+    hook_length_seconds: Optional[float] = None
+    intro_length_seconds: Optional[float] = None
+    question_count: Optional[int] = None
+    speaking_turns: Optional[int] = None
+    host_guest_ratio: Optional[float] = None
+    topic_shift_count: Optional[int] = None
+    cta_present: Optional[bool] = None
+
+    model_config = {"from_attributes": True}
+
+
+class TaxonomyNodeCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=256)
+    node_type: str = Field(..., pattern="^(domain|category|subcategory)$")
+    parent_id: Optional[int] = None
+
+
+class TaxonomyNodeRead(BaseModel):
+    id: int
+    name: str
+    node_type: str
+    parent_id: Optional[int] = None
+
+    model_config = {"from_attributes": True}
+
+
+class PodcastTaxonomyMapRequest(BaseModel):
+    podcast_id: int
+    taxonomy_node_id: int
+
+
+class TranslationRead(BaseModel):
+    episode_id: int
+    template_id: str
+    insight_text: str
+
+    model_config = {"from_attributes": True}
