@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "min_episodes_for_live_benchmarks": 2,
+  "categories": [
+    {
+      "id": "general",
+      "label": "General / mixed",
+      "defaults": {
+        "hook_time_seconds": { "avg": 45, "p90": 90, "p10": 20 },
+        "guest_talk_percentage": { "avg": 48, "p90": 60, "p10": 35 },
+        "host_talk_percentage": { "avg": 52, "p90": 65, "p10": 40 },
+        "question_count": { "avg": 12, "p90": 22, "p10": 5 },
+        "followup_question_count": { "avg": 4, "p90": 8, "p10": 1 },
+        "story_count": { "avg": 2, "p90": 4, "p10": 0 },
+        "interruptions": { "avg": 2, "p90": 6, "p10": 0 },
+        "topic_changes": { "avg": 4, "p90": 8, "p10": 1 }
+      }
+    },
+    {
+      "id": "interview",
+      "label": "Guest interview",
+      "defaults": {
+        "hook_time_seconds": { "avg": 35, "p90": 70, "p10": 15 },
+        "guest_talk_percentage": { "avg": 58, "p90": 70, "p10": 45 },
+        "host_talk_percentage": { "avg": 42, "p90": 55, "p10": 30 },
+        "question_count": { "avg": 18, "p90": 30, "p10": 8 },
+        "followup_question_count": { "avg": 7, "p90": 12, "p10": 2 },
+        "story_count": { "avg": 3, "p90": 6, "p10": 1 },
+        "interruptions": { "avg": 3, "p90": 8, "p10": 0 },
+        "topic_changes": { "avg": 5, "p90": 10, "p10": 2 }
+      }
+    },
+    {
+      "id": "business",
+      "label": "Business / news analysis",
+      "defaults": {
+        "hook_time_seconds": { "avg": 25, "p90": 50, "p10": 10 },
+        "guest_talk_percentage": { "avg": 40, "p90": 55, "p10": 25 },
+        "host_talk_percentage": { "avg": 60, "p90": 75, "p10": 45 },
+        "question_count": { "avg": 10, "p90": 18, "p10": 4 },
+        "followup_question_count": { "avg": 3, "p90": 6, "p10": 1 },
+        "story_count": { "avg": 2, "p90": 4, "p10": 0 },
+        "interruptions": { "avg": 1, "p90": 4, "p10": 0 },
+        "topic_changes": { "avg": 6, "p90": 12, "p10": 2 }
+      }
+    },
+    {
+      "id": "solo",
+      "label": "Solo / monologue",
+      "defaults": {
+        "hook_time_seconds": { "avg": 30, "p90": 60, "p10": 12 },
+        "guest_talk_percentage": { "avg": 5, "p90": 15, "p10": 0 },
+        "host_talk_percentage": { "avg": 95, "p90": 100, "p10": 85 },
+        "question_count": { "avg": 2, "p90": 5, "p10": 0 },
+        "followup_question_count": { "avg": 0, "p90": 1, "p10": 0 },
+        "story_count": { "avg": 3, "p90": 6, "p10": 1 },
+        "interruptions": { "avg": 0, "p90": 1, "p10": 0 },
+        "topic_changes": { "avg": 5, "p90": 10, "p10": 2 }
+      }
+    },
+    {
+      "id": "comedy",
+      "label": "Comedy / casual",
+      "defaults": {
+        "hook_time_seconds": { "avg": 20, "p90": 45, "p10": 8 },
+        "guest_talk_percentage": { "avg": 52, "p90": 65, "p10": 38 },
+        "host_talk_percentage": { "avg": 48, "p90": 62, "p10": 35 },
+        "question_count": { "avg": 14, "p90": 25, "p10": 6 },
+        "followup_question_count": { "avg": 3, "p90": 7, "p10": 0 },
+        "story_count": { "avg": 4, "p90": 8, "p10": 1 },
+        "interruptions": { "avg": 5, "p90": 12, "p10": 1 },
+        "topic_changes": { "avg": 8, "p90": 14, "p10": 3 }
+      }
+    }
+  ]
+}

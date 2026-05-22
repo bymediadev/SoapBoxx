@@ -1,4 +1,4 @@
-﻿# Environment variables
+# Environment variables
 .env
 .env.local
 .env.production
@@ -55,3 +55,6 @@ backend_test_report.json
 
 # Local workflow / doctor outputs
 runs/
+
+# Phase 1 intelligence SQLite (local episodes DB)
+data/*.db

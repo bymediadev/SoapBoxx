@@ -1,0 +1,13 @@
+﻿SoapBoxx Production Studio Demo
+==============================
+
+IMPORTANT (Windows / WinRAR / 7-Zip):
+  Extract the ENTIRE zip to a folder on your PC before launching.
+  Do NOT double-click the .bat file from inside the archive viewer.
+  If you do, Windows will only extract the .bat to a temp folder and the app will not start.
+
+Steps:
+  1. Right-click the zip -> Extract All... (or drag the folder out of WinRAR).
+  2. Open the extracted folder.
+  3. Double-click: Launch SoapBoxx Production Studio Demo.bat
+     OR open SoapBoxxProductionStudioDemo and run SoapBoxx Production Studio Demo.bat

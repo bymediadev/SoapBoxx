@@ -493,6 +493,23 @@ class MainWindow(QMainWindow):
                     background-color: {win_bg};
                     border-top: 1px solid {border};
                 }}
+                QPushButton {{
+                    color: {"#FFFFFF" if darkish else "#000000"};
+                    background-color: {"#3E3E42" if darkish else "#F5F5F5"};
+                    border: 1px solid {border};
+                    border-radius: 6px;
+                    padding: 8px 14px;
+                    font-size: 13px;
+                    font-weight: 500;
+                    min-height: 22px;
+                }}
+                QPushButton:hover {{
+                    background-color: {tab_hover};
+                }}
+                QPushButton:disabled {{
+                    color: #888888;
+                    background-color: #EEEEEE;
+                }}
             """
             )
         except Exception as e:
@@ -567,7 +584,7 @@ class MainWindow(QMainWindow):
                 "Production Studio Demo",
             )
         return (
-            "SoapBoxx - AI-Powered Podcast Production Studio",
+            "SoapBoxx - Episode Coach & Intelligence",
             "SoapBoxx",
             "AI-Powered Podcast Production Studio",
         )
@@ -597,11 +614,23 @@ class MainWindow(QMainWindow):
 
             # Create placeholder tabs first, defer actual tab creation
             tab_definitions = [
-                ("SoapBoxx", self._create_soapboxx_tab),
-                ("Scoop", self._create_scoop_tab),
-                ("Reverb", self._create_reverb_tab),
+                ("Coach", self._create_reverb_tab),
                 ("Settings", self._create_settings_tab),
             ]
+            if os.getenv("SOAPBOXX_SHOW_STUDIO", "").strip().lower() in (
+                "1",
+                "true",
+                "yes",
+            ):
+                tab_definitions.insert(0, ("SoapBoxx", self._create_soapboxx_tab))
+            if os.getenv("SOAPBOXX_SHOW_SCOOP", "").strip().lower() in (
+                "1",
+                "true",
+                "yes",
+            ):
+                tab_definitions.insert(
+                    max(0, len(tab_definitions) - 1), ("Scoop", self._create_scoop_tab)
+                )
 
             for tab_name, tab_creator in tab_definitions:
                 try:
@@ -778,7 +807,7 @@ class MainWindow(QMainWindow):
         return None
 
     def _deliver_session_feedback_to_reverb(self, payload):
-        """After SoapBoxx recording: open Reverb and run FeedbackEngine on the episode transcript."""
+        """After SoapBoxx recording: open Coach tab and run Episode Coach Report."""
         text = ""
         try:
             from backend.soapboxx_core import RecordingSession
@@ -794,9 +823,11 @@ class MainWindow(QMainWindow):
         if not text:
             return
         try:
-            reverb = self.ensure_tab_created("Reverb")
+            reverb = self.ensure_tab_created("Coach")
             if reverb is None:
-                print("MainWindow: Reverb tab could not be created for session feedback")
+                reverb = self.ensure_tab_created("Reverb")
+            if reverb is None:
+                print("MainWindow: Coach tab could not be created for session feedback")
                 return
             if hasattr(reverb, "run_session_feedback_from_transcript"):
                 reverb.run_session_feedback_from_transcript(text)
@@ -829,7 +860,8 @@ class MainWindow(QMainWindow):
         """Create Reverb tab with error handling"""
         try:
             tab = ReverbTab()
-            self._loaded_tabs["Reverb"] = tab
+            self._loaded_tabs["Coach"] = tab
+            self._loaded_tabs["Reverb"] = tab  # legacy alias
             return tab
         except Exception as e:
             self._track_error(
@@ -944,17 +976,21 @@ class MainWindow(QMainWindow):
             form = QFormLayout(card)
 
             self.settings_transcription_combo = QComboBox()
-            self.settings_transcription_combo.addItems(["openai", "local", "assemblyai", "azure"])
-            self.settings_transcription_combo.setCurrentText(
-                str(cfg.get("ui_settings.soapbox.transcription_service", "openai") or "openai")
-            )
+            self.settings_transcription_combo.addItems(["openai", "local", "assemblyai"])
+            _tr = str(
+                cfg.get("ui_settings.soapbox.transcription_service", "openai") or "openai"
+            ).strip().lower()
+            if _tr == "azure":
+                _tr = "openai"
+            self.settings_transcription_combo.setCurrentText(_tr)
             form.addRow("Transcription service:", self.settings_transcription_combo)
 
             self.settings_stt_combo = QComboBox()
-            self.settings_stt_combo.addItems(["openai", "local", "azure", "assemblyai"])
-            self.settings_stt_combo.setCurrentText(
-                str(cfg.get("ui_settings.soapbox.stt_service", "openai") or "openai")
-            )
+            self.settings_stt_combo.addItems(["openai", "local", "assemblyai"])
+            _stt = str(cfg.get("ui_settings.soapbox.stt_service", "openai") or "openai").strip().lower()
+            if _stt == "azure":
+                _stt = "openai"
+            self.settings_stt_combo.setCurrentText(_stt)
             form.addRow("Speech-to-text service:", self.settings_stt_combo)
 
             self.settings_tts_combo = QComboBox()
@@ -977,6 +1013,23 @@ class MainWindow(QMainWindow):
                 str(os.getenv("SOAPBOXX_OLLAMA_MODEL", "") or cfg.get("ui_settings.soapbox.ollama_model", ""))
             )
             form.addRow("Offline model (Ollama):", self.settings_ollama_model)
+
+            self.settings_intelligence_category_combo = QComboBox()
+            try:
+                from backend.intelligence_v1.categories import category_labels
+
+                _cats = category_labels()
+            except ImportError:
+                _cats = [("general", "General / mixed")]
+            for cid, label in _cats:
+                self.settings_intelligence_category_combo.addItem(label, cid)
+            _icat = str(
+                cfg.get("ui_settings.soapbox.intelligence_category", "general") or "general"
+            )
+            _idx = self.settings_intelligence_category_combo.findData(_icat)
+            if _idx >= 0:
+                self.settings_intelligence_category_combo.setCurrentIndex(_idx)
+            form.addRow("Default Coach category:", self.settings_intelligence_category_combo)
 
             layout.addWidget(card)
 
@@ -1213,6 +1266,20 @@ class MainWindow(QMainWindow):
                 "(paste your API key in Settings, choose OpenAI if needed, save, or set .env)."
             )
 
+        try:
+            from backend.coach_stt import coach_stt_validation_error
+        except ImportError:
+            from coach_stt import coach_stt_validation_error  # type: ignore
+
+        for label, combo in (
+            ("Transcription", self.settings_transcription_combo),
+            ("STT", self.settings_stt_combo),
+        ):
+            svc = str(combo.currentText() or "").strip()
+            msg = coach_stt_validation_error(svc)
+            if msg:
+                errors.append(f"{label}: {msg}")
+
         if om and ":" not in om:
             warnings.append("Ollama model usually uses 'name:tag' format (example: llama3.1:8b).")
 
@@ -1279,6 +1346,9 @@ class MainWindow(QMainWindow):
             cfg.set("ui_settings.soapbox.tts_service", tts)
             cfg.set("ui_settings.soapbox.question_llm_backend", qllm)
             cfg.set("ui_settings.soapbox.ollama_model", om)
+            icat = self.settings_intelligence_category_combo.currentData()
+            if icat:
+                cfg.set("ui_settings.soapbox.intelligence_category", str(icat))
             tid = self.settings_theme_combo.currentData()
             if tid:
                 cfg.set("ui_settings.theme", str(tid))
@@ -1319,6 +1389,12 @@ class MainWindow(QMainWindow):
                 if hasattr(tab, "question_llm_combo"):
                     tab.question_llm_combo.setCurrentText(qllm)
 
+            coach_tab = self._loaded_tabs.get("Coach") or self._loaded_tabs.get("Reverb")
+            if coach_tab and hasattr(coach_tab, "category_combo") and icat:
+                ix = coach_tab.category_combo.findData(str(icat))
+                if ix >= 0:
+                    coach_tab.category_combo.setCurrentIndex(ix)
+
             self._refresh_settings_validation_status()
             self._show_status_message("Settings saved and applied.")
             QMessageBox.information(self, "Settings", "SoapBoxx settings saved.")
@@ -1346,6 +1422,10 @@ class MainWindow(QMainWindow):
             self.settings_tts_combo.setCurrentText("openai")
             self.settings_question_combo.setCurrentText("auto")
             self.settings_ollama_model.setText("")
+            if hasattr(self, "settings_intelligence_category_combo"):
+                ix_cat = self.settings_intelligence_category_combo.findData("general")
+                if ix_cat >= 0:
+                    self.settings_intelligence_category_combo.setCurrentIndex(ix_cat)
             ix = self.settings_theme_combo.findData("modern_light")
             if ix >= 0:
                 self.settings_theme_combo.setCurrentIndex(ix)
@@ -1386,7 +1466,7 @@ class MainWindow(QMainWindow):
                 lines.append(f"  - {name}: {'ok' if loaded else 'failed/not loaded'}")
             lines.append("")
         lines.append("Loaded tabs:")
-        for name in ("SoapBoxx", "Scoop", "Reverb", "Settings"):
+        for name in ("SoapBoxx", "Coach", "Scoop", "Settings"):
             lines.append(f"  - {name}: {'loaded' if name in self._loaded_tabs else 'not loaded'}")
         lines.append("")
         lines.append("Current Settings tab values:")
@@ -1594,7 +1674,7 @@ class MainWindow(QMainWindow):
                 tab = self._create_soapboxx_tab()
             elif tab_name == "Scoop":
                 tab = self._create_scoop_tab()
-            elif tab_name == "Reverb":
+            elif tab_name in ("Coach", "Reverb"):
                 tab = self._create_reverb_tab()
             elif tab_name == "Settings":
                 tab = self._create_settings_tab()

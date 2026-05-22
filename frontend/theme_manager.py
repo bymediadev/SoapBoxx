@@ -36,8 +36,8 @@ class ThemeManager(QObject):
             "base": "#FFFFFF",
             "alternate_base": "#F8F9FA",
             "text": "#2C3E50",
-            "button": "#3498DB",
-            "button_text": "#FFFFFF",
+            "button": "#F0F0F0",
+            "button_text": "#000000",
             "bright_text": "#FFFFFF",
             "highlight": "#3498DB",
             "highlight_text": "#FFFFFF",
@@ -276,6 +276,42 @@ class ThemeManager(QObject):
             "card_shadow": "0 2px 4px rgba(76,175,80,0.1)",
         }
 
+    def _push_button_stylesheet(self, theme_name: str, theme: dict) -> str:
+        """Readable button labels — black on light themes, white on dark."""
+        dark = theme_name in ("modern_dark", "dark")
+        if dark:
+            bg = theme.get("button", "#3E3E42")
+            fg = theme.get("button_text", "#FFFFFF")
+            border = theme.get("border", "#5A5A5A")
+            hover = theme.get("mid", "#4A4A4A")
+        else:
+            bg = "#F5F5F5"
+            fg = "#000000"
+            border = theme.get("border", "#BDBDBD")
+            hover = "#E8E8E8"
+        return f"""
+            QPushButton {{
+                color: {fg};
+                background-color: {bg};
+                border: 1px solid {border};
+                border-radius: 6px;
+                padding: 8px 14px;
+                font-size: 13px;
+                font-weight: 500;
+                min-height: 22px;
+            }}
+            QPushButton:hover {{
+                background-color: {hover};
+            }}
+            QPushButton:pressed {{
+                background-color: {border};
+            }}
+            QPushButton:disabled {{
+                color: #888888;
+                background-color: #EEEEEE;
+            }}
+        """
+
     def apply_theme(self, theme_name: str):
         """Apply a theme to the application"""
         if theme_name not in self.themes:
@@ -314,6 +350,9 @@ class ThemeManager(QObject):
 
         # Apply palette
         app.setPalette(palette)
+
+        # Plain QPushButton labels (Windows often hides palette-only button text)
+        app.setStyleSheet(self._push_button_stylesheet(theme_name, theme))
 
         # Emit signal
         self.theme_changed.emit(theme_name)

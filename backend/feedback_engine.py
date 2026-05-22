@@ -161,6 +161,26 @@ class FeedbackEngine:
 
         return result
 
+    def generate_episode_coach_report(
+        self,
+        transcript: str,
+        *,
+        title: str = "",
+        creator: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Post-episode coach loop: structured Episode Coach Report (sections A–F).
+
+        Primary desktop output for improving the *next* episode. See
+        ``backend/episode_coach_report.py``.
+        """
+        try:
+            from .episode_coach_report import generate_episode_coach_report as _gen
+        except ImportError:
+            from episode_coach_report import generate_episode_coach_report as _gen  # type: ignore
+
+        return _gen(transcript, title=title, creator=creator)
+
     def generate_network_brief(
         self,
         transcript: str,

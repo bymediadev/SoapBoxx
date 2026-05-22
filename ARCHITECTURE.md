@@ -1,14 +1,18 @@
 # SoapBoxx — System Architecture
 
+**Purpose:** See [`SOAPBOXX_MASTER_PLAN_FOUNDATION.md`](SOAPBOXX_MASTER_PLAN_FOUNDATION.md) — build a measurement/pattern library; sources (Spotify, YouTube, RSS) feed ingest, not the primary asset.
+
+**V1 API (Day 1+):** FastAPI + Postgres + Redis — [`docs/V1_DAY01.md`](docs/V1_DAY01.md), entry `uvicorn main:app`. Desktop PyQt remains legacy until V1 API reaches parity.
+
 ## High-level structure
 
 SoapBoxx is divided into three user-facing modules:
 
 | Module | UI tab | Purpose |
 |--------|--------|---------|
-| **Studio** | SoapBoxx | Recording, transcription |
+| **Studio** (optional) | SoapBoxx | Recording — hidden unless `SOAPBOXX_SHOW_STUDIO=1` |
 | **Scoop** | Scoop | Guest/topic prep |
-| **Reverb** | Reverb | Analysis and improvement feedback |
+| **Coach** | Coach | Post-episode **Episode Coach Report** (sections A–F) |
 
 ## Current repo mapping (source of truth)
 
@@ -18,7 +22,7 @@ The pack describes logical `/studio`, `/scoop`, `/reverb`, and `/services/*` fol
 |----------------|-------------|
 | Studio | [`frontend/soapboxx_tab.py`](frontend/soapboxx_tab.py), [`backend/soapboxx_core.py`](backend/soapboxx_core.py), [`backend/audio_recorder.py`](backend/audio_recorder.py) |
 | Scoop | [`frontend/scoop_tab.py`](frontend/scoop_tab.py), [`backend/guest_research.py`](backend/guest_research.py) |
-| Reverb | [`frontend/reverb_tab.py`](frontend/reverb_tab.py), [`backend/feedback_engine.py`](backend/feedback_engine.py) |
+| Coach | [`frontend/reverb_tab.py`](frontend/reverb_tab.py), [`backend/episode_coach_report.py`](backend/episode_coach_report.py), [`backend/feedback_engine.py`](backend/feedback_engine.py) |
 | Audio service | [`backend/audio_recorder.py`](backend/audio_recorder.py) |
 | Transcription | [`backend/transcriber.py`](backend/transcriber.py) |
 | AI (facade) | [`backend/llm_service.py`](backend/llm_service.py) wraps workflow LLM; also `feedback_engine`, `episode_intelligence`, `guest_research`, `blueprint_v1/llm_runner` |
@@ -32,9 +36,10 @@ Structural `/services/*` directories are a **target**, not the current tree.
 ### Desktop app (v1 — default for UI work)
 
 ```text
-SoapBoxx tab → SoapBoxxCore → audio_recorder
-                          → transcriber
-                          → Reverb tab → FeedbackEngine
+Coach tab → episode_ingest (URL / file / paste)
+         → transcriber (audio only)
+         → FeedbackEngine.generate_episode_coach_report
+         → intelligence_v1 (metrics, SQLite, tier)
 ```
 
 Do not wire new UI features through batch-only pipelines unless explicitly requested.
@@ -48,17 +53,42 @@ Do not wire new UI features through batch-only pipelines unless explicitly reque
 
 Used for scripts, evaluation, and markdown/JSON exports — not the primary PyQt path.
 
+### V0/V1 instrumentation (see [`docs/SYSTEM_DESIGN_V0_V1.md`](docs/SYSTEM_DESIGN_V0_V1.md))
+
+```text
+episode_ingest → transcriber → backend/features (rule-based metrics)
+  → intelligence_v1/db.py (SQLite)
+  → analyzer (category benchmarks)
+  → report (comparison; tier optional via SOAPBOXX_ENABLE_TIER)
+```
+
+### Insights library (hosting platforms as source)
+
+```text
+Spotify / Apple / YouTube / RSS  (catalog — not owned by SoapBoxx)
+  → episode_ingest + weekly batch (backend/library/)
+  → SQLite shelf: category → author → show → episodes
+  → Coach / intelligence on demand
+```
+
+See [`docs/LIBRARY_AND_BATCH.md`](docs/LIBRARY_AND_BATCH.md).
+
+Default metrics: **`backend/features/rule_based.py`** (reproducible).  
+LLM metrics: only if `SOAPBOXX_LLM_METRICS=1`.  
+Coach (A–F): separate product layer — [`episode_coach_report.py`](backend/episode_coach_report.py).
+
+CLI: [`scripts/run_intelligence_pipeline.py`](scripts/run_intelligence_pipeline.py).
+
 ## Data flow
 
 ```text
-Audio Input
-  → Studio (recording)
-  → Transcription (Whisper / OpenAI / local)
-  → Structured transcript
-  → Reverb analysis
-  → Feedback + insights
+Import (YouTube / file / paste)
+  → Extract + normalize transcript
+  → Episode Coach Report (A–F)
+  → Intelligence (metrics + category benchmarks + tier)
+  → SQLite history for comparison
 
-Optional: Scoop → prep context for Studio
+Optional: Studio record (`SOAPBOXX_SHOW_STUDIO=1`); Scoop (`SOAPBOXX_SHOW_SCOOP=1`)
 ```
 
 ## UI rule
@@ -88,7 +118,7 @@ Today: [`RecordingSession`](backend/soapboxx_core.py) plus separate v3/strict JS
 
 ## v1 freeze scope (active)
 
-**In scope:** record, transcribe, Scoop prep, Reverb feedback, export.
+**In scope:** record, transcribe, Episode Coach Report, export. Scoop optional.
 
 **Out of scope for desktop v1:** new tabs, extending blueprint/atomic pipelines in UI, physical folder moves to `/studio` without a planned migration.
 

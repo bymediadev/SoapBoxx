@@ -46,14 +46,19 @@ Tags `v*` trigger [`.github/workflows/build.yml`](.github/workflows/build.yml) (
 ```bash
 git checkout demo
 git merge --ff-only production
-./package_demo_release.ps1 -Version "1.2.0"
-git tag demo-v1.2.0
+# Windows (on a PC):
+./package_demo_release.ps1 -Version "1.2.4"
+# macOS (on a Mac, or via GitHub Actions — cannot build on Windows):
+./package_demo_release_mac.sh 1.2.4
+git tag demo-v1.2.4
 git push origin demo --tags
 ```
 
+Pushing a `demo-v*` tag runs [`.github/workflows/demo-release.yml`](.github/workflows/demo-release.yml) and publishes **both** Windows and macOS zips to GitHub Releases.
+
 Demo builds use the **full app** with `SOAPBOXX_BUCKET=demo` and Production Studio Demo branding — not the old barebones modules.
 
-See [`DEMO_INSTRUCTIONS.md`](DEMO_INSTRUCTIONS.md) and [`package_demo_release.ps1`](package_demo_release.ps1).
+See [`DEMO_INSTRUCTIONS.md`](DEMO_INSTRUCTIONS.md), [`package_demo_release.ps1`](package_demo_release.ps1), and [`package_demo_release_mac.sh`](package_demo_release_mac.sh).
 
 ## Rules
 

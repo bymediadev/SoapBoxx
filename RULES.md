@@ -2,9 +2,13 @@
 
 ## 1. Core principle
 
-Do not add complexity unless it improves the core loop:
+**V1 daily build** ([`SOAPBOXX_V1_7DAY_EXECUTION.md`](SOAPBOXX_V1_7DAY_EXECUTION.md)) — execute **current day only**; no feature creep.
 
-**Record → Transcribe → Improve**
+**V1 pipeline** ([`SOAPBOXX_EXECUTION_PLAN_V1.md`](SOAPBOXX_EXECUTION_PLAN_V1.md)):
+
+**Ingest → Transcribe → Segment → Measure → Store → Pattern → Translate**
+
+No coaching, scoring, or ranking in V1. If something feels missing: **V1 or V2?** — not redesign.
 
 ## 2. Architecture discipline
 
@@ -27,9 +31,11 @@ Do not add complexity unless it improves the core loop:
 
 ## 5. Feature expansion rule
 
-Before adding a feature, ask:
+Before adding a feature, ask ([`SOAPBOXX_MASTER_PLAN_FOUNDATION.md`](SOAPBOXX_MASTER_PLAN_FOUNDATION.md) Rule #5):
 
-> Does this improve recording, understanding, or improvement?
+> Does this help us collect, organize, compare, or learn from podcast **patterns**?
+
+Legacy loop check: does it improve recording, transcription, or improvement?
 
 If not → reject it
 

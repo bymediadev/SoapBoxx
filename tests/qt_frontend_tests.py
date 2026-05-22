@@ -87,7 +87,7 @@ class TestFrontend:
 
             # Check if expected tabs are present
             tab_names = [tab_widget.tabText(i) for i in range(tab_widget.count())]
-            expected_tabs = ["SoapBoxx", "Scoop", "Reverb"]
+            expected_tabs = ["Coach"]
 
             for expected_tab in expected_tabs:
                 assert (

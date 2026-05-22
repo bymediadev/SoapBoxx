@@ -100,6 +100,12 @@ Write-Host "Preparing release folder..."
 Copy-Item $builtAppDir -Destination $releaseDir -Recurse -Force
 Copy-Item "README_DEMO.md" -Destination (Join-Path $releaseDir "README_DEMO.md") -Force
 Copy-Item "DEMO_INSTRUCTIONS.md" -Destination (Join-Path $releaseDir "DEMO_INSTRUCTIONS.md") -Force
+Copy-Item "TESTER_QUICKSTART.md" -Destination (Join-Path $releaseDir "TESTER_QUICKSTART.md") -Force
+Copy-Item "TESTER_QUICKSTART.html" -Destination (Join-Path $releaseDir "TESTER_QUICKSTART.html") -Force
+$demoGuideDest = Join-Path $releaseDir "demo-guide"
+if (Test-Path "docs\demo-guide") {
+    Copy-Item "docs\demo-guide" -Destination $demoGuideDest -Recurse -Force
+}
 if (Test-Path "soapboxx_config.demo.json") {
     Copy-Item "soapboxx_config.demo.json" -Destination (Join-Path $releaseDir "soapboxx_config.demo.json") -Force
 }
@@ -120,7 +126,8 @@ IMPORTANT (Windows / WinRAR / 7-Zip):
 Steps:
   1. Right-click the zip -> Extract All... (or drag the folder out of WinRAR).
   2. Open the extracted folder.
-  3. Double-click: Launch SoapBoxx Production Studio Demo.bat
+  3. Open TESTER_QUICKSTART.html (pictures) or TESTER_QUICKSTART.md for setup.
+  4. Double-click: Launch SoapBoxx Production Studio Demo.bat
      OR open SoapBoxxProductionStudioDemo and run SoapBoxx Production Studio Demo.bat
 "@ | Out-File -FilePath $extractFirstPath -Encoding utf8
 

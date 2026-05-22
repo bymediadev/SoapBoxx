@@ -5,7 +5,7 @@ alwaysApply: true
 
 # SoapBoxx
 
-Follow as source of truth (repo root): `PRODUCT.md`, `ARCHITECTURE.md`, `WORKFLOW.md`, `RULES.md`, `BRANCHES.md`.
+Follow as source of truth (repo root): `SOAPBOXX_V1_7DAY_EXECUTION.md` (build ONLY current day; no redesign), `SOAPBOXX_EXECUTION_PLAN_V1.md`, `SOAPBOXX_MASTER_PLAN_FOUNDATION.md`, `PRODUCT.md`, `ARCHITECTURE.md`, `WORKFLOW.md`, `RULES.md`, `BRANCHES.md`. V1 stack target: FastAPI+Postgres+Redis+Celery per 7-day plan. No coach/scoring/ranking. Missing scope → V1 vs V2, not new architecture.
 
 ## Core loop
 

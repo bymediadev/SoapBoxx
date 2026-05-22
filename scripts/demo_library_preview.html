@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SoapBoxx Insights Library — Preview</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: "Segoe UI", system-ui, sans-serif; margin: 0; background: #f4f5f7; color: #1a1a1a; }
+    .app { max-width: 960px; margin: 24px auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,.08); overflow: hidden; }
+    .titlebar { background: #2d3748; color: #fff; padding: 12px 20px; font-size: 14px; }
+    .content { padding: 20px; }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    .sub { color: #555; font-size: 13px; margin-bottom: 20px; line-height: 1.5; }
+    .group { border: 1px solid #dde1e6; border-radius: 6px; margin-bottom: 16px; }
+    .group-h { background: #f8f9fa; padding: 10px 14px; font-weight: 600; font-size: 13px; border-bottom: 1px solid #dde1e6; }
+    .group-b { padding: 14px; }
+    label { font-size: 12px; color: #666; display: block; margin-bottom: 4px; }
+    input, select { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    button { padding: 8px 14px; border-radius: 4px; border: 1px solid #bdbdbd; background: #f5f5f5; color: #000; font-size: 13px; font-weight: 500; cursor: default; }
+    button.secondary { background: #fff; color: #000; border: 1px solid #999; }
+    .tree { font-family: Consolas, monospace; font-size: 12px; background: #fafbfc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 12px; line-height: 1.6; min-height: 180px; }
+    .tree .cat { font-weight: 700; color: #2d3748; }
+    .tree .author { color: #4a5568; }
+    .tree .show { color: #2b6cb0; }
+    .tree .ep { color: #718096; }
+    .status { font-size: 11px; color: #6c757d; margin-top: 8px; }
+    .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+    .metric { background: #edf2f7; padding: 10px; border-radius: 4px; text-align: center; }
+    .metric b { display: block; font-size: 18px; color: #2d3748; }
+    .metric span { font-size: 10px; color: #666; text-transform: uppercase; }
+    .note { font-size: 11px; color: #888; margin-top: 16px; padding-top: 12px; border-top: 1px dashed #ddd; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="titlebar">SoapBoxx — Episode Coach (static preview)</div>
+    <div class="content">
+      <h1>Episode Coach</h1>
+      <p class="sub">
+        Spotify / YouTube are the <strong>catalog</strong>. SoapBoxx builds your
+        <strong>insights library</strong> — measurements and patterns, not another host.
+      </p>
+
+      <div class="group">
+        <div class="group-h">1. Import episode (source layer)</div>
+        <div class="group-b">
+          <label>YouTube URL</label>
+          <input type="text" value="https://www.youtube.com/watch?v=…" readonly />
+          <div class="row">
+            <div><label>Show (source)</label><input value="My First Million" readonly /></div>
+            <div><label>Author</label><input value="Sam Parr" readonly /></div>
+          </div>
+          <label>Category</label>
+          <select disabled><option>business</option></select>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-h">Insights library — weekly batch</div>
+        <div class="group-b">
+          <div class="btns">
+            <button type="button">Add to weekly queue</button>
+            <button type="button" class="secondary">Run weekly batch</button>
+          </div>
+          <p class="status">Library: 3 show(s). Weekly queue: 0 pending. Batch 2026-W21: 3 processed.</p>
+          <div class="tree">
+            <div class="cat">business</div>
+            <div class="author">&nbsp;&nbsp;+-- Sam Parr</div>
+            <div class="show">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+-- My First Million (1 episode)</div>
+            <div class="ep">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- Demo — Startup mistakes [hook 0s, 24 questions]</div>
+            <div class="author">&nbsp;&nbsp;+-- Ben Gilbert</div>
+            <div class="show">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+-- Acquired (1 episode)</div>
+            <div class="ep">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- Demo — Company deep dive</div>
+            <br />
+            <div class="cat">interview</div>
+            <div class="author">&nbsp;&nbsp;+-- Steven Bartlett</div>
+            <div class="show">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+-- The Diary of a CEO (1 episode)</div>
+            <div class="ep">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- Demo — Founder interview</div>
+          </div>
+          <div class="metrics">
+            <div class="metric"><b>24</b><span>Questions</span></div>
+            <div class="metric"><b>68%</b><span>Guest talk</span></div>
+            <div class="metric"><b>41s</b><span>Hook (example)</span></div>
+          </div>
+        </div>
+      </div>
+
+      <p class="note">
+        Static mock for layout only. Live app: <code>python scripts/demo_library_preview.py</code> then
+        <code>python -m frontend.main_window</code> → Coach tab.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

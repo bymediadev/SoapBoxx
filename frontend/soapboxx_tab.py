@@ -1312,7 +1312,7 @@ class SoapBoxxTab(QWidget):
             service_label = QLabel("Service:")
             service_label.setStyleSheet("font-weight: bold; color: #495057;")
             self.service_combo = QComboBox()
-            self.service_combo.addItems(["openai", "local", "assemblyai", "azure"])
+            self.service_combo.addItems(["openai", "local", "assemblyai"])
             self.service_combo.currentTextChanged.connect(
                 self._on_soapbox_service_setting_changed
             )
@@ -1415,7 +1415,7 @@ class SoapBoxxTab(QWidget):
             stt_service_label = QLabel("STT Service:")
             stt_service_label.setStyleSheet("font-weight: bold; color: #495057;")
             self.stt_service_combo = QComboBox()
-            self.stt_service_combo.addItems(["openai", "local", "azure", "assemblyai"])
+            self.stt_service_combo.addItems(["openai", "local", "assemblyai"])
             self.stt_service_combo.setCurrentText("openai")
             self.stt_service_combo.currentTextChanged.connect(
                 self._on_stt_service_setting_changed

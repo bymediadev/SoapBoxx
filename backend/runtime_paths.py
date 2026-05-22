@@ -21,9 +21,14 @@ def bundle_root() -> Path:
 
 
 def app_root() -> Path:
-    """Writable folder beside the .exe (frozen) or repo root (dev)."""
+    """Writable folder beside the bundle (.exe dir or folder containing .app) or repo root."""
     if is_frozen():
-        return Path(sys.executable).resolve().parent
+        exe = Path(sys.executable).resolve()
+        # PyInstaller macOS: .../SoapBoxxProductionStudioDemo.app/Contents/MacOS/<binary>
+        parts = exe.parts
+        if sys.platform == "darwin" and len(parts) >= 4 and parts[-3] == "Contents" and parts[-2] == "MacOS":
+            return Path(*parts[:-4])
+        return exe.parent
     return Path(__file__).resolve().parent.parent
 
 

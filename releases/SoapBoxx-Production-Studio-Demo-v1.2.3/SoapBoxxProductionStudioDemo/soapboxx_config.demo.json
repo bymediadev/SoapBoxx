@@ -1,0 +1,84 @@
+{
+  "openai_api_key": "[HIDDEN]",
+  "google_cse_id": "0628a50c1bb4e4976",
+  "audio_settings": {
+    "sample_rate": 16000,
+    "channels": 1,
+    "dtype": "int16",
+    "chunk_size": 1024,
+    "max_recording_duration": 3600,
+    "auto_cleanup": true
+  },
+  "transcription_settings": {
+    "model": "whisper-1",
+    "language": "en",
+    "temperature": 0.0,
+    "max_file_size_mb": 25,
+    "timeout_seconds": 30
+  },
+  "feedback_settings": {
+    "model": "gpt-4",
+    "max_tokens": 800,
+    "temperature": 0.3,
+    "analysis_depth": "comprehensive",
+    "enable_caching": true,
+    "cache_ttl": 3600,
+    "enable_quantitative_scoring": true,
+    "enable_comparative_analysis": true,
+    "default_focus_areas": [
+      "clarity",
+      "engagement",
+      "structure",
+      "energy",
+      "professionalism"
+    ],
+    "scoring_weights": {
+      "clarity": 0.25,
+      "engagement": 0.25,
+      "structure": 0.2,
+      "energy": 0.15,
+      "professionalism": 0.15
+    }
+  },
+  "research_settings": {
+    "model": "gpt-3.5-turbo",
+    "max_tokens": 800,
+    "temperature": 0.7,
+    "search_depth": "moderate"
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "soapboxx.log",
+    "max_size": "10MB",
+    "backup_count": 5,
+    "mask_sensitive_data": true,
+    "sensitive_fields": [
+      "openai_api_key",
+      "google_api_key",
+      "news_api_key",
+      "youtube_api_key",
+      "podchaser_api_key",
+      "listen_notes_api_key"
+    ]
+  },
+  "ui_settings": {
+    "theme": "modern_light",
+    "auto_save": true,
+    "auto_transcribe": true,
+    "show_api_status": true,
+    "hide_sensitive_data": true,
+    "soapbox": {
+      "transcription_service": "openai",
+      "stt_service": "openai",
+      "tts_service": "openai",
+      "question_llm_backend": "auto"
+    }
+  },
+  "security": {
+    "validate_api_keys": true,
+    "sanitize_inputs": true,
+    "rate_limit_enabled": true,
+    "max_concurrent_requests": 5,
+    "request_timeout": 30
+  }
+}

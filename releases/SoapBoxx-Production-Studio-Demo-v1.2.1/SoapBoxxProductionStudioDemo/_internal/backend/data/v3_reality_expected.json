@@ -1,0 +1,10 @@
+{
+  "_schema": "soapboxx_v3_reality_v1",
+  "forbid_generic_thesis": true,
+  "forbidden_terms": ["unknown", "various aspects", "interesting to hear"],
+  "min_evidence_rows": 2,
+  "min_segments": 1,
+  "min_clip_proxies": 1,
+  "min_thesis_grounding_ratio": 0.15,
+  "must_have_tension": false
+}

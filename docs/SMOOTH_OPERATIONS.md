@@ -36,7 +36,7 @@ uvicorn main:app --reload --port 8000
 |------|--------|
 | 1 | Postgres plugin on API service |
 | 2 | Variables: `DATABASE_URL` (auto), `SOAPBOXX_CORS_ORIGINS=https://soapboxx.lovable.app` |
-| 3 | Optional: `RAILPACK_START_CMD=python start.py` |
+| 3 | Dashboard **Build command**: empty; start from `railway.toml` (`python start.py`) |
 | 4 | Builder: **Railpack**; push `production`; redeploy **without cache** |
 | 5 | Verify: `curl https://YOUR-APP.up.railway.app/health` |
 
@@ -91,7 +91,8 @@ Patterns: `GET /insights/patterns/weekly`
 
 | Symptom | Fix |
 |---------|-----|
-| Railpack no start command | Push `start.py` + `railpack.json`; set `RAILPACK_START_CMD` |
+| Railpack no start command | Push `start.py` + `railway.toml`; clear dashboard build command; optional `RAILPACK_START_CMD=python start.py` |
+| Build + start both `python start.py` | Clear **Build command** in dashboard; keep start in `railway.toml` only |
 | PortAudio crash | `libportaudio2` in `railpack.json`; lazy `backend/__init__.py` |
 | requirements-v1-api missing | Use inlined deps in `requirements.txt`; no custom install step |
 | Health degraded | Add Postgres; Redis optional |

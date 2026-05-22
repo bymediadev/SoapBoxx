@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SoapBoxxEpisodeMetrics",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "hook_time_seconds",
+    "guest_talk_percentage",
+    "host_talk_percentage",
+    "question_count",
+    "followup_question_count",
+    "story_count",
+    "interruptions",
+    "topic_changes",
+    "cta_present"
+  ],
+  "properties": {
+    "hook_time_seconds": { "type": "number", "minimum": 0 },
+    "guest_talk_percentage": { "type": "number", "minimum": 0, "maximum": 100 },
+    "host_talk_percentage": { "type": "number", "minimum": 0, "maximum": 100 },
+    "question_count": { "type": "integer", "minimum": 0 },
+    "followup_question_count": { "type": "integer", "minimum": 0 },
+    "story_count": { "type": "integer", "minimum": 0 },
+    "interruptions": { "type": "integer", "minimum": 0 },
+    "topic_changes": { "type": "integer", "minimum": 0 },
+    "cta_present": { "type": "boolean" }
+  }
+}

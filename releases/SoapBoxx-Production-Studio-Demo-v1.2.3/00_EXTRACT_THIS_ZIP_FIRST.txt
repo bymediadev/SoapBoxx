@@ -1,0 +1,15 @@
+SoapBoxx Production Studio Demo — START HERE
+============================================
+
+READ FIRST: open TESTER_QUICKSTART.md in this folder for the full
+15-minute setup (download is already done if you are reading this).
+
+Quick version:
+  1. You must EXTRACT this entire zip to a folder (e.g. C:\SoapBoxx-Demo\).
+     Do NOT double-click the .bat from inside WinRAR or 7-Zip.
+  2. Double-click: Launch SoapBoxx Production Studio Demo.bat
+  3. If Norton blocks the app, add an exclusion for the extracted folder.
+  4. For recording + transcript: add an OpenAI key in Settings (or use a .env file your host sent).
+
+Full guide: TESTER_QUICKSTART.md
+Release: https://github.com/bymediadev/SoapBoxx/releases/tag/demo-v1.2.3

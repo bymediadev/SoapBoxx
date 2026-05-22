@@ -496,7 +496,7 @@ class SoapBoxxCore:
             return {"error": error_msg}
 
     def transcribe_audio(self, audio_data: bytes) -> str:
-        """Transcribe audio with rate limiting and performance monitoring"""
+        """Transcribe audio with rate limiting; Azure STT is remapped (``coach_stt``)."""
         operation = "transcription"
 
         # Check rate limiting
@@ -507,6 +507,17 @@ class SoapBoxxCore:
         start_time = time.time()
 
         try:
+            try:
+                from .coach_stt import resolve_stt_for_coach
+            except ImportError:
+                from coach_stt import resolve_stt_for_coach  # type: ignore
+
+            effective, stt_warn = resolve_stt_for_coach(self.transcription_service)
+            if effective != self.transcriber.service:
+                self.transcriber = Transcriber(service=effective)
+            if stt_warn:
+                self.logger.logger.warning(stt_warn)
+
             result = self.transcriber.transcribe(audio_data)
 
             # Track performance

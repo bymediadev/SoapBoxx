@@ -1,5 +1,7 @@
 # SoapBoxx Production Studio Demo Instructions
 
+**Testers:** use **[TESTER_QUICKSTART.md](TESTER_QUICKSTART.md)** for a ~15-minute step-by-step setup (download → extract → launch → API key → smoke test).
+
 ## What Testers Get
 
 - A packaged desktop demo (dependencies bundled).

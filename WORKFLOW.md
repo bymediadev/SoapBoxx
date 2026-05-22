@@ -1,56 +1,35 @@
 # SoapBoxx — User Workflow
 
-> **UI naming:** The recording tab is labeled **SoapBoxx** in the app; product docs call this module **Studio**.
+> Default app: **Coach** + **Settings**. Studio recording is off unless `SOAPBOXX_SHOW_STUDIO=1`.
 
-## First-time user flow
+## First-time flow
 
-1. Open app
-2. See SoapBoxx tab (Studio / recording — default)
-3. Plug in microphone
-4. Click Record
-5. Speak naturally
-6. Stop recording
-7. Transcript is generated automatically
-8. User sees AI feedback (Reverb tab)
+1. Open app → **Coach** tab
+2. **Settings** → add OpenAI API key (or Ollama model) → Save
+3. Import an episode (YouTube URL, file, or paste)
+4. Choose **category** → **Generate Episode Coach Report**
+5. Read **Coach** (A–F) and **Intelligence** (comparison + tier)
 
-## Core recording flow
+## Import paths
 
-```text
-START
-  → User clicks Record
-  → Audio captured + buffered
-  → User speaks episode
-  → Stop recording
-  → Audio saved as session / episode
-  → Transcription triggered
-  → Transcript displayed
-  → Reverb analysis runs
-  → Feedback displayed
-```
+| Method | What happens |
+|--------|----------------|
+| **YouTube URL** | yt-dlp captions → clean text; optional audio ASR if thin |
+| **Transcript file** | Load `.txt` / `.md` |
+| **Audio file** | Transcribe (OpenAI or local Whisper) |
+| **Paste** | Tactiq/YouTube exports cleaned automatically |
 
-## Feedback flow (Reverb)
+## Analysis (after import)
 
-1. Take transcript
-2. Analyze: clarity, structure, pacing, question handling
-3. Generate: score (0–100), insights, improvement suggestions
-4. Display results in structured format
+1. **Producer coach** — sections A–F
+2. **Intelligence** — metrics vs category, tier, actions; saved to `data/soapboxx.db`
 
-## Scoop flow (pre-recording)
+## Categories
 
-1. User selects guest/topic
-2. System generates: background info, talking points, suggested questions
-3. Output used as reference during recording
-
-## Export flow
-
-User can export:
-
-- Transcript (.txt / .md)
-- Audio file
-- Analysis report
+`general`, `interview`, `business`, `solo`, `comedy` — set on Coach tab or in Settings as default. Fewer than 2 episodes in a category uses **sensible defaults** until your library grows.
 
 ## Design principle
 
-Every workflow must end with:
+Every session ends with:
 
-> a usable improvement artifact
+> a usable improvement artifact for the **next** episode

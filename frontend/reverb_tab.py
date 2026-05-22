@@ -1,6 +1,6 @@
 # frontend/reverb_tab.py
 """
-Reverb Tab - Podcast Feedback and Coaching Tools
+Coach tab (ReverbTab) — post-episode Episode Coach Report (sections A–F).
 Provides AI-powered feedback and coaching for podcast creators
 """
 
@@ -73,7 +73,17 @@ def _episode_analysis_stt_service() -> str:
         or _config_soapbox_stt_service()
         or ""
     ).strip().lower()
-    if raw in ("openai", "local", "assemblyai", "azure"):
+    try:
+        from backend.coach_stt import resolve_stt_for_coach
+    except ImportError:
+        try:
+            from coach_stt import resolve_stt_for_coach  # type: ignore
+        except ImportError:
+            resolve_stt_for_coach = None  # type: ignore
+    if resolve_stt_for_coach is not None:
+        effective, _ = resolve_stt_for_coach(raw)
+        return effective
+    if raw in ("openai", "local", "assemblyai"):
         return raw
     if _reverb_ollama_model_configured():
         return "local"
@@ -94,6 +104,7 @@ def _episode_upload_size_hint() -> str:
         )
     return (
         f"💡 Transcription uses «{svc}» (not the OpenAI 25 MB cap). "
+        "Coach supports openai, local, or assemblyai only. "
         "Very large files may still be slow or memory-heavy with local Whisper."
     )
 
@@ -179,8 +190,8 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (QButtonGroup, QComboBox, QFileDialog, QGridLayout,
                              QGroupBox, QHBoxLayout, QLabel, QLineEdit,
                              QListWidget, QListWidgetItem, QMessageBox,
-                             QProgressBar, QPushButton, QTextEdit, QVBoxLayout,
-                             QWidget)
+                             QProgressBar, QPushButton, QTextEdit, QTreeWidget,
+                             QTreeWidgetItem, QVBoxLayout, QWidget)
 
 
 class EpisodeAnalysisThread(QThread):
@@ -190,10 +201,19 @@ class EpisodeAnalysisThread(QThread):
     progress_updated = pyqtSignal(int)
     error_occurred = pyqtSignal(str)
 
-    def __init__(self, file_path: str, analysis_type: str):
+    def __init__(
+        self,
+        file_path: str,
+        analysis_type: str,
+        *,
+        category: str = "general",
+        title: str = "",
+    ):
         super().__init__()
         self.file_path = file_path
         self.analysis_type = analysis_type
+        self.category = category
+        self.episode_title = title
 
     def run(self):
         """Run episode analysis"""
@@ -302,7 +322,40 @@ class EpisodeAnalysisThread(QThread):
 
             self.progress_updated.emit(60)
 
-            # Analyze content or episode report / network brief
+            base = os.path.splitext(os.path.basename(self.file_path))[0]
+            title = (self.episode_title or base).strip()
+            if hasattr(feedback_engine, "generate_episode_coach_report"):
+                coach = feedback_engine.generate_episode_coach_report(
+                    transcript,
+                    title=title,
+                    creator="",
+                )
+                intelligence: dict = {}
+                try:
+                    from backend.intelligence_v1.pipeline import process_transcript_only
+                except ImportError:
+                    from intelligence_v1.pipeline import process_transcript_only  # type: ignore
+
+                self.progress_updated.emit(85)
+                intelligence = process_transcript_only(
+                    transcript, self.category, title=title
+                )
+                self.progress_updated.emit(100)
+                self.analysis_complete.emit(
+                    {
+                        "file_path": self.file_path,
+                        "file_name": base,
+                        "transcript": transcript,
+                        "coach_report": coach,
+                        "markdown": coach.get("markdown") or "",
+                        "intelligence": intelligence,
+                        "intelligence_markdown": intelligence.get("markdown") or "",
+                        "analysis_type": "Episode Coach Report",
+                    }
+                )
+                return
+
+            # Legacy path (should not run in focused coach UI)
             network_brief_md = None
             network_brief_payload = None
             if self.analysis_type == "Episode Report (v3 — primary)":
@@ -390,44 +443,103 @@ class EpisodeAnalysisThread(QThread):
             traceback.print_exc()
 
 
-def _format_session_feedback_block(analysis: dict) -> str:
-    """Human-readable block for FeedbackEngine.analyze() results."""
-    lines = ["🎯 AI feedback (SoapBoxx recording)", "─" * 44, ""]
-    if not isinstance(analysis, dict):
-        return str(analysis)
-    lf = analysis.get("listener_feedback")
-    if lf:
-        lines.append("Listener feedback")
-        lines.append(str(lf).strip())
-        lines.append("")
-    cs = analysis.get("coaching_suggestions")
-    if isinstance(cs, (list, tuple)) and cs:
-        lines.append("Coaching suggestions")
-        for i, s in enumerate(cs, 1):
-            lines.append(f"  {i}. {s}")
-        lines.append("")
-    bm = analysis.get("benchmark")
-    if bm:
-        lines.append(f"Benchmark: {bm}")
-    conf = analysis.get("confidence")
-    if conf is not None:
+def _coach_category_choices():
+    try:
+        from backend.intelligence_v1.categories import category_labels
+    except ImportError:
         try:
-            lines.append(f"Confidence: {float(conf):.2f}")
-        except (TypeError, ValueError):
-            lines.append(f"Confidence: {conf}")
-    return "\n".join(lines).strip()
+            from intelligence_v1.categories import category_labels  # type: ignore
+        except ImportError:
+            return [("general", "General / mixed")]
+    return category_labels()
 
 
-class SessionFeedbackThread(QThread):
-    """Run FeedbackEngine.analyze in the background (SoapBoxx → Reverb path)."""
+def _load_saved_intelligence_category() -> str:
+    try:
+        from config import Config
+    except ImportError:
+        try:
+            from backend.config import Config  # type: ignore
+        except ImportError:
+            return "general"
+    try:
+        return str(
+            Config().get("ui_settings.soapbox.intelligence_category", "general")
+            or "general"
+        ).strip()
+    except Exception:
+        return "general"
 
-    feedback_complete = pyqtSignal(dict)
+
+def _format_coach_report_payload(payload: dict) -> str:
+    """Display Episode Coach Report markdown from generate_episode_coach_report."""
+    if not isinstance(payload, dict):
+        return str(payload)
+    md = str(payload.get("markdown") or "").strip()
+    if md:
+        return md
+    return "(No coach report generated.)"
+
+
+class EpisodeIngestThread(QThread):
+    """Pull transcript from YouTube, file, or audio."""
+
+    ingest_complete = pyqtSignal(dict)
     error_occurred = pyqtSignal(str)
 
-    def __init__(self, transcript: str, analysis_depth: str = "standard"):
+    def __init__(self, mode: str, payload: str):
+        super().__init__()
+        self.mode = mode
+        self.payload = payload
+
+    def run(self):
+        try:
+            try:
+                from backend.episode_ingest import (
+                    ingest_from_audio_file,
+                    ingest_from_transcript_file,
+                    ingest_from_youtube_url,
+                )
+            except ImportError:
+                from episode_ingest import (  # type: ignore
+                    ingest_from_audio_file,
+                    ingest_from_transcript_file,
+                    ingest_from_youtube_url,
+                )
+
+            if self.mode == "youtube":
+                r = ingest_from_youtube_url(self.payload)
+            elif self.mode == "transcript_file":
+                r = ingest_from_transcript_file(self.payload)
+            elif self.mode == "audio_file":
+                r = ingest_from_audio_file(self.payload)
+            else:
+                self.error_occurred.emit(f"Unknown ingest mode: {self.mode}")
+                return
+            self.ingest_complete.emit(r.to_dict())
+        except Exception as e:
+            self.error_occurred.emit(str(e))
+
+
+class FullEpisodeAnalysisThread(QThread):
+    """Episode Coach Report (A–F) + intelligence metrics/tier report."""
+
+    analysis_complete = pyqtSignal(dict)
+    error_occurred = pyqtSignal(str)
+
+    def __init__(
+        self,
+        transcript: str,
+        *,
+        title: str = "",
+        category: str = "general",
+        creator: str = "",
+    ):
         super().__init__()
         self.transcript = transcript
-        self.analysis_depth = analysis_depth
+        self.title = title
+        self.category = category
+        self.creator = creator
 
     def run(self):
         try:
@@ -437,37 +549,58 @@ class SessionFeedbackThread(QThread):
 
                 feedback_engine = FeedbackEngine()
             except ImportError:
-                try:
-                    sys.path.insert(0, backend_dir)
-                    from feedback_engine import FeedbackEngine
+                sys.path.insert(0, backend_dir)
+                from feedback_engine import FeedbackEngine
 
-                    feedback_engine = FeedbackEngine()
-                except ImportError:
-                    try:
-                        sys.path.insert(
-                            0, os.path.join(os.path.dirname(__file__), "..", "backend")
-                        )
-                        from feedback_engine import FeedbackEngine
-
-                        feedback_engine = FeedbackEngine()
-                    except ImportError as e:
-                        self.error_occurred.emit(
-                            f"Could not import FeedbackEngine: {e}"
-                        )
-                        return
-
+                feedback_engine = FeedbackEngine()
             if feedback_engine is None:
-                self.error_occurred.emit("FeedbackEngine failed to initialize")
+                self.error_occurred.emit("FeedbackEngine not available")
                 return
 
-            out = feedback_engine.analyze(
-                transcript=self.transcript,
-                analysis_depth=self.analysis_depth,
-            )
-            if isinstance(out, dict):
-                self.feedback_complete.emit(out)
+            coach: dict = {}
+            if hasattr(feedback_engine, "generate_episode_coach_report"):
+                coach = feedback_engine.generate_episode_coach_report(
+                    self.transcript,
+                    title=self.title,
+                    creator=self.creator,
+                )
             else:
-                self.error_occurred.emit("Unexpected response from feedback engine")
+                coach = feedback_engine.analyze(transcript=self.transcript)
+
+            intelligence: dict = {}
+            try:
+                from backend.intelligence_v1.pipeline import process_transcript_only
+            except ImportError:
+                from intelligence_v1.pipeline import process_transcript_only  # type: ignore
+
+            intelligence = process_transcript_only(
+                self.transcript,
+                self.category,
+                title=self.title or "Episode",
+            )
+
+            self.analysis_complete.emit(
+                {
+                    "coach": coach if isinstance(coach, dict) else {},
+                    "intelligence": intelligence,
+                }
+            )
+        except Exception as e:
+            self.error_occurred.emit(str(e))
+
+
+class WeeklyBatchThread(QThread):
+    """Process pending library queue (measurement-first)."""
+
+    batch_complete = pyqtSignal(dict)
+    error_occurred = pyqtSignal(str)
+
+    def run(self):
+        try:
+            from backend.library import run_weekly_batch
+
+            summary = run_weekly_batch()
+            self.batch_complete.emit(summary)
         except Exception as e:
             self.error_occurred.emit(str(e))
 
@@ -480,7 +613,10 @@ class ReverbTab(QWidget):
         self.uploaded_episodes = []
         self.analysis_thread = None
         self._session_feedback_thread = None
+        self._coach_report_thread = None
         self._last_episode_session = None
+        self._last_ingest_source: Optional[Dict[str, str]] = None
+        self._batch_thread: Optional[WeeklyBatchThread] = None
         # Defer UI setup until widget is shown
         self._ui_initialized = False
 
@@ -499,23 +635,173 @@ class ReverbTab(QWidget):
         super().showEvent(event)
 
     def init_ui(self):
-        """Initialize the user interface"""
+        """Focused post-episode coach UI (transcript → Episode Coach Report)."""
         layout = QVBoxLayout()
 
-        # Title
-        title = QLabel("🎙️ Reverb - Podcast Feedback & Coaching")
-        title.setStyleSheet("font-size: 18px; font-weight: bold; margin: 10px;")
+        title = QLabel("Episode Coach")
+        title.setStyleSheet("font-size: 20px; font-weight: bold; margin: 8px 0;")
         layout.addWidget(title)
 
-        # Description
         description = QLabel(
-            "AI-powered feedback and coaching tools to help you create better podcasts"
+            "Import from where you already publish (YouTube, transcript, or audio). "
+            "SoapBoxx adds an insights library on top — producer coaching and structure metrics "
+            "for your next episode, in 2–3 minutes."
         )
-        description.setStyleSheet("color: #666; margin: 5px;")
+        description.setWordWrap(True)
+        description.setStyleSheet("color: #555; margin-bottom: 8px;")
         layout.addWidget(description)
 
-        # Past Episodes Upload Section
-        upload_group = QGroupBox("📁 Past Episodes Upload")
+        input_group = QGroupBox("1. Import episode")
+        input_layout = QVBoxLayout()
+
+        import_row = QHBoxLayout()
+        import_row.addWidget(QLabel("YouTube URL:"))
+        self.youtube_url_input = QLineEdit()
+        self.youtube_url_input.setPlaceholderText("https://www.youtube.com/watch?v=…")
+        import_row.addWidget(self.youtube_url_input, 1)
+        self.import_youtube_btn = QPushButton("Import URL")
+        self.import_youtube_btn.clicked.connect(self.import_from_youtube_url)
+        import_row.addWidget(self.import_youtube_btn)
+        input_layout.addLayout(import_row)
+
+        file_row = QHBoxLayout()
+        self.import_transcript_btn = QPushButton("Import transcript file…")
+        self.import_transcript_btn.clicked.connect(self.import_transcript_file)
+        file_row.addWidget(self.import_transcript_btn)
+        self.import_audio_btn = QPushButton("Import audio file…")
+        self.import_audio_btn.clicked.connect(self.import_audio_file)
+        file_row.addWidget(self.import_audio_btn)
+        file_row.addStretch()
+        input_layout.addLayout(file_row)
+
+        paste_hint = QLabel(
+            "Or paste a transcript below (e.g. from Tactiq). Then choose category and generate."
+        )
+        paste_hint.setWordWrap(True)
+        paste_hint.setStyleSheet("color: #666; font-size: 11px;")
+        input_layout.addWidget(paste_hint)
+
+        self.transcript_input = QTextEdit()
+        self.transcript_input.setPlaceholderText(
+            "Paste your episode transcript here…"
+        )
+        self.transcript_input.setMinimumHeight(120)
+        input_layout.addWidget(self.transcript_input)
+
+        meta_row = QHBoxLayout()
+        meta_row.addWidget(QLabel("Episode title:"))
+        self.episode_title_input = QLineEdit()
+        self.episode_title_input.setPlaceholderText("Optional — used in reports")
+        meta_row.addWidget(self.episode_title_input, 1)
+        input_layout.addLayout(meta_row)
+
+        shelf_row = QHBoxLayout()
+        shelf_row.addWidget(QLabel("Show:"))
+        self.show_title_input = QLineEdit()
+        self.show_title_input.setPlaceholderText("Podcast / series name")
+        shelf_row.addWidget(self.show_title_input, 1)
+        shelf_row.addWidget(QLabel("Author:"))
+        self.author_input = QLineEdit()
+        self.author_input.setPlaceholderText("Host / creator")
+        shelf_row.addWidget(self.author_input, 1)
+        input_layout.addLayout(shelf_row)
+
+        cat_row = QHBoxLayout()
+        cat_row.addWidget(QLabel("Category:"))
+        self.category_combo = QComboBox()
+        for cid, label in _coach_category_choices():
+            self.category_combo.addItem(label, cid)
+        saved_cat = _load_saved_intelligence_category()
+        idx = self.category_combo.findData(saved_cat)
+        if idx >= 0:
+            self.category_combo.setCurrentIndex(idx)
+        cat_row.addWidget(self.category_combo, 1)
+        cat_hint = QLabel("Benchmarks compare against this show type.")
+        cat_hint.setStyleSheet("color: #888; font-size: 10px;")
+        cat_row.addWidget(cat_hint)
+        input_layout.addLayout(cat_row)
+
+        btn_row = QHBoxLayout()
+        self.generate_coach_btn = QPushButton("Generate Episode Coach Report")
+        self.generate_coach_btn.clicked.connect(self.generate_coach_from_transcript)
+        btn_row.addWidget(self.generate_coach_btn)
+        self.coach_progress = QProgressBar()
+        self.coach_progress.setVisible(False)
+        btn_row.addWidget(self.coach_progress, 1)
+        input_layout.addLayout(btn_row)
+
+        self.session_feedback_status = QLabel("Waiting for transcript…")
+        self.session_feedback_status.setWordWrap(True)
+        self.session_feedback_status.setStyleSheet("color: #6C757D; font-size: 11px;")
+        input_layout.addWidget(self.session_feedback_status)
+
+        input_group.setLayout(input_layout)
+        layout.addWidget(input_group)
+
+        library_group = QGroupBox("Insights library — weekly batch")
+        library_layout = QVBoxLayout()
+        lib_hint = QLabel(
+            "Spotify, YouTube, and other hosts are the catalog — SoapBoxx builds your "
+            "insights shelf here (category → author → show → episodes). "
+            "Queue episodes from imports, run weekly batch for measurements; coach stays on demand."
+        )
+        lib_hint.setWordWrap(True)
+        lib_hint.setStyleSheet("color: #666; font-size: 11px;")
+        library_layout.addWidget(lib_hint)
+
+        queue_row = QHBoxLayout()
+        self.add_to_queue_btn = QPushButton("Add to weekly queue")
+        self.add_to_queue_btn.clicked.connect(self.add_episode_to_weekly_queue)
+        queue_row.addWidget(self.add_to_queue_btn)
+        self.run_batch_btn = QPushButton("Run weekly batch")
+        self.run_batch_btn.clicked.connect(self.run_weekly_batch)
+        queue_row.addWidget(self.run_batch_btn)
+        self.batch_progress = QProgressBar()
+        self.batch_progress.setVisible(False)
+        queue_row.addWidget(self.batch_progress, 1)
+        library_layout.addLayout(queue_row)
+
+        self.library_status = QLabel("")
+        self.library_status.setWordWrap(True)
+        self.library_status.setStyleSheet("color: #6C757D; font-size: 11px;")
+        library_layout.addWidget(self.library_status)
+
+        self.library_tree = QTreeWidget()
+        self.library_tree.setHeaderLabels(["Shelf", ""])
+        self.library_tree.setMinimumHeight(140)
+        library_layout.addWidget(self.library_tree)
+
+        library_group.setLayout(library_layout)
+        layout.addWidget(library_group)
+
+        report_group = QGroupBox("2. Episode Coach Report")
+        report_layout = QVBoxLayout()
+        self.coach_report_output = QTextEdit()
+        self.coach_report_output.setReadOnly(True)
+        self.coach_report_output.setPlaceholderText(
+            "Sections A–F will appear here: summary, strong/weak moments, missed follow-ups, "
+            "host patterns, and next-episode improvements."
+        )
+        self.coach_report_output.setMinimumHeight(220)
+        report_layout.addWidget(self.coach_report_output)
+
+        intel_label = QLabel("3. Intelligence (metrics, tier, actions)")
+        intel_label.setStyleSheet("font-weight: 600; margin-top: 8px;")
+        report_layout.addWidget(intel_label)
+        self.intelligence_report_output = QTextEdit()
+        self.intelligence_report_output.setReadOnly(True)
+        self.intelligence_report_output.setPlaceholderText(
+            "Category comparison, predicted tier (A/B/C), and metric-driven actions appear here."
+        )
+        self.intelligence_report_output.setMinimumHeight(200)
+        report_layout.addWidget(self.intelligence_report_output)
+
+        report_group.setLayout(report_layout)
+        layout.addWidget(report_group, 1)
+        self.results_text = self.coach_report_output  # legacy helper methods
+
+        # Optional: audio upload → transcribe → same coach report
+        upload_group = QGroupBox("Optional: upload audio (transcribe → coach)")
         upload_layout = QVBoxLayout()
 
         # File size / STT backend hint (OpenAI Whisper API = 25 MB cap; local = relaxed)
@@ -537,29 +823,7 @@ class ReverbTab(QWidget):
 
         upload_layout.addLayout(file_layout)
 
-        # Analysis type selection
-        analysis_layout = QHBoxLayout()
-        analysis_label = QLabel("Analysis Type:")
-        self.analysis_combo = QComboBox()
-        self.analysis_combo.addItems(
-            [
-                "Episode Report (v3 — primary)",
-                "Network Brief (v2 — compact)",
-                "Content Analysis",
-                "Performance Coaching",
-                "Engagement Analysis",
-                "Storytelling Feedback",
-                "Guest Interview Coaching",
-            ]
-        )
-        analysis_layout.addWidget(analysis_label)
-        analysis_layout.addWidget(self.analysis_combo)
-        analysis_layout.addStretch()
-
-        upload_layout.addLayout(analysis_layout)
-
-        # Upload and analyze button
-        self.analyze_btn = QPushButton("🔍 Analyze Episode")
+        self.analyze_btn = QPushButton("Transcribe & generate coach report")
         self.analyze_btn.clicked.connect(self.analyze_episode)
         self.analyze_btn.setEnabled(False)
         upload_layout.addWidget(self.analyze_btn)
@@ -581,178 +845,363 @@ class ReverbTab(QWidget):
         upload_group.setLayout(upload_layout)
         layout.addWidget(upload_group)
 
-        # API Status
-        api_status_group = QGroupBox("🔑 API Key Status")
-        api_status_layout = QGridLayout()
-
-        api_keys = {
-            "OpenAI API Key": os.environ.get("OPENAI_API_KEY", "Not set"),
-            "Ollama model (SOAPBOXX_OLLAMA_MODEL)": os.environ.get(
-                "SOAPBOXX_OLLAMA_MODEL", "Not set"
-            ),
-            "YouTube API Key": os.environ.get("YOUTUBE_API_KEY", "Not set"),
-            "AssemblyAI API Key": os.environ.get("ASSEMBLYAI_API_KEY", "Not set"),
-            "ElevenLabs API Key": os.environ.get("ELEVENLABS_API_KEY", "Not set"),
-            "Azure Speech Key": os.environ.get("AZURE_SPEECH_KEY", "Not set"),
-            "Spotify Client ID": os.environ.get("SPOTIFY_CLIENT_ID", "Not set"),
-            "PODCHASER_API_KEY": os.environ.get("PODCHASER_API_KEY", "Not set"),
-            "LISTEN_NOTES_API_KEY": os.environ.get("LISTEN_NOTES_API_KEY", "Not set"),
-            "APPLE_PODCASTS_API_KEY": os.environ.get(
-                "APPLE_PODCASTS_API_KEY", "Not set"
-            ),
-            "GOOGLE_PODCASTS_API_KEY": os.environ.get(
-                "GOOGLE_PODCASTS_API_KEY", "Not set"
-            ),
-        }
-
-        row = 0
-        _has_openai = bool(
-            api_keys.get("OpenAI API Key")
-            and api_keys.get("OpenAI API Key") != "Not set"
-        )
-        _llm_ready = _has_openai or _reverb_ollama_model_configured()
-        for key_name, value in api_keys.items():
-            status = "✅ Configured" if value and value != "Not set" else "❌ Not set"
-            status_label = QLabel(f"{key_name}: {status}")
-            api_status_layout.addWidget(status_label, row, 0)
-            row += 1
-
-        api_status_group.setLayout(api_status_layout)
-        layout.addWidget(api_status_group)
-
-        # Feedback Tools
-        feedback_group = QGroupBox("🎯 Feedback & Coaching Tools")
-        feedback_layout = QVBoxLayout()
-
-        # Content Analysis
-        content_btn = QPushButton("📊 Content Analysis")
-        content_btn.clicked.connect(self.content_analysis)
-        content_btn.setEnabled(_llm_ready)
-        feedback_layout.addWidget(content_btn)
-
-        # Video Content Analysis (NEW - YouTube Integration)
-        video_analysis_btn = QPushButton("🎥 Video Content Analysis")
-        video_analysis_btn.clicked.connect(self.video_content_analysis)
-        video_analysis_btn.setEnabled(
-            api_keys.get("YouTube API Key")
-            and api_keys.get("YouTube API Key") != "Not set"
-        )
-        feedback_layout.addWidget(video_analysis_btn)
-
-        # Video Podcast Research (NEW - YouTube Integration)
-        video_research_btn = QPushButton("🔍 Video Podcast Research")
-        video_research_btn.clicked.connect(self.video_podcast_research)
-        video_research_btn.setEnabled(
-            api_keys.get("YouTube API Key")
-            and api_keys.get("YouTube API Key") != "Not set"
-        )
-        feedback_layout.addWidget(video_research_btn)
-
-        # Performance Coaching
-        coaching_btn = QPushButton("🎓 Performance Coaching")
-        coaching_btn.clicked.connect(self.performance_coaching)
-        coaching_btn.setEnabled(_llm_ready)
-        feedback_layout.addWidget(coaching_btn)
-
-        # Engagement Analysis
-        engagement_btn = QPushButton("📈 Engagement Analysis")
-        engagement_btn.clicked.connect(self.engagement_analysis)
-        engagement_btn.setEnabled(_llm_ready)
-        feedback_layout.addWidget(engagement_btn)
-
-        # Storytelling Feedback
-        storytelling_btn = QPushButton("📖 Storytelling Feedback")
-        storytelling_btn.clicked.connect(self.storytelling_feedback)
-        storytelling_btn.setEnabled(_llm_ready)
-        feedback_layout.addWidget(storytelling_btn)
-
-        feedback_group.setLayout(feedback_layout)
-        layout.addWidget(feedback_group)
-
-        # SoapBoxx live recording → AI feedback (moved from SoapBoxx tab)
-        session_fb_group = QGroupBox("🎙️ SoapBoxx recording — AI feedback")
-        session_fb_layout = QVBoxLayout()
-        session_hint = QLabel(
-            "When you stop recording on the SoapBoxx tab, the live transcript is sent here for "
-            "listener feedback and coaching. Uses Ollama when SOAPBOXX_OLLAMA_MODEL is set, "
-            "otherwise your OpenAI API key (same stack as FeedbackEngine)."
-        )
-        session_hint.setWordWrap(True)
-        session_hint.setStyleSheet("color: #666; font-size: 11px;")
-        session_fb_layout.addWidget(session_hint)
-        self.session_feedback_status = QLabel(
-            "Waiting for a finished SoapBoxx recording…"
-        )
-        self.session_feedback_status.setWordWrap(True)
-        self.session_feedback_status.setStyleSheet("color: #6C757D;")
-        session_fb_layout.addWidget(self.session_feedback_status)
-        self.session_feedback_output = QTextEdit()
-        self.session_feedback_output.setReadOnly(True)
-        self.session_feedback_output.setPlaceholderText(
-            "Listener feedback and coaching suggestions appear here after each session."
-        )
-        self.session_feedback_output.setMinimumHeight(200)
-        session_fb_layout.addWidget(self.session_feedback_output)
-        session_fb_group.setLayout(session_fb_layout)
-        layout.addWidget(session_fb_group)
-
-        # Results section
-        results_group = QGroupBox("📊 Analysis Results")
-        results_layout = QVBoxLayout()
-
-        self.results_text = QTextEdit()
-        self.results_text.setPlaceholderText(
-            "Episode analysis results will appear here..."
-        )
-        self.results_text.setMaximumHeight(300)
-        results_layout.addWidget(self.results_text)
-
-        results_group.setLayout(results_layout)
-        layout.addWidget(results_group)
-
         self.setLayout(layout)
+        self._coach_report_thread = None
+        self._full_analysis_thread = None
+        self._ingest_thread = None
+        self._ensure_button_labels_visible()
+        self.refresh_library_tree()
+
+    def _ensure_button_labels_visible(self):
+        """Black readable labels on standard QPushButton (Coach tab)."""
+        style = """
+            QPushButton {
+                color: #000000;
+                background-color: #F5F5F5;
+                border: 1px solid #BDBDBD;
+                border-radius: 6px;
+                padding: 8px 14px;
+                font-size: 13px;
+                font-weight: 500;
+                min-height: 22px;
+            }
+            QPushButton:hover {
+                background-color: #E8E8E8;
+                border: 1px solid #999999;
+            }
+            QPushButton:disabled {
+                color: #666666;
+                background-color: #EEEEEE;
+            }
+        """
+        for btn in self.findChildren(QPushButton):
+            btn.setStyleSheet(style)
+
+    def _current_category_id(self) -> str:
+        if hasattr(self, "category_combo"):
+            data = self.category_combo.currentData()
+            if data:
+                return str(data)
+        return _load_saved_intelligence_category()
+
+    def _current_episode_title(self) -> str:
+        if hasattr(self, "episode_title_input"):
+            t = (self.episode_title_input.text() or "").strip()
+            if t:
+                return t
+        return "Studio recording"
+
+    def _current_show_title(self) -> str:
+        if hasattr(self, "show_title_input"):
+            return (self.show_title_input.text() or "").strip()
+        return ""
+
+    def _current_author(self) -> str:
+        if hasattr(self, "author_input"):
+            return (self.author_input.text() or "").strip()
+        return ""
+
+    def refresh_library_tree(self):
+        if not hasattr(self, "library_tree"):
+            return
+        try:
+            from backend.library import get_library_tree, list_pending_queue
+        except ImportError:
+            return
+        tree = get_library_tree()
+        pending = list_pending_queue()
+        self.library_tree.clear()
+        for cat_node in tree:
+            cat_item = QTreeWidgetItem([str(cat_node.get("category", ""))])
+            for auth in cat_node.get("authors") or []:
+                auth_item = QTreeWidgetItem([str(auth.get("author", ""))])
+                cat_item.addChild(auth_item)
+                for show in auth.get("shows") or []:
+                    n = show.get("episode_count", 0)
+                    show_item = QTreeWidgetItem(
+                        [str(show.get("title", "")), f"{n} episode(s)"]
+                    )
+                    auth_item.addChild(show_item)
+                    for ep in show.get("episodes") or []:
+                        title = str(ep.get("title") or "Episode")
+                        when = str(ep.get("created_at") or "")[:10]
+                        show_item.addChild(QTreeWidgetItem([title, when]))
+            self.library_tree.addTopLevelItem(cat_item)
+        self.library_tree.expandAll()
+        if hasattr(self, "library_status"):
+            self.library_status.setText(
+                f"Library: {sum(len(a.get('shows') or []) for c in tree for a in c.get('authors') or [])} show(s). "
+                f"Weekly queue: {len(pending)} pending."
+            )
+
+    def add_episode_to_weekly_queue(self):
+        try:
+            from backend.library import enqueue_episode
+        except ImportError as e:
+            QMessageBox.warning(self, "Library", f"Library module unavailable: {e}")
+            return
+
+        category = self._current_category_id()
+        show_title = self._current_show_title() or "Untitled show"
+        author = self._current_author() or "Unknown"
+        episode_title = self._current_episode_title()
+
+        source_type = ""
+        source_ref = ""
+        if self._last_ingest_source:
+            source_type = self._last_ingest_source.get("source_type", "")
+            source_ref = self._last_ingest_source.get("source_ref", "")
+        url = (self.youtube_url_input.text() or "").strip() if hasattr(
+            self, "youtube_url_input"
+        ) else ""
+        if not source_ref and url:
+            source_type, source_ref = "youtube", url
+        if not source_ref:
+            paste = self.transcript_input.toPlainText().strip()
+            if len(paste) >= 80:
+                source_type, source_ref = "paste", paste
+        if not source_ref:
+            QMessageBox.warning(
+                self,
+                "Weekly queue",
+                "Import a YouTube URL / file, or paste a transcript, then add to queue.",
+            )
+            return
+
+        try:
+            result = enqueue_episode(
+                source_type=source_type,
+                source_ref=source_ref,
+                category=category,
+                show_title=show_title,
+                author=author,
+                episode_title=episode_title,
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "Weekly queue", str(e))
+            return
+
+        dup = result.get("duplicate")
+        self.library_status.setText(
+            f"{'Already queued' if dup else 'Added to weekly queue'} "
+            f"(#{result.get('queue_id')}). Run batch when ready."
+        )
+        self.refresh_library_tree()
+
+    def run_weekly_batch(self):
+        if self._batch_thread and self._batch_thread.isRunning():
+            return
+        self.run_batch_btn.setEnabled(False)
+        self.add_to_queue_btn.setEnabled(False)
+        self.batch_progress.setVisible(True)
+        self.batch_progress.setRange(0, 0)
+        self.library_status.setText("Running weekly batch…")
+        self._batch_thread = WeeklyBatchThread()
+        self._batch_thread.batch_complete.connect(
+            self._on_weekly_batch_complete, Qt.ConnectionType.QueuedConnection
+        )
+        self._batch_thread.error_occurred.connect(
+            self._on_weekly_batch_error, Qt.ConnectionType.QueuedConnection
+        )
+        self._batch_thread.start()
+
+    def _on_weekly_batch_complete(self, summary: dict):
+        self.run_batch_btn.setEnabled(True)
+        self.add_to_queue_btn.setEnabled(True)
+        self.batch_progress.setVisible(False)
+        ok = summary.get("processed", 0)
+        fail = summary.get("failed", 0)
+        self.library_status.setText(
+            f"Batch {summary.get('label', '')}: {ok} processed, {fail} failed."
+        )
+        self.refresh_library_tree()
+        if fail:
+            QMessageBox.warning(
+                self,
+                "Weekly batch",
+                f"Finished with {fail} failure(s). See library status.",
+            )
+
+    def _on_weekly_batch_error(self, err: str):
+        self.run_batch_btn.setEnabled(True)
+        self.add_to_queue_btn.setEnabled(True)
+        self.batch_progress.setVisible(False)
+        self.library_status.setText("Weekly batch failed.")
+        QMessageBox.warning(self, "Weekly batch", err)
+
+    def _start_full_analysis(self, transcript: str):
+        category = self._current_category_id()
+        title = self._current_episode_title()
+        thread = FullEpisodeAnalysisThread(
+            transcript,
+            title=title,
+            category=category,
+        )
+        thread.analysis_complete.connect(
+            self._on_full_analysis_complete,
+            Qt.ConnectionType.QueuedConnection,
+        )
+        thread.error_occurred.connect(
+            self._on_full_analysis_error,
+            Qt.ConnectionType.QueuedConnection,
+        )
+        self._full_analysis_thread = thread
+        thread.start()
 
     def run_session_feedback_from_transcript(self, transcript: str):
-        """Called from MainWindow when SoapBoxx recording stops (non-empty transcript)."""
+        """Legacy hook if Studio tab is enabled — same as paste + analyze."""
+        if hasattr(self, "transcript_input"):
+            self.transcript_input.setPlainText((transcript or "").strip())
+        self.generate_coach_from_transcript()
+
+    def import_from_youtube_url(self):
+        url = (self.youtube_url_input.text() or "").strip()
+        if not url:
+            QMessageBox.warning(self, "Import", "Paste a YouTube URL first.")
+            return
+        self._run_ingest("youtube", url)
+
+    def import_transcript_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Import transcript",
+            "",
+            "Text (*.txt *.md);;All files (*.*)",
+        )
+        if path:
+            self._run_ingest("transcript_file", path)
+
+    def import_audio_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Import audio",
+            "",
+            "Audio (*.mp3 *.wav *.m4a *.flac *.ogg);;All files (*.*)",
+        )
+        if path:
+            self._run_ingest("audio_file", path)
+
+    def _run_ingest(self, mode: str, payload: str):
+        if self._ingest_thread and self._ingest_thread.isRunning():
+            self._ingest_thread.wait(3000)
+        self.session_feedback_status.setText("Importing episode…")
+        self.import_youtube_btn.setEnabled(False)
+        self.import_transcript_btn.setEnabled(False)
+        self.import_audio_btn.setEnabled(False)
+        self._ingest_thread = EpisodeIngestThread(mode, payload)
+        self._ingest_thread.ingest_complete.connect(
+            self._on_ingest_complete, Qt.ConnectionType.QueuedConnection
+        )
+        self._ingest_thread.error_occurred.connect(
+            self._on_ingest_error, Qt.ConnectionType.QueuedConnection
+        )
+        self._ingest_thread.start()
+
+    def _on_ingest_complete(self, result: dict):
+        self.import_youtube_btn.setEnabled(True)
+        self.import_transcript_btn.setEnabled(True)
+        self.import_audio_btn.setEnabled(True)
+        tx = str(result.get("transcript") or "").strip()
+        self.transcript_input.setPlainText(tx)
+        if result.get("title") and hasattr(self, "episode_title_input"):
+            self.episode_title_input.setText(str(result["title"]))
+        st = str(result.get("source_type") or "")
+        ref = str(result.get("source_ref") or "")
+        if st and ref:
+            self._last_ingest_source = {"source_type": st, "source_ref": ref}
+        creator = str(result.get("creator") or "").strip()
+        if creator and hasattr(self, "author_input") and not self.author_input.text().strip():
+            self.author_input.setText(creator)
+        warns = result.get("warnings") or []
+        msg = f"Imported ({result.get('source_type', 'unknown')})."
+        if warns:
+            msg += " " + "; ".join(str(w) for w in warns[:2])
+        self.session_feedback_status.setText(msg)
+
+    def _on_ingest_error(self, err: str):
+        self.import_youtube_btn.setEnabled(True)
+        self.import_transcript_btn.setEnabled(True)
+        self.import_audio_btn.setEnabled(True)
+        self.session_feedback_status.setText("Import failed.")
+        QMessageBox.warning(
+            self,
+            "Import failed",
+            f"{err}\n\nFor YouTube: install yt-dlp (`pip install yt-dlp`). "
+            "For ASR fallback: ffmpeg on PATH + OpenAI or local Whisper.",
+        )
+
+    def _on_full_analysis_complete(self, payload: dict):
+        self.generate_coach_btn.setEnabled(True)
+        self.coach_progress.setVisible(False)
+        self.session_feedback_status.setText("Coach + intelligence ready.")
+        coach = payload.get("coach") or {}
+        intel = payload.get("intelligence") or {}
+        episode_id = intel.get("episode_id")
+        if episode_id:
+            try:
+                from backend.library.db import LibraryDB
+
+                db = LibraryDB()
+                db.init_schema()
+                md = str(coach.get("markdown") or "").strip()
+                if not md:
+                    md = _format_coach_report_payload(coach)
+                db.save_coach_report(
+                    int(episode_id),
+                    markdown=md,
+                    report=coach if isinstance(coach, dict) else None,
+                )
+            except Exception:
+                pass
+        self.coach_report_output.setPlainText(_format_coach_report_payload(coach))
+        intel_md = str(intel.get("markdown") or "").strip()
+        if hasattr(self, "intelligence_report_output"):
+            self.intelligence_report_output.setPlainText(
+                intel_md or "(Intelligence report not generated.)"
+            )
+
+    def _on_full_analysis_error(self, err: str):
+        self._on_session_feedback_error(err)
+
+    def _on_session_feedback_error(self, err: str):
+        self.generate_coach_btn.setEnabled(True)
+        self.coach_progress.setVisible(False)
+        self.session_feedback_status.setText("Analysis failed.")
+        tip = (
+            "Set OPENAI_API_KEY or SOAPBOXX_OLLAMA_MODEL in Settings, then try again."
+        )
+        msg = f"Could not complete analysis.\n\n{err}\n\n{tip}"
+        self.coach_report_output.setPlainText(msg)
+        if hasattr(self, "intelligence_report_output"):
+            self.intelligence_report_output.setPlainText("")
+
+    def generate_coach_from_transcript(self):
+        """Generate coach report from text in transcript_input."""
         if not getattr(self, "_ui_initialized", False):
             self.init_ui()
             self._ui_initialized = True
-        t = (transcript or "").strip()
-        if not t:
-            self.session_feedback_status.setText("No transcript text to analyze.")
+        t = self.transcript_input.toPlainText().strip()
+        if len(t) < 80:
+            QMessageBox.warning(
+                self,
+                "Transcript too short",
+                "Paste at least a few sentences of dialogue for meaningful coaching.",
+            )
             return
-        if self._session_feedback_thread and self._session_feedback_thread.isRunning():
-            self._session_feedback_thread.wait(2000)
-        self.session_feedback_status.setText("Generating AI feedback…")
-        self.session_feedback_output.clear()
-        self._session_feedback_thread = SessionFeedbackThread(t, "standard")
-        self._session_feedback_thread.feedback_complete.connect(
-            self._on_session_feedback_complete,
-            Qt.ConnectionType.QueuedConnection,
+        if self._coach_report_thread and self._coach_report_thread.isRunning():
+            self._coach_report_thread.wait(2000)
+        self.generate_coach_btn.setEnabled(False)
+        self.coach_progress.setVisible(True)
+        self.coach_progress.setRange(0, 0)
+        if hasattr(self, "intelligence_report_output"):
+            self.intelligence_report_output.clear()
+        self.session_feedback_status.setText(
+            "Generating coach report and intelligence analysis…"
         )
-        self._session_feedback_thread.error_occurred.connect(
-            self._on_session_feedback_error,
-            Qt.ConnectionType.QueuedConnection,
-        )
-        self._session_feedback_thread.start()
-
-    def _on_session_feedback_complete(self, analysis: dict):
-        self.session_feedback_status.setText("Feedback ready.")
-        self.session_feedback_output.setPlainText(
-            _format_session_feedback_block(analysis)
-        )
-
-    def _on_session_feedback_error(self, err: str):
-        self.session_feedback_status.setText("Feedback failed.")
-        tip = (
-            "Tips: set SOAPBOXX_OLLAMA_MODEL and run Ollama for local feedback, "
-            "or set OPENAI_API_KEY for cloud-only use."
-            if _reverb_ollama_model_configured()
-            else "Tips: set OPENAI_API_KEY, or run Ollama with SOAPBOXX_OLLAMA_MODEL in your environment."
-        )
-        self.session_feedback_output.setPlainText(
-            f"Could not generate feedback.\n\n{err}\n\n{tip}"
-        )
+        self.coach_report_output.clear()
+        if self._full_analysis_thread and self._full_analysis_thread.isRunning():
+            self._full_analysis_thread.wait(2000)
+        self._start_full_analysis(t)
 
     def select_episode_file(self):
         """Select an episode file for upload"""
@@ -811,10 +1260,11 @@ class ReverbTab(QWidget):
         self.analysis_progress.setVisible(True)
         self.analysis_progress.setValue(0)
 
-        # Create analysis thread
-        analysis_type = self.analysis_combo.currentText()
         self.analysis_thread = EpisodeAnalysisThread(
-            self.selected_file_path, analysis_type
+            self.selected_file_path,
+            "Episode Coach Report",
+            category=self._current_category_id(),
+            title=self._current_episode_title(),
         )
         self.analysis_thread.analysis_complete.connect(self.on_analysis_complete)
         self.analysis_thread.progress_updated.connect(self.analysis_progress.setValue)
@@ -822,30 +1272,33 @@ class ReverbTab(QWidget):
         self.analysis_thread.start()
 
     def on_analysis_complete(self, results):
-        """Handle analysis completion"""
+        """Handle transcribe + coach report completion."""
         self.analyze_btn.setEnabled(True)
-        self.analyze_btn.setText("🔍 Analyze Episode")
+        self.analyze_btn.setText("Transcribe & generate coach report")
         self.analysis_progress.setVisible(False)
 
-        # Add to episodes list
-        episode_item = QListWidgetItem(
-            f"📁 {results['file_name']} - {results['analysis_type']}"
+        md = results.get("markdown") or ""
+        if not md and results.get("coach_report"):
+            md = _format_coach_report_payload(results["coach_report"])
+        transcript = results.get("transcript", "")
+        if transcript and hasattr(self, "transcript_input"):
+            self.transcript_input.setPlainText(transcript)
+        self.coach_report_output.setPlainText(md or "(No coach report generated.)")
+        intel_md = results.get("intelligence_markdown") or ""
+        if not intel_md and results.get("intelligence"):
+            intel_md = str(results["intelligence"].get("markdown") or "")
+        if hasattr(self, "intelligence_report_output"):
+            self.intelligence_report_output.setPlainText(
+                intel_md or "(Intelligence report not generated.)"
+            )
+        self.session_feedback_status.setText("Coach + intelligence ready (from audio).")
+
+        fname = results.get("file_name") or os.path.basename(
+            results.get("file_path", "episode")
         )
-        episode_item.setData(1, results)  # Store results data
+        episode_item = QListWidgetItem(f"📁 {fname}")
+        episode_item.setData(1, results)
         self.episodes_list.addItem(episode_item)
-
-        # Display results
-        self.display_analysis_results(results)
-
-        QMessageBox.information(
-            self,
-            "Analysis Complete",
-            f"Episode analysis completed successfully!\n\n"
-            f"File: {results['file_name']}\n"
-            f"Analysis Type: {results['analysis_type']}\n"
-            f"Word Count: {results['word_count']}\n"
-            f"Estimated Duration: {results['duration_estimate']:.1f} minutes",
-        )
 
     def on_analysis_error(self, error):
         """Handle analysis error"""
@@ -863,81 +1316,15 @@ class ReverbTab(QWidget):
             self.display_analysis_results(results)
 
     def display_analysis_results(self, results):
-        """Display analysis results in the results text area"""
-        try:
-            # Format results
-            output = f"📊 Episode Analysis Results\n"
-            output += f"─" * 50 + "\n"
-            output += f"📁 File: {results['file_name']}\n"
-            output += f"🔍 Analysis Type: {results['analysis_type']}\n"
-            output += f"📝 Word Count: {results['word_count']}\n"
-            output += (
-                f"⏱️ Estimated Duration: {results['duration_estimate']:.1f} minutes\n"
-            )
-            output += (
-                f"📅 Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-            )
-
-            # Add transcript preview
-            transcript = results.get("transcript", "")
-            if transcript and not transcript.startswith("Error"):
-                transcript_preview = (
-                    transcript[:500] + "..." if len(transcript) > 500 else transcript
-                )
-                output += f"📝 Transcript Preview:\n{transcript_preview}\n\n"
-            else:
-                output += (
-                    f"📝 Transcript Preview:\n❌ Transcription failed: {transcript}\n\n"
-                )
-                output += f"💡 Suggestions:\n"
-                output += f"• Check if the audio file is corrupted\n"
-                if _episode_analysis_stt_service() == "openai":
-                    output += f"• Ensure the file is under 25MB when using OpenAI transcription\n"
-                else:
-                    output += (
-                        f"• Transcription uses «{_episode_analysis_stt_service()}» — "
-                        "check local Whisper (openai-whisper) and available RAM\n"
-                    )
-                output += f"• Try converting to a different audio format\n"
-                output += f"• Check if the audio contains speech\n\n"
-
-            # Add analysis results
-            analysis = results.get("analysis", {})
-            if isinstance(analysis, dict):
-                if results.get("network_brief_markdown"):
-                    if results.get("analysis_type") == "Episode Report (v3 — primary)":
-                        output += "📋 EPISODE REPORT (v3 — primary)\n"
-                    else:
-                        output += "📋 NETWORK BRIEF (v2 — compact)\n"
-                    output += "─" * 50 + "\n"
-                    output += results["network_brief_markdown"]
-                    output += "\n\n"
-                if "listener_feedback" in analysis:
-                    output += (
-                        f"🎯 Listener Feedback:\n{analysis['listener_feedback']}\n\n"
-                    )
-
-                if "coaching_suggestions" in analysis:
-                    output += f"💡 Coaching Suggestions:\n"
-                    for i, suggestion in enumerate(analysis["coaching_suggestions"], 1):
-                        output += f"  {i}. {suggestion}\n"
-                    output += "\n"
-
-                if "benchmark" in analysis:
-                    output += f"📊 Benchmark: {analysis['benchmark']}\n\n"
-
-                if "confidence" in analysis:
-                    output += f"🎯 Confidence Score: {analysis['confidence']:.2f}\n\n"
-            else:
-                output += f"📊 Analysis Results:\n{str(analysis)}\n\n"
-
-            self.results_text.setText(output)
-
-        except Exception as e:
-            self.results_text.setText(f"Error displaying results: {str(e)}")
-            import traceback
-
-            traceback.print_exc()
+        """Show stored coach report (episode list click)."""
+        md = results.get("markdown") or ""
+        if not md and results.get("coach_report"):
+            md = _format_coach_report_payload(results["coach_report"])
+        if md:
+            self.coach_report_output.setPlainText(md)
+        transcript = results.get("transcript", "")
+        if transcript and hasattr(self, "transcript_input"):
+            self.transcript_input.setPlainText(transcript)
 
     def content_analysis(self):
         """Analyze podcast content for quality and engagement"""
