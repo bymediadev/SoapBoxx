@@ -50,3 +50,11 @@ def test_library_stats_and_episodes(v1_client, v1_db_clean):
     pipe = v1_client.get("/pipeline/status")
     assert pipe.status_code == 200
     assert pipe.json()["by_status"]["queued"] >= 2
+
+    home = v1_client.get("/library/home?episodes_limit=5&activity_limit=10")
+    assert home.status_code == 200
+    bundle = home.json()
+    assert bundle["stats"]["episodes_total"] == 2
+    assert len(bundle["episodes"]) == 2
+    assert bundle["pipeline"]["by_status"]["queued"] >= 2
+    assert any(e["event_type"] == "ingest.completed" for e in bundle["activity"])

@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SoapBoxx — Insights Library</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* SoapBoxx library terminal theme (Lovable / shadcn palette) */
+    :root {
+      --radius: 0.375rem;
+      --radius-sm: calc(var(--radius) - 4px);
+      --radius-md: calc(var(--radius) - 2px);
+      --radius-lg: var(--radius);
+      --radius-xl: calc(var(--radius) + 4px);
+
+      --background: oklch(0.16 0.012 60);
+      --foreground: oklch(0.92 0.018 75);
+      --card: oklch(0.195 0.013 60);
+      --card-foreground: oklch(0.92 0.018 75);
+      --popover: oklch(0.195 0.013 60);
+      --popover-foreground: oklch(0.92 0.018 75);
+      --primary: oklch(0.78 0.14 75);
+      --primary-foreground: oklch(0.16 0.012 60);
+      --amber: oklch(0.78 0.14 75);
+      --secondary: oklch(0.24 0.014 60);
+      --secondary-foreground: oklch(0.92 0.018 75);
+      --muted: oklch(0.22 0.012 60);
+      --muted-foreground: oklch(0.62 0.02 70);
+      --accent: oklch(0.28 0.018 65);
+      --accent-foreground: oklch(0.95 0.02 80);
+      --destructive: oklch(0.6 0.2 25);
+      --destructive-foreground: oklch(0.98 0.01 80);
+      --border: oklch(0.28 0.012 60);
+      --input: oklch(0.24 0.012 60);
+      --ring: oklch(0.78 0.14 75);
+      --sidebar: oklch(0.135 0.012 60);
+      --sidebar-foreground: oklch(0.85 0.018 75);
+      --sidebar-border: oklch(0.24 0.012 60);
+      --ok: oklch(0.72 0.12 145);
+    }
+
+    * { box-sizing: border-box; margin: 0; border-color: var(--border); }
+
+    html, body {
+      min-height: 100vh;
+      background: var(--background);
+      color: var(--foreground);
+      font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+      font-feature-settings: "ss01", "cv11";
+      line-height: 1.5;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image: radial-gradient(oklch(0.92 0.018 75 / 0.025) 1px, transparent 1px);
+      background-size: 3px 3px;
+      z-index: 0;
+      mix-blend-mode: overlay;
+    }
+
+    h1, h2, h3, .font-serif {
+      font-family: "Cormorant Garamond", ui-serif, Georgia, serif;
+      letter-spacing: -0.01em;
+      font-weight: 600;
+    }
+
+    .font-mono, code, kbd, .label-mono {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 260px 1fr 300px;
+      min-height: 100vh;
+    }
+    @media (max-width: 1100px) {
+      .app { grid-template-columns: 1fr; }
+      .nav-sidebar, .rail { display: none; }
+    }
+
+    /* Left sidebar */
+    .nav-sidebar {
+      background: var(--sidebar);
+      color: var(--sidebar-foreground);
+      border-right: 1px solid var(--sidebar-border);
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .nav-sidebar .logo {
+      font-size: 1.65rem;
+      line-height: 1.1;
+      color: var(--foreground);
+    }
+    .nav-sidebar .tagline {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted-foreground);
+      margin-top: 6px;
+      font-family: "JetBrains Mono", monospace;
+    }
+    .sidebar-block h2 {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted-foreground);
+      margin-bottom: 10px;
+      font-family: "JetBrains Mono", monospace;
+      font-weight: 500;
+    }
+
+    /* Main workspace */
+    .workspace {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      border-right: 1px solid var(--border);
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--card);
+    }
+    .topbar h1 { font-size: 1.35rem; }
+    .topbar-actions { display: flex; gap: 8px; align-items: center; }
+
+    .content { padding: 20px 24px 32px; flex: 1; }
+
+    /* Right rail */
+    .rail {
+      background: var(--card);
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
+
+    .card {
+      background: var(--card);
+      color: var(--card-foreground);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+    }
+    .rail .card { background: var(--secondary); }
+    .card-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted-foreground);
+      margin-bottom: 12px;
+      font-family: "JetBrains Mono", monospace;
+    }
+
+    .pill {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--muted);
+      font-family: "JetBrains Mono", monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .pill.ok {
+      border-color: var(--amber);
+      color: var(--amber);
+      background: oklch(0.78 0.14 75 / 0.08);
+    }
+    .pill.err {
+      border-color: var(--destructive);
+      color: var(--destructive);
+      background: oklch(0.6 0.2 25 / 0.1);
+    }
+
+    .btn {
+      font: inherit;
+      font-weight: 600;
+      font-size: 13px;
+      padding: 8px 14px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: opacity 0.15s, background 0.15s;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border: none;
+    }
+    .btn-primary:hover { filter: brightness(1.06); }
+    .btn-ghost {
+      background: var(--secondary);
+      color: var(--secondary-foreground);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { background: var(--accent); }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .stat {
+      background: var(--secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px;
+    }
+    .stat-value {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 1.5rem;
+      font-weight: 500;
+      color: var(--foreground);
+    }
+    .stat.highlight .stat-value { color: var(--amber); }
+    .stat-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted-foreground);
+      margin-top: 4px;
+    }
+    .progress-wrap {
+      margin-top: 8px;
+      height: 3px;
+      background: var(--muted);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: var(--amber);
+      box-shadow: 0 0 8px oklch(0.78 0.14 75 / 0.4);
+    }
+
+    .ingest-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .ingest-row input {
+      flex: 1;
+      min-width: 200px;
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      background: var(--input);
+      color: var(--foreground);
+      font: inherit;
+      font-size: 13px;
+    }
+    .ingest-row input:focus {
+      outline: none;
+      border-color: var(--ring);
+      box-shadow: 0 0 0 2px oklch(0.78 0.14 75 / 0.2);
+    }
+    .ingest-msg { font-size: 12px; margin-top: 8px; color: var(--muted-foreground); font-family: "JetBrains Mono", monospace; }
+    .ingest-msg.ok { color: var(--amber); }
+    .ingest-msg.err { color: var(--destructive); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      text-align: left;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted-foreground);
+      padding: 0 12px 10px 0;
+      font-family: "JetBrains Mono", monospace;
+      font-weight: 500;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 11px 12px 11px 0;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    td.title { font-weight: 500; max-width: 300px; }
+    td.show { color: var(--muted-foreground); font-size: 12px; }
+
+    .status {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      font-family: "JetBrains Mono", monospace;
+      border: 1px solid var(--border);
+    }
+    .status-ready, .status-measured {
+      color: var(--amber);
+      border-color: oklch(0.78 0.14 75 / 0.35);
+      background: oklch(0.78 0.14 75 / 0.08);
+    }
+    .status-queued, .status-ingested, .status-new {
+      color: var(--muted-foreground);
+      background: var(--muted);
+    }
+    .status-transcribing, .status-ingesting {
+      color: var(--accent-foreground);
+      border-color: var(--ring);
+    }
+    .status-failed {
+      color: var(--destructive);
+      border-color: oklch(0.6 0.2 25 / 0.4);
+      background: oklch(0.6 0.2 25 / 0.1);
+    }
+
+    .pipeline-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      font-size: 11px;
+      font-family: "JetBrains Mono", monospace;
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      background: var(--muted);
+      border: 1px solid var(--border);
+      color: var(--muted-foreground);
+    }
+    .chip strong { color: var(--amber); margin-left: 4px; }
+
+    .tree { font-size: 12px; line-height: 1.55; max-height: 42vh; overflow-y: auto; }
+    .tree details { margin-left: 0; }
+    .tree details details { margin-left: 12px; }
+    .tree summary {
+      cursor: pointer;
+      padding: 3px 0;
+      list-style: none;
+      color: var(--sidebar-foreground);
+    }
+    .tree summary::-webkit-details-marker { display: none; }
+    .tree summary::before {
+      content: "› ";
+      color: var(--amber);
+      font-family: "JetBrains Mono", monospace;
+    }
+    .tree details[open] > summary::before { content: "⌄ "; }
+    .tree .domain { font-weight: 600; color: var(--foreground); }
+    .tree .podcast {
+      margin: 4px 0 4px 12px;
+      padding: 6px 8px;
+      border-radius: var(--radius-sm);
+      background: var(--accent);
+      border: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+      font-size: 11px;
+    }
+    .tree .podcast span { color: var(--muted-foreground); font-family: "JetBrains Mono", monospace; }
+
+    .activity { list-style: none; max-height: 220px; overflow-y: auto; }
+    .activity li {
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .activity li:last-child { border-bottom: none; }
+    .activity .type {
+      font-size: 10px;
+      font-family: "JetBrains Mono", monospace;
+      color: var(--amber);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .activity .time {
+      font-size: 10px;
+      color: var(--muted-foreground);
+      margin-top: 4px;
+      font-family: "JetBrains Mono", monospace;
+    }
+
+    .pattern-summary {
+      font-size: 12px;
+      color: var(--muted-foreground);
+      font-style: italic;
+      margin-bottom: 10px;
+    }
+    .pattern-card {
+      padding: 12px;
+      border-radius: var(--radius-md);
+      background: var(--background);
+      border: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+    .pattern-card h3 { font-size: 1rem; color: var(--foreground); margin-bottom: 4px; }
+    .pattern-card p { font-size: 12px; color: var(--muted-foreground); }
+
+    .empty { color: var(--muted-foreground); font-size: 12px; }
+    .skeleton {
+      background: linear-gradient(90deg, var(--muted) 25%, var(--accent) 50%, var(--muted) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.2s infinite;
+      border-radius: var(--radius-md);
+      height: 52px;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    footer {
+      padding: 12px 24px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--muted-foreground);
+      font-family: "JetBrains Mono", monospace;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    footer a { color: var(--amber); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    .hairline { border-color: var(--border); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="nav-sidebar">
+      <div>
+        <div class="logo font-serif">SoapBoxx</div>
+        <p class="tagline">Insights library</p>
+      </div>
+      <div class="sidebar-block">
+        <h2>Pipeline</h2>
+        <div id="pipeline" class="pipeline-chips empty">—</div>
+      </div>
+      <div class="sidebar-block" style="flex:1; min-height:0">
+        <h2>Catalog</h2>
+        <div id="tree" class="tree empty">Loading…</div>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar hairline">
+        <h1 class="font-serif">Production library</h1>
+        <div class="topbar-actions">
+          <span id="healthBadge" class="pill">connecting</span>
+          <button type="button" class="btn btn-ghost" id="refreshBtn">Refresh</button>
+        </div>
+      </header>
+
+      <div class="content">
+        <div class="stats" id="stats">
+          <div class="stat skeleton"></div>
+          <div class="stat skeleton"></div>
+          <div class="stat skeleton"></div>
+          <div class="stat skeleton"></div>
+        </div>
+
+        <section class="card" style="margin-bottom: 16px">
+          <div class="card-title">Ingest RSS</div>
+          <div class="ingest-row">
+            <input id="rssUrl" type="url" placeholder="https://feeds.example.com/podcast.xml" autocomplete="url" />
+            <button type="button" class="btn btn-primary" id="ingestBtn">Ingest</button>
+          </div>
+          <p id="ingestMsg" class="ingest-msg"></p>
+        </section>
+
+        <section class="card">
+          <div class="card-title">Episodes</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Show</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="episodesBody">
+              <tr><td colspan="3" class="empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      <footer>
+        <a href="/docs">/docs</a>
+        <a href="/health">/health</a>
+        <a href="/ui/">/ui</a>
+      </footer>
+    </div>
+
+    <aside class="rail">
+      <section class="card">
+        <div class="card-title">Activity</div>
+        <ul id="activity" class="activity"><li class="empty">Loading…</li></ul>
+      </section>
+      <section class="card">
+        <div class="card-title">Weekly patterns</div>
+        <div id="patterns"><p class="empty">Loading…</p></div>
+      </section>
+    </aside>
+  </div>
+
+  <script>
+    const API = "";
+
+    function esc(s) {
+      if (s == null) return "";
+      const d = document.createElement("div");
+      d.textContent = String(s);
+      return d.innerHTML;
+    }
+
+    async function api(path, init) {
+      const res = await fetch(API + path, {
+        ...init,
+        headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
+      });
+      const text = await res.text();
+      if (!res.ok) throw new Error(res.status + " " + path + ": " + text.slice(0, 200));
+      return text ? JSON.parse(text) : null;
+    }
+
+    function setHealth(health, err) {
+      const el = document.getElementById("healthBadge");
+      if (err) {
+        el.textContent = "offline";
+        el.className = "pill err";
+        el.title = err;
+        return;
+      }
+      const ok = health.status === "ok" || health.status === "degraded";
+      el.textContent = health.status === "ok" ? "live" : health.status;
+      el.className = "pill " + (ok ? "ok" : "err");
+      el.title = JSON.stringify(health.database || {}) + " " + JSON.stringify(health.redis || {});
+    }
+
+    function renderStats(s) {
+      const pct = s.measured_pct ?? 0;
+      document.getElementById("stats").innerHTML = `
+        <div class="stat highlight">
+          <div class="stat-value">${esc(s.episodes_total)}</div>
+          <div class="stat-label">Episodes</div>
+          <div class="progress-wrap"><div class="progress-bar" style="width:${Math.min(100, pct)}%"></div></div>
+          <div class="stat-label">${esc(pct)}% measured</div>
+        </div>
+        <div class="stat"><div class="stat-value">${esc(s.shows_total)}</div><div class="stat-label">Shows</div></div>
+        <div class="stat"><div class="stat-value">${esc(s.domains_total)}</div><div class="stat-label">Domains</div></div>
+        <div class="stat"><div class="stat-value">${esc(s.measured_count)}</div><div class="stat-label">Measured</div></div>
+        <div class="stat"><div class="stat-value">${esc(s.queued_count)}</div><div class="stat-label">Queued</div></div>
+        <div class="stat"><div class="stat-value">${esc(s.processing_count)}</div><div class="stat-label">Processing</div></div>
+      `;
+    }
+
+    function renderPipeline(p) {
+      const el = document.getElementById("pipeline");
+      const by = p.by_status || {};
+      const keys = Object.keys(by).sort();
+      if (!keys.length && !p.processing_count) {
+        el.innerHTML = '<span class="empty">—</span>';
+        el.className = "pipeline-chips";
+        return;
+      }
+      el.className = "pipeline-chips";
+      el.innerHTML = keys
+        .map((k) => `<span class="chip">${esc(k)}<strong>${esc(by[k])}</strong></span>`)
+        .join("") + (p.processing_count ? `<span class="chip">active<strong>${esc(p.processing_count)}</strong></span>` : "");
+    }
+
+    function renderTree(nodes) {
+      const el = document.getElementById("tree");
+      if (!nodes || !nodes.length) {
+        el.innerHTML = '<p class="empty">Ingest a feed to build the catalog.</p>';
+        return;
+      }
+      function walkNode(n) {
+        const kids = (n.children || []).map(walkNode).join("");
+        const pods = (n.podcasts || [])
+          .map((p) => `<div class="podcast">${esc(p.name)}<span>${esc(p.episode_count)}</span></div>`)
+          .join("");
+        const label = `<span class="${n.node_type === "domain" ? "domain" : ""}">${esc(n.name)}</span>`;
+        if (!kids && !pods) return `<div style="padding:2px 0 2px 12px">${label}</div>`;
+        return `<details open><summary>${label}</summary>${kids}${pods}</details>`;
+      }
+      el.innerHTML = nodes.map(walkNode).join("");
+      el.className = "tree";
+    }
+
+    function renderActivity(events) {
+      const el = document.getElementById("activity");
+      if (!events || !events.length) {
+        el.innerHTML = '<li class="empty">No events yet.</li>';
+        return;
+      }
+      el.innerHTML = events
+        .map((ev) => {
+          const t = ev.created_at ? new Date(ev.created_at).toLocaleString() : "";
+          return `<li><span class="type">${esc(ev.event_type)}</span><div>${esc(ev.message)}</div><div class="time">${esc(t)}</div></li>`;
+        })
+        .join("");
+    }
+
+    function renderPatterns(p) {
+      const el = document.getElementById("patterns");
+      const patterns = p.patterns || [];
+      if (!patterns.length) {
+        el.innerHTML = `<p class="pattern-summary">${esc(p.summary || "No patterns yet.")}</p>`;
+        return;
+      }
+      el.innerHTML =
+        `<p class="pattern-summary">${esc(p.summary || "")}</p>` +
+        patterns
+          .map((x) => `<div class="pattern-card"><h3 class="font-serif">${esc(x.label)}</h3><p>${esc(x.detail)}</p></div>`)
+          .join("");
+    }
+
+    function renderEpisodes(eps) {
+      const body = document.getElementById("episodesBody");
+      if (!eps || !eps.length) {
+        body.innerHTML = '<tr><td colspan="3" class="empty">No episodes yet.</td></tr>';
+        return;
+      }
+      body.innerHTML = eps
+        .map((ep) => {
+          const st = (ep.status || "unknown").toLowerCase().replace(/\s+/g, "-");
+          return `<tr>
+            <td class="title">${esc(ep.title || "Untitled")}</td>
+            <td class="show">${esc(ep.podcast_name)}</td>
+            <td><span class="status status-${esc(st)}">${esc(ep.status)}</span></td>
+          </tr>`;
+        })
+        .join("");
+    }
+
+    async function refresh() {
+      const btn = document.getElementById("refreshBtn");
+      btn.disabled = true;
+      try {
+        const [health, home] = await Promise.all([
+          api("/health"),
+          api("/library/home?activity_limit=15&episodes_limit=25"),
+        ]);
+        setHealth(health);
+        renderStats(home.stats);
+        renderPipeline(home.pipeline);
+        renderActivity(home.activity);
+        renderPatterns(home.patterns);
+        renderTree(home.tree);
+        renderEpisodes(home.episodes);
+      } catch (e) {
+        setHealth({ status: "error" }, e.message);
+        document.getElementById("stats").innerHTML =
+          `<div class="stat"><div class="stat-label" style="color:var(--destructive)">${esc(e.message)}</div></div>`;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById("refreshBtn").addEventListener("click", refresh);
+    document.getElementById("ingestBtn").addEventListener("click", async () => {
+      const url = document.getElementById("rssUrl").value.trim();
+      const msg = document.getElementById("ingestMsg");
+      if (!url) {
+        msg.textContent = "Enter an RSS URL.";
+        msg.className = "ingest-msg err";
+        return;
+      }
+      const btn = document.getElementById("ingestBtn");
+      btn.disabled = true;
+      msg.textContent = "Ingesting…";
+      msg.className = "ingest-msg";
+      try {
+        const r = await api("/ingest/rss", { method: "POST", body: JSON.stringify({ rss_url: url }) });
+        msg.textContent = `+${r.episodes_created} created, ${r.episodes_skipped} skipped`;
+        msg.className = "ingest-msg ok";
+        document.getElementById("rssUrl").value = "";
+        await refresh();
+      } catch (e) {
+        msg.textContent = e.message;
+        msg.className = "ingest-msg err";
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    refresh();
+    setInterval(refresh, 45000);
+  </script>
+</body>
+</html>
