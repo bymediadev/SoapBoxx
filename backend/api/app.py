@@ -27,20 +27,20 @@ logger = logging.getLogger(__name__)
 
 
 def _find_ui_directory() -> Path | None:
-    """Locate static/v1-library (Railway cwd is usually repo root, not backend/)."""
-    roots: list[Path] = []
-    for raw in (
-        os.environ.get("SOAPBOXX_ROOT", "").strip(),
-        str(Path.cwd()),
-        str(Path(__file__).resolve().parents[2]),
-    ):
-        if not raw:
+    """Locate v1-library UI (bundled under backend/static for Railway root=backend)."""
+    candidates = [
+        Path(__file__).resolve().parents[1] / "static" / "v1-library",
+        Path(__file__).resolve().parents[2] / "static" / "v1-library",
+    ]
+    for raw in (os.environ.get("SOAPBOXX_ROOT", "").strip(), str(Path.cwd())):
+        if raw:
+            candidates.append(Path(raw).resolve() / "static" / "v1-library")
+    seen: set[Path] = set()
+    for ui in candidates:
+        ui = ui.resolve()
+        if ui in seen:
             continue
-        root = Path(raw).resolve()
-        if root not in roots:
-            roots.append(root)
-    for root in roots:
-        ui = root / "static" / "v1-library"
+        seen.add(ui)
         if ui.is_dir() and (ui / "index.html").is_file():
             return ui
     return None

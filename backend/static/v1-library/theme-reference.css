@@ -1,0 +1,20 @@
+/**
+ * Reference: Lovable / Tailwind v4 theme for SoapBoxx library UI.
+ * The live UI inlines these tokens in index.html (no Tailwind build on Railway).
+ *
+ * Original stack: @import "tailwindcss", tw-animate-css, Inter + Cormorant + JetBrains Mono
+ */
+
+:root {
+  --radius: 0.375rem;
+  --background: oklch(0.16 0.012 60);
+  --foreground: oklch(0.92 0.018 75);
+  --card: oklch(0.195 0.013 60);
+  --primary: oklch(0.78 0.14 75);
+  --primary-foreground: oklch(0.16 0.012 60);
+  --amber: oklch(0.78 0.14 75);
+  --muted-foreground: oklch(0.62 0.02 70);
+  --border: oklch(0.28 0.012 60);
+  --sidebar: oklch(0.135 0.012 60);
+  --sidebar-border: oklch(0.24 0.012 60);
+}
