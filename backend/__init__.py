@@ -1,14 +1,11 @@
-# backend/__init__.py
-# This file makes the backend directory a Python package
+# backend package — lazy desktop imports so V1 API deploy does not require PortAudio.
 
-from .audio_recorder import AudioRecorder
-from .config import Config
+from __future__ import annotations
+
+import importlib
+from typing import Any
+
 from .error_tracker import error_tracker
-from .feedback_engine import FeedbackEngine
-from .guest_research import GuestResearch
-from .logger import Logger
-from .soapboxx_core import SoapBoxxCore
-from .transcriber import Transcriber
 
 __all__ = [
     "SoapBoxxCore",
@@ -20,3 +17,20 @@ __all__ = [
     "Logger",
     "error_tracker",
 ]
+
+_LAZY_EXPORTS: dict[str, str] = {
+    "SoapBoxxCore": "soapboxx_core",
+    "Config": "config",
+    "Transcriber": "transcriber",
+    "FeedbackEngine": "feedback_engine",
+    "GuestResearch": "guest_research",
+    "AudioRecorder": "audio_recorder",
+    "Logger": "logger",
+}
+
+
+def __getattr__(name: str) -> Any:
+    if name in _LAZY_EXPORTS:
+        module = importlib.import_module(f".{_LAZY_EXPORTS[name]}", __name__)
+        return getattr(module, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

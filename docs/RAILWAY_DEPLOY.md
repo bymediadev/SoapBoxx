@@ -98,6 +98,7 @@ See [`LOVABLE_INTEGRATION.md`](LOVABLE_INTEGRATION.md).
 | Deploying desktop `requirements.txt` only | No FastAPI, wrong start detection |
 | PyQt `main` as start | No HTTP server |
 | Missing `DATABASE_URL` | API up, `/health` degraded |
+| `PortAudio` / `sounddevice` crash at startup | `railpack.json` → `deploy.aptPackages: ["libportaudio2"]`; `backend/__init__.py` lazy-loads desktop modules |
 | Nixpacks builder with only `railpack.json` | Config ignored — switch builder to Railpack |
 
 ---

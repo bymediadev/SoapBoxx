@@ -1,6 +1,7 @@
 {
   "$schema": "https://schema.railpack.com",
   "deploy": {
-    "startCommand": "python start.py"
+    "startCommand": "python start.py",
+    "aptPackages": ["libportaudio2"]
   }
 }
