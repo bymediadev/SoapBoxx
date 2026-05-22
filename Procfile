@@ -1,2 +1,2 @@
-web: python start.py
-release: alembic upgrade head
+web: sh scripts/start_api.sh
+release: sh scripts/migrate_db.sh

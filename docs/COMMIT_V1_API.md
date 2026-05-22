@@ -21,7 +21,7 @@ git add backend/api/ backend/models/ backend/services/ backend/workers/ backend/
 git add backend/features/ backend/services/rss_service.py
 git add .github/workflows/v1-tests.yml
 git add tests/conftest.py tests/fixtures/ tests/utils/ tests/test_day*.py tests/test_system_health.py tests/test_system_state.py tests/test_lovable_library_api.py
-git add scripts/railway_start.sh scripts/v1_day01_up.ps1 scripts/sync_all_feeds.py scripts/seed_feeds_from_file.py data/seed_feeds.txt
+git add scripts/start_api.sh scripts/migrate_db.sh scripts/v1_day01_up.ps1 scripts/sync_all_feeds.py scripts/seed_feeds_from_file.py data/seed_feeds.txt
 git add docs/SMOOTH_OPERATIONS.md
 git add docs/V1_*.md docs/V1_INGESTION_LAYER.md docs/SYSTEM_STATE_LAYER.md docs/LOVABLE_INTEGRATION.md docs/RAILWAY_DEPLOY.md docs/COMMIT_V1_API.md
 git add SOAPBOXX_V1_7DAY_EXECUTION.md SOAPBOXX_EXECUTION_PLAN_V1.md SOAPBOXX_MASTER_PLAN_FOUNDATION.md

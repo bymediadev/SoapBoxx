@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.railpack.com",
   "deploy": {
-    "startCommand": "python start.py",
-    "aptPackages": ["libportaudio2"]
+    "preDeployCommand": "sh scripts/migrate_db.sh",
+    "startCommand": "sh scripts/start_api.sh"
   }
 }

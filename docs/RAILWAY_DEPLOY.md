@@ -5,9 +5,25 @@
 | File | Role |
 |------|------|
 | **`main.py`** | Exports FastAPI `app` (`from backend.api.app import app`) |
-| **Start command** | `sh scripts/railway_start.sh` (migrations + uvicorn) |
+| **Start command** | `python start.py` via `railway.toml` / `railpack.json` (migrations + uvicorn) |
+| **ASGI app** | Root `main.py` → `app` (same as `backend.api.app:app`). Override: `ASGI_APP=backend.api.app:app` |
+| **Root directory** | Repo root (must contain `main.py`, `start.py`, `requirements.txt`) |
+| **Build command (dashboard)** | **Empty** — Railpack auto-detects; never set `python start.py` here |
 
-This is **not** the PyQt desktop app. Do not deploy `requirements.txt` (PyQt/Whisper desktop stack) for the API service.
+This is **not** the PyQt desktop app. `requirements.txt` is API-only; install desktop deps locally with `requirements-desktop.txt`.
+
+### Dashboard settings (API service)
+
+In Railway → Service → **Settings**:
+
+| Field | Set to |
+|-------|--------|
+| Builder | **Railpack** |
+| **Build command** | **Clear / empty** |
+| **Start command** | **Clear / empty** (use `railway.toml` `[deploy] startCommand`) |
+| Custom start in Variables | Only if needed: `RAILPACK_START_CMD=python start.py` — not as build command |
+
+If both dashboard **Build command** and `railway.toml` **start** are `python start.py`, Railway blocks deploy or mis-runs the build phase.
 
 ---
 
@@ -32,6 +48,7 @@ If you see `No such file: requirements-v1-api.txt` — remove custom `steps.inst
 In Railway → Service → Settings → Build:
 
 - Builder: **Railpack** (not Nixpacks, if you migrated)
+- **Build command:** leave **empty** (do not duplicate `python start.py`)
 - Root directory: repo root (where `main.py` and `railpack.json` live)
 
 ### Environment variables
@@ -46,18 +63,20 @@ In Railway → Service → Settings → Build:
 Optional override (if deploy still fails):
 
 ```text
-RAILPACK_START_CMD=sh scripts/railway_start.sh
+RAILPACK_START_CMD=sh scripts/start_api.sh
 ```
 
 ### Migrations
 
-**Release phase** (Procfile `release:` line):
+**Pre-deploy** (`railway.toml` / `railpack.json` → `preDeployCommand`):
 
 ```bash
-alembic upgrade head
+sh scripts/migrate_db.sh
 ```
 
-Or run once from Railway shell after first deploy.
+Also in Procfile `release:` for Heroku-style platforms. Or run once from Railway shell after first deploy.
+
+**Do not** run migrations in a script named `railway_start.sh` — Railpack may execute it during **build**, where the private network is unavailable (`postgres.railway.internal` DNS failure).
 
 ### Verify
 
@@ -71,9 +90,10 @@ curl https://YOUR_SERVICE.up.railway.app/docs
 ## Config files (priority)
 
 1. `RAILPACK_START_CMD` env (highest)
-2. `railpack.json` → `deploy.startCommand`
-3. `Procfile` → `web:` process
-4. Auto-detect FastAPI (only if `fastapi` is in the **installed** requirements file)
+2. `railway.toml` → `preDeployCommand` / `startCommand`
+3. `railpack.json` → `deploy.preDeployCommand` / `deploy.startCommand`
+4. `Procfile` → `web:` / `release:` processes
+5. Auto-detect scripts (avoid `railway_*` names at build time)
 
 See [Railpack Procfile docs](https://railpack.com/config/procfile.md).
 
@@ -97,9 +117,11 @@ See [`LOVABLE_INTEGRATION.md`](LOVABLE_INTEGRATION.md).
 |---------|--------|
 | Deploying desktop `requirements.txt` only | No FastAPI, wrong start detection |
 | PyQt `main` as start | No HTTP server |
-| Missing `DATABASE_URL` | API up, `/health` degraded |
+| Missing `DATABASE_URL` | API up, `/health` degraded (no Postgres) |
+| `requirements.txt` includes PyQt/Whisper | Build OOM or crash — API file must be V1-only; desktop: `requirements-desktop.txt` |
 | `PortAudio` / `sounddevice` crash at startup | `railpack.json` → `deploy.aptPackages: ["libportaudio2"]`; `backend/__init__.py` lazy-loads desktop modules |
 | Nixpacks builder with only `railpack.json` | Config ignored — switch builder to Railpack |
+| `python start.py` as **Build command** in dashboard | Conflicts with `railway.toml` start — clear build command; Railpack installs deps only |
 
 ---
 
@@ -108,8 +130,8 @@ See [`LOVABLE_INTEGRATION.md`](LOVABLE_INTEGRATION.md).
 ### “No start command detected”
 
 1. Confirm **Railpack** builder (Settings → Build).
-2. Push `railpack.json`, `Procfile`, `railway.toml`, `scripts/railway_start.sh`.
-3. Set variable: `RAILPACK_START_CMD=sh scripts/railway_start.sh`
+2. Push `railpack.json`, `Procfile`, `railway.toml`, `scripts/start_api.sh`, `scripts/migrate_db.sh`.
+3. Set variable: `RAILPACK_START_CMD=sh scripts/start_api.sh` (optional)
 4. **Redeploy without cache.**
 
 ### Build OK, crash on start
@@ -118,7 +140,8 @@ See [`LOVABLE_INTEGRATION.md`](LOVABLE_INTEGRATION.md).
 |----------|-----|
 | `could not connect to server` / DB errors | Add **Postgres** plugin; wait for `DATABASE_URL` to appear on the service |
 | `postgres://` driver errors | Fixed in code — pulls latest `backend/api/config.py` (normalizes to `postgresql+psycopg2://`) |
-| `alembic` / migration errors | Open Railway **Shell**: `alembic upgrade head` |
+| `alembic` / migration errors at **build** | Clear build command; migrations belong in **preDeploy** only (`migrate_db.sh`) |
+| `alembic` / migration errors at **preDeploy** | Check `DATABASE_URL` reference; redeploy |
 | `ModuleNotFoundError: backend` | Root directory must be repo root (where `main.py` lives) |
 | Health `degraded` | OK for demo — add **Redis** plugin or ignore; API still serves `/docs` |
 
@@ -131,7 +154,7 @@ Needs Postgres connected for `status: ok`. Redis optional.
 
 1. Railway → Deployments → latest → **View logs** (build + deploy).
 2. Copy the **last 20 lines** of the deploy log.
-3. Compare with local: `sh scripts/railway_start.sh` (with Docker Postgres up).
+3. Compare with local: `sh scripts/migrate_db.sh` then `sh scripts/start_api.sh` (Docker Postgres up).
 
 ### One-service layout
 
