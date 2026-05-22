@@ -70,6 +70,23 @@ GET /health HTTP/1.1" 200 OK
 
 That is **internal** Railway health traffic (`100.64.x.x`). Public 502 means the **public hostname is not reaching that running container**.
 
+**Most common cause:** Public domain is routed to the **wrong port** (local dev uses **8000**; Railway usually injects **`PORT=8080`**).
+
+| Deploy log | Domain port (see below) | Result |
+|------------|-------------------------|--------|
+| `Uvicorn running on 0.0.0.0:8080` | **8080** | Public works |
+| `Uvicorn running on 0.0.0.0:8080` | **8000** | Public **502**, internal health may still **200** |
+
+Railway does **not** use a separate “target port” field in Networking. The port is tied to the **domain**:
+
+1. API service → **Settings** → **Networking** → **Public Networking**
+2. Next to `soapboxx-production.up.railway.app`, click the **edit (pencil) icon** on the domain
+3. Choose the port that matches the deploy log (**8080**), or enter it if offered in a list
+
+Or: **remove domain** → **Generate Domain** again and pick **8080** when Railway lists detected ports.
+
+**Alternative:** Variables → set `PORT=8000` and redeploy so uvicorn listens on 8000, then set the domain port to **8000** as well (both must match).
+
 Check on the **API service**:
 
 | Check | Where |
@@ -98,7 +115,7 @@ Requests **reach** Railway (`GET /health 502` in HTTP logs) but nothing is liste
 | Start script exited before uvicorn | Start: `sh scripts/start_api.sh` (no alembic in start) |
 | Wrong start command | Leave dashboard start empty; use `railway.toml` |
 | Process crash loop | Deploy logs: look for exit / restart after `Uvicorn running` |
-| Custom port mismatch | Networking → target port = **$PORT** (often **8080**) |
+| Domain → wrong port | Edit icon next to domain in Public Networking → **8080** (match deploy log) |
 
 **Fast dashboard test** — set Start command to:
 
