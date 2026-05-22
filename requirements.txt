@@ -1,7 +1,16 @@
-# V1 API (Railpack/Railway must see fastapi+uvicorn for auto-start)
--r requirements-v1-api.txt
+# V1 API — must be in this file for Railpack (custom install steps cannot see -r includes)
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+sqlalchemy>=2.0.36
+alembic>=1.14.0
+psycopg2-binary>=2.9.10
+redis>=5.2.0
+pydantic-settings>=2.6.0
+httpx>=0.28.0
+feedparser>=6.0.11
+celery>=5.4.0
 
-# Desktop app dependencies (PyQt, Whisper, etc.)
+# Desktop app dependencies (PyQt, Whisper, etc.) — optional on Railway API service
 PyQt6
 openai
 sounddevice
