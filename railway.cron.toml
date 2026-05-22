@@ -1,0 +1,13 @@
+# Railway config — soapboxx-sync (cron) ONLY
+# API service uses railway.toml (uvicorn + migrations).
+#
+# On the soapboxx-sync service in Railway:
+#   Settings → Config-as-code → Config file path: railway.cron.toml
+# (or set equivalent “Railway config file” field for that service)
+
+[build]
+builder = "RAILPACK"
+
+[deploy]
+startCommand = "python scripts/sync_all_feeds.py"
+cronSchedule = "0 6 * * *"

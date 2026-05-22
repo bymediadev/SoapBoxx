@@ -8,7 +8,7 @@ Production host: `https://soapboxx-production.up.railway.app`
 |---|------|-----------|
 | 1 | **Postgres** on project → reference `DATABASE_URL` on API service | Variable visible in API → Variables |
 | 2 | **Redeploy API** (Railpack, empty build command, start via `railway.toml`, clear cache) | `GET /health` → HTTP 200, `"status":"ok"` (Redis optional) |
-| 3 | **Cron service** `soapboxx-sync` → `python scripts/sync_all_feeds.py`, schedule `0 6 * * *`, same `DATABASE_URL` | Cron run logs show feed sync |
+| 3 | **Cron service** `soapboxx-sync` → `python scripts/sync_all_feeds.py`, schedule `0 6 * * *`, same `DATABASE_URL` | ✅ Done — cron run logs show feed sync |
 | 4 | **UI** — open `/ui/` on Railway (free; no Lovable) or Lovable chat prompt | Library stats/ingest work |
 | 5 | **Lovable wireup** — copy `docs/lovable/api-client.ts`, follow [`WIREUP.md`](lovable/WIREUP.md) | Library/stats/activity from API |
 
@@ -63,9 +63,36 @@ Cron must be a **separate Railway service** (not the long-running web service).
 
 ### Create `soapboxx-sync` service
 
+**Do not use root `railway.toml` on the cron service** — that file is for the API (uvicorn + `migrate_db.sh`). If sync uses it, you get `migrate_db.sh: No such file` or wrong start command.
+
+Use repo file **[`railway.cron.toml`](../railway.cron.toml)** on the sync service only:
+
+1. Same repo, same branch (`production`).
+2. Click service **soapboxx-sync** (not soapboxx-production).
+3. **Settings** → **Config-as-code** (or **Build**) → set **Config file path** to:
+
+   ```text
+   railway.cron.toml
+   ```
+
+4. Leave dashboard **Build / Start / Pre-deploy** empty (the cron toml controls deploy).
+5. **Variables:** reference `DATABASE_URL` from Postgres.
+6. **Networking:** no public domain.
+
+That file sets:
+
+```toml
+startCommand = "python scripts/sync_all_feeds.py"
+cronSchedule = "0 6 * * *"
+```
+
+(No `preDeployCommand` — migrations run on the API service only.)
+
+**If you cannot set a separate config path:** remove deploy overrides from dashboard on sync; set only **Cron schedule** + **Start** = `python scripts/sync_all_feeds.py` and **Pre-deploy** = empty (see error note below).
+
 1. Same repo, same branch (`production`).
 2. **Build command:** empty (Railpack install only).
-3. **Settings → Deploy** → Start command:
+3. **Settings → Deploy** → **Pre-deploy:** empty · Start command (only if not using `railway.cron.toml`):
 
    ```bash
    python scripts/sync_all_feeds.py
@@ -89,6 +116,7 @@ Cron must be a **separate Railway service** (not the long-running web service).
 
 - Put cron schedule on the **web** service (conflicts with uvicorn).
 - Run sync inside the API process without a job queue.
+- Leave **preDeploy** on the cron service (inherits `migrate_db.sh` from repo `railway.toml`).
 
 ## Seed feeds (one-time)
 

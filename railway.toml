@@ -1,9 +1,11 @@
-# Railway service config — SoapBoxx V1 API
+# Railway config — soapboxx-production (API) ONLY
 # https://docs.railway.com/reference/config-as-code
 #
-# Dashboard: leave Build Command EMPTY.
-# Do NOT use scripts named railway_start.sh — Railpack may run them during build
-# (private network unavailable; alembic fails on postgres.railway.internal).
+# Cron/sync uses railway.cron.toml on the soapboxx-sync service (separate config file).
+# Do not paste this file into the dashboard Start command field.
+#
+# Dashboard (API): leave Build / Start / Pre-deploy EMPTY — this file controls deploy.
+# Do NOT use scripts named railway_start.sh — Railpack may run them during build.
 
 [build]
 builder = "RAILPACK"
