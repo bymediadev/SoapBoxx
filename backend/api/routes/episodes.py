@@ -10,10 +10,13 @@ from backend.api.schemas import (
     EpisodeCreate,
     EpisodeFeaturesRead,
     EpisodeRead,
+    ProcessEpisodeRequest,
+    ProcessEpisodeResponse,
     TranscribeRequest,
     TranscribeResponse,
     TranslationRead,
 )
+from backend.services.episode_pipeline_service import run_episode_pipeline
 from backend.models import Episode, EpisodeFeatures, EpisodeTranslation, Podcast
 from backend.services.feature_service import run_feature_extraction
 from backend.services.pipeline_status import (
@@ -74,6 +77,31 @@ def get_episode(episode_id: int, db: Session = Depends(get_db)) -> Episode:
             detail=f"Episode {episode_id} not found",
         )
     return row
+
+
+@router.post("/{episode_id}/process", response_model=ProcessEpisodeResponse)
+def process_episode_endpoint(
+    episode_id: int,
+    body: ProcessEpisodeRequest | None = None,
+    db: Session = Depends(get_db),
+) -> ProcessEpisodeResponse:
+    """Transcribe (if needed) → extract 7 metrics → template translation."""
+    body = body or ProcessEpisodeRequest()
+    try:
+        result = run_episode_pipeline(
+            db,
+            episode_id,
+            transcript=body.transcript,
+            force_retranscribe=body.force_retranscribe,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Pipeline failed: {exc}",
+        ) from exc
+    return ProcessEpisodeResponse(**result.to_dict())
 
 
 @router.post("/{episode_id}/transcribe", response_model=TranscribeResponse)

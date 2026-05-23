@@ -97,4 +97,28 @@ export const soapboxxApi = {
       body: JSON.stringify({ rss_url }),
     }),
   episodeState: (id: number) => api<unknown>(`/episodes/${id}/state`),
+  /** Transcribe → 7 metrics → template insight (one episode). */
+  processEpisode: (
+    id: number,
+    body?: { transcript?: string; force_retranscribe?: boolean }
+  ) =>
+    api<{
+      episode_id: number;
+      status: string;
+      template_id?: string;
+      insight_preview?: string;
+      steps: unknown[];
+    }>(`/episodes/${id}/process`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+  /** Process up to `limit` episodes missing translation (max 10). */
+  processQueued: (limit = 1) =>
+    api<{
+      requested: number;
+      attempted: number;
+      succeeded: number;
+      failed: number;
+      results: unknown[];
+    }>(`/pipeline/process?limit=${limit}`, { method: "POST" }),
 };

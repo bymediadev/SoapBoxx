@@ -20,3 +20,16 @@ def transcribe_episode_task(episode_id: int) -> dict:
         }
     finally:
         db.close()
+
+
+@celery_app.task(name="soapboxx.process_episode")
+def process_episode_task(episode_id: int) -> dict:
+    from backend.api.deps import get_session_factory
+    from backend.services.episode_pipeline_service import run_episode_pipeline
+
+    db = get_session_factory()()
+    try:
+        result = run_episode_pipeline(db, episode_id)
+        return result.to_dict()
+    finally:
+        db.close()

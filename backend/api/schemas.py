@@ -112,3 +112,29 @@ class TranslationRead(BaseModel):
     insight_text: str
 
     model_config = {"from_attributes": True}
+
+
+class ProcessEpisodeRequest(BaseModel):
+    transcript: Optional[str] = Field(
+        None,
+        description="Optional pasted transcript; skips audio STT when set",
+    )
+    force_retranscribe: bool = False
+
+
+class ProcessEpisodeResponse(BaseModel):
+    episode_id: int
+    status: str
+    steps: list[dict]
+    transcript_length: int
+    segment_count: int
+    template_id: Optional[str] = None
+    insight_preview: Optional[str] = None
+
+
+class ProcessBatchResponse(BaseModel):
+    requested: int
+    attempted: int
+    succeeded: int
+    failed: int
+    results: list[dict]

@@ -18,8 +18,17 @@ def _resolve_stt_service() -> str:
     raw = (
         os.getenv("SOAPBOXX_TRANSCRIPTION_SERVICE")
         or os.getenv("SOAPBOXX_EPISODE_ANALYSIS_STT")
-        or "openai"
-    )
+        or ""
+    ).strip()
+    if not raw:
+        groq = (os.getenv("SOAPBOXX_GROQ_API_KEY") or os.getenv("GROQ_API_KEY") or "").strip()
+        openai = (os.getenv("OPENAI_API_KEY") or "").strip()
+        if groq:
+            raw = "groq"
+        elif openai:
+            raw = "openai"
+        else:
+            raw = "openai"
     effective, _ = resolve_stt_for_coach(raw)
     return effective
 

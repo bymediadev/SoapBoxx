@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from typing import Optional, Tuple
 
-COACH_SUPPORTED_STT: Tuple[str, ...] = ("openai", "local", "assemblyai")
+COACH_SUPPORTED_STT: Tuple[str, ...] = ("openai", "groq", "local", "assemblyai")
 
 _AZURE_COACH_MSG = (
     "Azure Speech is not supported for Studio transcription or the Coach loop. "
@@ -26,6 +26,12 @@ def _openai_configured() -> bool:
     return bool((os.getenv("OPENAI_API_KEY") or "").strip())
 
 
+def _groq_configured() -> bool:
+    return bool(
+        (os.getenv("SOAPBOXX_GROQ_API_KEY") or os.getenv("GROQ_API_KEY") or "").strip()
+    )
+
+
 def resolve_stt_for_coach(requested: str) -> Tuple[str, Optional[str]]:
     """
     Return (effective_service, warning_message).
@@ -34,6 +40,11 @@ def resolve_stt_for_coach(requested: str) -> Tuple[str, Optional[str]]:
     """
     raw = (requested or "").strip().lower()
     if raw in COACH_SUPPORTED_STT:
+        if raw == "openai" and not _openai_configured() and _groq_configured():
+            return (
+                "groq",
+                "OPENAI_API_KEY not set; using Groq Whisper (free tier).",
+            )
         return raw, None
     if raw == "azure":
         if _ollama_configured():
@@ -41,14 +52,23 @@ def resolve_stt_for_coach(requested: str) -> Tuple[str, Optional[str]]:
                 "local",
                 "Azure Speech is not supported for Coach. Using local transcription.",
             )
+        if _groq_configured():
+            return (
+                "groq",
+                "Azure Speech is not supported for Coach. Using Groq Whisper.",
+            )
         if _openai_configured():
             return (
                 "openai",
                 "Azure Speech is not supported for Coach. Using OpenAI transcription.",
             )
         return "local", _AZURE_COACH_MSG
+    if _groq_configured():
+        return "groq", None
     if _ollama_configured():
         return "local", None
+    if _openai_configured():
+        return "openai", None
     return "openai", None
 
 

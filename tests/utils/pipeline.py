@@ -6,10 +6,9 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from backend.services.feature_service import run_feature_extraction
+from backend.services.episode_pipeline_service import run_episode_pipeline
 from backend.services.rss_service import ingest_rss_xml
 from backend.services.transcription_service import transcribe_episode
-from backend.services.translation_service import run_translation
 
 FIXTURE_TRANSCRIPT = (
     Path(__file__).resolve().parents[1] / "fixtures" / "sample_transcript.txt"
@@ -27,5 +26,4 @@ def seed_episode_with_transcript(db: Session) -> int:
 
 
 def run_all_steps(db: Session, episode_id: int) -> None:
-    run_feature_extraction(db, episode_id)
-    run_translation(db, episode_id)
+    run_episode_pipeline(db, episode_id)

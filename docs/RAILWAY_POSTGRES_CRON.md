@@ -6,11 +6,14 @@ Production host: `https://soapboxx-production.up.railway.app`
 
 | # | Task | Done when |
 |---|------|-----------|
-| 1 | **Postgres** on project → reference `DATABASE_URL` on API service | Variable visible in API → Variables |
-| 2 | **Redeploy API** (Railpack, empty build command, start via `railway.toml`, clear cache) | `GET /health` → HTTP 200, `"status":"ok"` (Redis optional) |
-| 3 | **Cron service** `soapboxx-sync` → `python scripts/sync_all_feeds.py`, schedule `0 6 * * *`, same `DATABASE_URL` | ✅ Done — cron run logs show feed sync |
+| 1 | **Postgres** on project → reference `DATABASE_URL` on API service | Variable visible in API → Variables; alembic connects in deploy logs |
+| 2 | **Redeploy API** (Railpack, empty build command, start via `railway.toml`, clear cache) | `GET /health/live` → 200; `GET /health` → 200 with DB connected |
+| 3 | **Cron service** `soapboxx-sync` → `python scripts/sync_all_feeds.py`, schedule `0 6 * * *`, same `DATABASE_URL` | Cron run logs show feed sync |
 | 4 | **UI** — open `/ui/` on Railway (free; no Lovable) or Lovable chat prompt | Library stats/ingest work |
 | 5 | **Lovable wireup** — copy `docs/lovable/api-client.ts`, follow [`WIREUP.md`](lovable/WIREUP.md) | Library/stats/activity from API |
+
+**Infra (1–3):** working when deploy logs show `Import OK: main:app`, `Uvicorn running on http://0.0.0.0:8080`, and `/health/live` 200.  
+**Product (4–5):** still open if you have not verified `/ui/` or Lovable yet.
 
 **502 "Application failed to respond"** — see **[`RAILWAY_502_FIX.md`](RAILWAY_502_FIX.md)** (deploy log lines + isolate `uvicorn` start).
 
@@ -46,7 +49,7 @@ Repeat on **soapboxx-sync** cron service when you add it (same reference).
 
 1. Railway project → **New** → **Database** → **PostgreSQL** (or Add Postgres plugin to project).
 2. On the **API service** → **Variables** → **Add reference** → `DATABASE_URL` from Postgres service (host will look like `${{Postgres.*}}` / `*.railway.internal`, not `127.0.0.1`).
-3. Redeploy API service. Pre-deploy runs `alembic upgrade head`; start runs uvicorn only.
+3. Redeploy API service. **`start.py`** runs wait → alembic → uvicorn at container start.
 4. Verify: `GET https://YOUR-APP.up.railway.app/health` → `"status": "ok"` (Redis optional).
 
 Required variables on **API** service:
@@ -63,7 +66,7 @@ Cron must be a **separate Railway service** (not the long-running web service).
 
 ### Create `soapboxx-sync` service
 
-**Do not use root `railway.toml` on the cron service** — that file is for the API (uvicorn + `migrate_db.sh`). If sync uses it, you get `migrate_db.sh: No such file` or wrong start command.
+**Do not use root `railway.toml` on the cron service** — that file is for the API (`python start.py`: wait + alembic + uvicorn). If sync uses it, you get wrong start command or missing files.
 
 Use repo file **[`railway.cron.toml`](../railway.cron.toml)** on the sync service only:
 
@@ -116,7 +119,27 @@ cronSchedule = "0 6 * * *"
 
 - Put cron schedule on the **web** service (conflicts with uvicorn).
 - Run sync inside the API process without a job queue.
-- Leave **preDeploy** on the cron service (inherits `migrate_db.sh` from repo `railway.toml`).
+- Leave **preDeploy** on the cron service (would inherit API start/migrations from repo `railway.toml`).
+
+## Episode pipeline (transcribe → insights)
+
+RSS ingest only stores **metadata**. To turn an episode into structure + translation:
+
+| Action | How |
+|--------|-----|
+| One episode | `POST /episodes/{id}/process` (Swagger `/docs`) |
+| Batch (max 10) | `POST /pipeline/process?limit=1` |
+| Railway shell | `python scripts/process_queued_episodes.py --limit 1` |
+
+**Free cloud STT (recommended):** `GROQ_API_KEY` from [console.groq.com](https://console.groq.com) — Groq Whisper, OpenAI-compatible, free tier.
+
+**Paid STT:** `OPENAI_API_KEY` + `SOAPBOXX_TRANSCRIPTION_SERVICE=openai`.
+
+**Free demo (no keys):** paste transcript — **[`FREE_DEMO_PIPELINE.md`](FREE_DEMO_PIPELINE.md)**.
+
+**Verify:** `GET /episodes/{id}/translation` returns `template_id` + `insight_text`; `/ui/` shows measured % > 0 after processing at least one episode.
+
+---
 
 ## Seed feeds (one-time)
 

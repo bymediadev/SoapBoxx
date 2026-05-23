@@ -134,6 +134,23 @@ class Transcriber:
                 openai.api_key = self.api_key
             else:
                 print("Warning: No OpenAI API key provided. Transcription will fail.")
+        elif self.service == "groq":
+            self.api_key = (
+                api_key
+                or os.getenv("SOAPBOXX_GROQ_API_KEY")
+                or os.getenv("GROQ_API_KEY")
+            )
+            self.model = (
+                os.getenv("SOAPBOXX_GROQ_WHISPER_MODEL", "").strip()
+                or "whisper-large-v3-turbo"
+            )
+            self.groq_base_url = (
+                os.getenv("SOAPBOXX_GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+                .strip()
+                .rstrip("/")
+            )
+            if not self.api_key:
+                print("Warning: No Groq API key (GROQ_API_KEY). Sign up free at console.groq.com")
         elif self.service == "assemblyai":
             self.api_key = api_key or os.getenv("ASSEMBLYAI_API_KEY")
             if not self.api_key:
@@ -192,6 +209,8 @@ class Transcriber:
             # Attempt transcription based on service
             if self.service == "openai":
                 return self._transcribe_openai(audio_data)
+            elif self.service == "groq":
+                return self._transcribe_groq(audio_data)
             elif self.service == "assemblyai":
                 return self._transcribe_assemblyai(audio_data)
             elif self.service == "local":
@@ -369,6 +388,43 @@ class Transcriber:
                 error_msg, service="openai", api_error=error_str, critical=True
             )
             return f"Error: {error_msg} - This is a CRITICAL system component"
+
+    def _transcribe_groq(self, audio_data: bytes) -> str:
+        """Transcribe via Groq Whisper (OpenAI-compatible API, free tier available)."""
+        if not self.api_key:
+            return (
+                "Error: No Groq API key — set GROQ_API_KEY (free at https://console.groq.com)"
+            )
+        if len(audio_data) > 25 * 1024 * 1024:
+            return (
+                f"Error: Audio file too large ({len(audio_data) / (1024*1024):.1f}MB) "
+                "for Groq free tier (25MB max). Use shorter clip or local Whisper."
+            )
+        try:
+            from openai import OpenAI
+        except ImportError:
+            return "Error: Install the openai package for Groq STT support"
+
+        try:
+            wav_data = self._convert_audio_to_wav(audio_data)
+            client = OpenAI(api_key=self.api_key, base_url=self.groq_base_url)
+            wav_buf = io.BytesIO(wav_data)
+            create_kw: dict[str, Any] = {
+                "model": self.model,
+                "file": ("audio.wav", wav_buf),
+            }
+            if self.language:
+                create_kw["language"] = self.language
+            resp = client.audio.transcriptions.create(**create_kw)
+            if isinstance(resp, str):
+                transcript = resp.strip()
+            else:
+                transcript = (getattr(resp, "text", None) or "").strip()
+            if not transcript:
+                return "Error: Groq returned empty transcription"
+            return transcript
+        except Exception as exc:
+            return f"Error: Groq transcription failed: {exc}"
 
     def _transcribe_assemblyai(self, audio_data: bytes) -> str:
         """Transcribe using AssemblyAI API"""
