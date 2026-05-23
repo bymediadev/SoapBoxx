@@ -1,6 +1,6 @@
 # SoapBoxx
 
-## AI Podcast Performance Intelligence System
+## Podcast Performance Intelligence System
 
 Turn finished podcast episodes into **structured measurements and insights** that help you improve the next one.
 
