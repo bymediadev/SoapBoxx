@@ -65,6 +65,10 @@ def _wait_for_database() -> int:
         )
         return 1
     env = os.environ.copy()
+    root = str(ROOT)
+    env["PYTHONPATH"] = (
+        root if not env.get("PYTHONPATH") else f"{root}{os.pathsep}{env['PYTHONPATH']}"
+    )
     if _on_railway() and "DB_WAIT_ATTEMPTS" not in env:
         env["DB_WAIT_ATTEMPTS"] = "12"
     return subprocess.run(

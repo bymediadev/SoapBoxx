@@ -44,6 +44,15 @@ The container has Python/deps but **no repo files** in `/app` (common after over
 
 Good deploy logs start with `=== SoapBoxx boot ===`.
 
+## Deploy log: `ModuleNotFoundError: No module named 'backend'` in `wait_for_db.py`
+
+`python scripts/wait_for_db.py` puts `scripts/` on `sys.path`, not `/app`. The repo tree is fine; the subprocess needs the repo root (see `scripts/sync_all_feeds.py`).
+
+| Fix | Action |
+|-----|--------|
+| Repo | `wait_for_db.py` prepends repo root to `sys.path`; `start.py` sets `PYTHONPATH=/app` for the wait subprocess |
+| Logs | After fix: `wait_for_db: ready (attempt N)` — not `WARNING: database not reachable` from a false import crash |
+
 ## Deploy log: `sh: 0: cannot open scripts/migrate_db.sh`
 
 Pre-deploy or start is calling a **shell script** that is not in the Railpack deploy image (or the dashboard overrides repo config).
