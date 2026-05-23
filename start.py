@@ -98,6 +98,24 @@ def _run_migrations() -> int:
     return result.returncode
 
 
+def _verify_pipeline_deps() -> None:
+    """Fail at boot if STT/pipeline packages are missing (avoids 500 mid-request)."""
+    import importlib
+
+    missing: list[str] = []
+    for name in ("requests", "openai", "pydub", "numpy"):
+        try:
+            importlib.import_module(name)
+        except ImportError:
+            missing.append(name)
+    if missing:
+        raise RuntimeError(
+            f"Missing Python packages: {', '.join(missing)} — "
+            "add them to requirements.txt and redeploy."
+        )
+    print("Pipeline deps OK (requests, openai, pydub, numpy)", flush=True)
+
+
 def _verify_asgi_import() -> None:
     print(f"cwd={os.getcwd()}", flush=True)
     print(f"PORT={os.environ.get('PORT', '8000')}", flush=True)
@@ -127,6 +145,7 @@ def main() -> None:
             flush=True,
         )
     _run_migrations()
+    _verify_pipeline_deps()
     _verify_asgi_import()
 
     import uvicorn
