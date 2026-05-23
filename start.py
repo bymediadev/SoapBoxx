@@ -1,8 +1,7 @@
 """
 Local / fallback start entry (migrations + uvicorn).
 
-Railway/Railpack: preDeployCommand `migrate_db.sh` + start `start_api.sh`
-(see railway.toml). Migrations must not run during the Railpack build phase.
+Railway/Railpack: no preDeploy; start `python start.py` (alembic + uvicorn — see railway.toml).
 """
 
 from __future__ import annotations

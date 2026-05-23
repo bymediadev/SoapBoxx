@@ -19,8 +19,8 @@ Production host: `https://soapboxx-production.up.railway.app`
 | Setting | Value |
 |---------|--------|
 | **Build command** | **Empty** — clear any `python start.py` here; Railpack installs from `requirements.txt` automatically |
-| **Pre-deploy command** | Leave unset in dashboard; **`railway.toml`** runs `sh scripts/migrate_db.sh` (`alembic upgrade head`) |
-| **Start command** | Leave unset in dashboard; **`railway.toml`** runs uvicorn on `$PORT` |
+| **Pre-deploy command** | **Empty** — migrations run inside `python start.py` at container start |
+| **Start command** | Leave unset in dashboard; **`railway.toml`** runs `python start.py` |
 | **Domain port** | Edit icon next to `*.up.railway.app` in Public Networking → **8080** (not local dev 8000) |
 
 Railway rejects using the same command for build and start. **Do not** name start scripts `railway_start.sh` — Railpack may auto-run them during **build**, where `postgres.railway.internal` is unreachable.

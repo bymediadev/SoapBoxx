@@ -11,9 +11,8 @@
 builder = "RAILPACK"
 
 [deploy]
-preDeployCommand = "sh scripts/migrate_db.sh"
-# Inline uvicorn — avoids sh script / CRLF issues; must bind Railway $PORT
-startCommand = "python -m uvicorn main:app --host 0.0.0.0 --port $PORT"
+# No preDeploy — start.py runs alembic + uvicorn (avoids missing scripts/*.sh in image)
+startCommand = "python start.py"
 healthcheckPath = "/health/live"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"

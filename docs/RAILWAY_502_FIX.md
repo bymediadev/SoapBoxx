@@ -31,6 +31,19 @@ Railpack **auto-added** `railway_start.sh` to the **build** step (even after the
 
 Deploy should show **no** `▸ build $ sh scripts/railway_start.sh` line.
 
+## Deploy log: `sh: 0: cannot open scripts/migrate_db.sh`
+
+Pre-deploy or start is calling a **shell script** that is not in the Railpack deploy image (or the dashboard overrides repo config).
+
+| Fix | Action |
+|-----|--------|
+| Repo | `railway.toml` / `railpack.json` — **no preDeploy**; **`python start.py`** runs alembic + uvicorn |
+| Dashboard | **Pre-deploy** and **Start** must be **empty** (let `railway.toml` control deploy) |
+| Dashboard | Remove any `sh scripts/migrate_db.sh` pasted into Start or Pre-deploy |
+| Redeploy | **Redeploy** → **Clear build cache** |
+
+After a good deploy, logs should show `=== SoapBoxx boot ===` then `Starting uvicorn`.
+
 ## Checklist (do in order)
 
 ### 1. Variables on **API** service (not only Postgres)
