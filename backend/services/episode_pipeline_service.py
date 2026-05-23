@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -22,6 +23,7 @@ class EpisodePipelineResult:
     segment_count: int = 0
     template_id: Optional[str] = None
     insight_preview: Optional[str] = None
+    transcript_source: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -32,6 +34,7 @@ class EpisodePipelineResult:
             "segment_count": self.segment_count,
             "template_id": self.template_id,
             "insight_preview": self.insight_preview,
+            "transcript_source": self.transcript_source,
         }
 
 
@@ -40,6 +43,20 @@ def _transcript_segment_count(db: Session, episode_id: int) -> int:
         db.query(TranscriptSegment)
         .filter(TranscriptSegment.episode_id == episode_id)
         .count()
+    )
+
+
+def _log_pipeline_step(
+    episode_id: int,
+    step: str,
+    *,
+    duration_ms: float,
+    skipped: bool = False,
+) -> None:
+    skip_tag = " skipped" if skipped else ""
+    print(
+        f"pipeline episode_id={episode_id} step={step}{skip_tag} duration_ms={duration_ms:.0f}",
+        flush=True,
     )
 
 
@@ -62,13 +79,28 @@ def run_episode_pipeline(
 
     steps: List[Dict[str, Any]] = []
     has_transcript = bool((episode.full_transcript or "").strip())
+    transcript_source: Optional[str] = None
 
+    t0 = time.perf_counter()
     if transcript is not None or force_retranscribe or not has_transcript:
+        if transcript is not None:
+            transcribe_reason = "pasted_transcript"
+            transcript_source = "pasted"
+        elif force_retranscribe:
+            transcribe_reason = "force_retranscribe"
+            transcript_source = "stt"
+        else:
+            transcribe_reason = "no_transcript"
+            transcript_source = "stt"
+
         tr = transcribe_episode(db, episode_id, transcript=transcript)
+        _log_pipeline_step(episode_id, "transcribe", duration_ms=(time.perf_counter() - t0) * 1000)
         steps.append(
             {
                 "step": "transcribe",
                 "ok": True,
+                "reason": transcribe_reason,
+                "reused": False,
                 "transcript_length": tr.transcript_length,
                 "segment_count": tr.segment_count,
             }
@@ -78,26 +110,47 @@ def run_episode_pipeline(
     else:
         transcript_length = len((episode.full_transcript or "").strip())
         segment_count = _transcript_segment_count(db, episode_id)
+        transcript_source = "existing"
+        _log_pipeline_step(
+            episode_id,
+            "transcribe",
+            duration_ms=(time.perf_counter() - t0) * 1000,
+            skipped=True,
+        )
         steps.append(
             {
                 "step": "transcribe",
                 "ok": True,
                 "skipped": True,
+                "reason": "existing_transcript",
+                "reused": True,
                 "transcript_length": transcript_length,
                 "segment_count": segment_count,
             }
         )
 
     db.refresh(episode)
+    t0 = time.perf_counter()
     feat = run_feature_extraction(db, episode_id)
-    steps.append({"step": "features", "ok": True, "metrics": feat.features})
+    _log_pipeline_step(episode_id, "features", duration_ms=(time.perf_counter() - t0) * 1000)
+    steps.append(
+        {
+            "step": "features",
+            "ok": True,
+            "recomputed": True,
+            "metrics": feat.features,
+        }
+    )
 
+    t0 = time.perf_counter()
     trans = run_translation(db, episode_id)
+    _log_pipeline_step(episode_id, "translate", duration_ms=(time.perf_counter() - t0) * 1000)
     preview = trans.insight_text[:240] + ("…" if len(trans.insight_text) > 240 else "")
     steps.append(
         {
             "step": "translate",
             "ok": True,
+            "recomputed": True,
             "template_id": trans.template_id,
         }
     )
@@ -113,6 +166,7 @@ def run_episode_pipeline(
         segment_count=segment_count,
         template_id=trans.template_id,
         insight_preview=preview,
+        transcript_source=transcript_source,
     )
 
 

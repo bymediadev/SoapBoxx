@@ -119,17 +119,34 @@ class ProcessEpisodeRequest(BaseModel):
         None,
         description="Optional pasted transcript; skips audio STT when set",
     )
-    force_retranscribe: bool = False
+    force_retranscribe: bool = Field(
+        False,
+        description=(
+            "When true, re-run STT from audio_url even if a transcript exists. "
+            "Slow on Railway (may timeout on long episodes). Default false skips STT "
+            "when full_transcript is already stored."
+        ),
+    )
 
 
 class ProcessEpisodeResponse(BaseModel):
     episode_id: int
     status: str
-    steps: list[dict]
+    steps: list[dict] = Field(
+        description=(
+            "Per-step results. Transcribe step includes reason "
+            "(existing_transcript | force_retranscribe | no_transcript | pasted_transcript) "
+            "and reused (true when transcript was not re-generated)."
+        ),
+    )
     transcript_length: int
     segment_count: int
     template_id: Optional[str] = None
     insight_preview: Optional[str] = None
+    transcript_source: Optional[str] = Field(
+        None,
+        description="existing | stt | pasted — how the transcript used for metrics was obtained",
+    )
 
 
 class ProcessBatchResponse(BaseModel):

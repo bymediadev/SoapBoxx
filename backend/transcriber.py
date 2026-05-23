@@ -135,6 +135,26 @@ def _prepare_cloud_stt_payload(audio_data: bytes) -> tuple[bytes, str]:
     )
 
 
+def _stt_http_timeout() -> Any:
+    """Bounded HTTP timeout for cloud Whisper APIs (env SOAPBOXX_STT_HTTP_TIMEOUT, default 300s)."""
+    try:
+        import httpx
+
+        read_s = float(os.getenv("SOAPBOXX_STT_HTTP_TIMEOUT", "300"))
+        return httpx.Timeout(connect=10.0, read=read_s, write=60.0, pool=10.0)
+    except ImportError:
+        return None
+
+
+def _openai_stt_client(*, api_key: str, base_url: Optional[str] = None) -> Any:
+    from openai import OpenAI
+
+    timeout = _stt_http_timeout()
+    if base_url:
+        return OpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
+    return OpenAI(api_key=api_key, timeout=timeout)
+
+
 def _get_or_load_local_whisper_model(model_size: str) -> Any:
     """
     Load Whisper once per model size. Live recording spawns many TranscriptionThread runs;
@@ -367,13 +387,11 @@ class Transcriber:
             # OpenAI Python SDK >= 1.0: use client.audio.transcriptions (openai.Audio was removed).
             print("🔑 CRITICAL: Making OpenAI Whisper API call...")
             try:
-                from openai import OpenAI
+                client = _openai_stt_client(api_key=self.api_key)
             except ImportError:
                 error_msg = "CRITICAL ERROR: OpenAI package not installed"
                 track_transcription_error(error_msg, service="openai", critical=True)
                 return f"Error: {error_msg}"
-
-            client = OpenAI(api_key=self.api_key)
             file_buf = io.BytesIO(payload)
             create_kw: dict[str, Any] = {
                 "model": self.model,
@@ -402,6 +420,16 @@ class Transcriber:
         except Exception as api_error:
             error_str = str(api_error)
 
+            if "timeout" in error_str.lower() or api_error.__class__.__name__ in (
+                "Timeout",
+                "ReadTimeout",
+                "ConnectTimeout",
+            ):
+                return (
+                    f"Error: OpenAI STT timed out ({error_str}). "
+                    "Try a shorter clip or POST /process without force_retranscribe."
+                )
+
             # CRITICAL: Handle specific OpenAI API errors
             if "413" in error_str or "Maximum content size limit" in error_str:
                 error_msg = "CRITICAL ERROR: File too large for OpenAI API (413 error) - Compress audio"
@@ -428,16 +456,14 @@ class Transcriber:
                 "Error: No Groq API key — set GROQ_API_KEY (free at https://console.groq.com)"
             )
         try:
-            from openai import OpenAI
-        except ImportError:
-            return "Error: Install the openai package for Groq STT support"
-
-        try:
             try:
                 payload, fname = _prepare_cloud_stt_payload(audio_data)
             except ValueError as exc:
                 return f"Error: {exc}"
-            client = OpenAI(api_key=self.api_key, base_url=self.groq_base_url)
+            try:
+                client = _openai_stt_client(api_key=self.api_key, base_url=self.groq_base_url)
+            except ImportError:
+                return "Error: Install the openai package for Groq STT support"
             file_buf = io.BytesIO(payload)
             create_kw: dict[str, Any] = {
                 "model": self.model,
@@ -454,6 +480,16 @@ class Transcriber:
                 return "Error: Groq returned empty transcription"
             return transcript
         except Exception as exc:
+            err = str(exc)
+            if "timeout" in err.lower() or exc.__class__.__name__ in (
+                "Timeout",
+                "ReadTimeout",
+                "ConnectTimeout",
+            ):
+                return (
+                    f"Error: Groq STT timed out ({err}). "
+                    "Try a shorter clip or POST /process without force_retranscribe."
+                )
             return f"Error: Groq transcription failed: {exc}"
 
     def _transcribe_assemblyai(self, audio_data: bytes) -> str:

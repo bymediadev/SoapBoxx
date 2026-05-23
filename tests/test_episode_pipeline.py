@@ -34,7 +34,12 @@ def test_run_episode_pipeline_end_to_end(v1_db_clean):
         assert db.get(EpisodeTranslation, eid) is not None
         transcribe_step = next(s for s in result.steps if s.get("step") == "transcribe")
         assert transcribe_step.get("skipped") is True
+        assert transcribe_step.get("reason") == "existing_transcript"
+        assert transcribe_step.get("reused") is True
+        assert result.transcript_source == "existing"
         assert result.segment_count == transcribe_step["segment_count"]
         assert result.segment_count > 0
+        features_step = next(s for s in result.steps if s.get("step") == "features")
+        assert features_step.get("recomputed") is True
     finally:
         db.close()

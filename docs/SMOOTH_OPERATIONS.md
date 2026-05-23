@@ -69,9 +69,29 @@ Schedule on Railway: **separate cron service** — see [`RAILWAY_POSTGRES_CRON.m
 
 ## 5. Episode pipeline (per episode)
 
+Single call (recommended):
+
 ```text
-ingested/queued → POST /episodes/{id}/transcribe → POST .../features → POST .../translate
+POST /episodes/{id}/process
 ```
+
+Or step-by-step: `transcribe` → `features` → `translate`.
+
+Pre-flight: `GET /episodes/{id}/state` (`steps.transcribed`, `next_action`).
+
+### `POST /process` body (Railway)
+
+| Body | Use when | Railway safe? |
+|------|----------|----------------|
+| `{}` | Transcript already in Postgres; refresh 7 metrics + template insight | Yes (seconds) |
+| `{ "transcript": "..." }` | Paste transcript; skip audio download/STT | Yes |
+| `{ "force_retranscribe": true }` | Re-STT from `audio_url` | Often **no** on full episodes (proxy timeout); short clips/dev only |
+
+Default: `force_retranscribe=false` **skips** STT when `full_transcript` exists — intentional, not a bug. Response `steps[0].reason` is `existing_transcript` when skipped; top-level `transcript_source` is `existing | stt | pasted`.
+
+Deploy logs show step timing: `pipeline episode_id=N step=transcribe skipped duration_ms=...`
+
+Env: `SOAPBOXX_STT_HTTP_TIMEOUT` (default 300s) bounds Groq/OpenAI STT HTTP reads.
 
 Status: `GET /episodes/{id}/state`  
 Activity: `GET /system/activity`  
@@ -93,6 +113,8 @@ Patterns: `GET /insights/patterns/weekly`
 |---------|-----|
 | Railpack no start command | Push `start.py` + `railway.toml`; clear dashboard build command; optional `RAILPACK_START_CMD=python start.py` |
 | Build + start both `python start.py` | Clear **Build command** in dashboard; keep start in `railway.toml` only |
+| `can't open file '/app/start.py'` | Remove `steps.build` override from `railpack.json`; clear build cache — [`RAILWAY_502_FIX.md`](RAILWAY_502_FIX.md) |
+| `ModuleNotFoundError: backend` in `wait_for_db.py` | Pull latest `production`; script prepends repo root to `sys.path` |
 | PortAudio crash | `libportaudio2` in `railpack.json`; lazy `backend/__init__.py` |
 | requirements-v1-api missing | Use inlined deps in `requirements.txt`; no custom install step |
 | Health degraded | Add Postgres; Redis optional |
