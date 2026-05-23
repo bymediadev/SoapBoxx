@@ -1,0 +1,56 @@
+{
+  "tree": [
+    {
+      "name": "Business",
+      "node_type": "domain",
+      "children": [
+        {
+          "name": "Economics",
+          "node_type": "category",
+          "children": [
+            { "name": "Shows", "node_type": "subcategory", "podcast_name_contains": ["money", "planet money"] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Technology",
+      "node_type": "domain",
+      "children": [
+        {
+          "name": "Podcasts",
+          "node_type": "category",
+          "children": [
+            { "name": "Shows", "node_type": "subcategory", "podcast_name_contains": ["syntax", "tech"] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "News",
+      "node_type": "domain",
+      "children": [
+        {
+          "name": "Daily",
+          "node_type": "category",
+          "children": [
+            { "name": "Shows", "node_type": "subcategory", "podcast_name_contains": ["daily", "npr"] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Library",
+      "node_type": "domain",
+      "children": [
+        {
+          "name": "Uncategorized",
+          "node_type": "category",
+          "children": [
+            { "name": "Shows", "node_type": "subcategory", "default": true }
+          ]
+        }
+      ]
+    }
+  ]
+}

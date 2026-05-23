@@ -1,0 +1,18 @@
+# Railway config — soapboxx-worker (pipeline cron) ONLY
+#
+# Create a third service in the same repo/branch:
+#   Settings → Config-as-code → railway.worker.toml
+#
+# Variables (same as API):
+#   DATABASE_URL  (reference from Postgres)
+#   GROQ_API_KEY  (for audio transcription)
+# Optional:
+#   SOAPBOXX_WORKER_BATCH=1
+#   SOAPBOXX_DEMO_TRANSCRIPT=1   # use fixture text when no Groq / for free demos
+
+[build]
+builder = "RAILPACK"
+
+[deploy]
+startCommand = "python scripts/worker_tick.py"
+cronSchedule = "*/30 * * * *"
