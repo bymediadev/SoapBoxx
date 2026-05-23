@@ -1,12 +1,6 @@
 {
   "$schema": "https://schema.railpack.com",
   "provider": "python",
-  "steps": {
-    "build": {
-      "inputs": [{ "step": "install" }],
-      "commands": []
-    }
-  },
   "deploy": {
     "startCommand": "python start.py"
   }

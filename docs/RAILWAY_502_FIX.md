@@ -25,11 +25,24 @@ Railpack **auto-added** `railway_start.sh` to the **build** step (even after the
 
 | Fix | Action |
 |-----|--------|
-| Repo | `railpack.json` sets `"steps": { "build": { "commands": [] } }` (no build script) |
+| Repo | `railpack.json` only sets `deploy.startCommand` — **do not** override `steps.build.inputs` (that drops app source from the image) |
 | Dashboard | **Build command** must be **empty** — remove `sh scripts/railway_start.sh` if set |
 | Redeploy | **Clear build cache** so the plan regenerates |
 
 Deploy should show **no** `▸ build $ sh scripts/railway_start.sh` line.
+
+## Deploy log: `python: can't open file '/app/start.py'`
+
+The container has Python/deps but **no repo files** in `/app` (common after overriding `steps.build.inputs` to only `{ "step": "install" }`).
+
+| Fix | Action |
+|-----|--------|
+| Repo | Use current `railpack.json` (no custom `steps.build` block) |
+| Dashboard | **Root directory** = repo root (must contain `start.py`, `main.py`, `requirements.txt`) |
+| Branch | **`production`** (`start.py` is not on `main`) |
+| Redeploy | **Redeploy** → **Clear build cache** |
+
+Good deploy logs start with `=== SoapBoxx boot ===`.
 
 ## Deploy log: `sh: 0: cannot open scripts/migrate_db.sh`
 
