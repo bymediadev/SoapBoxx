@@ -6,7 +6,6 @@ import threading
 import time
 from typing import Any, Optional, Union
 
-import numpy as np
 import requests
 
 # Try to import error tracker

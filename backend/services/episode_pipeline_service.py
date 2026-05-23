@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from backend.models import Episode, EpisodeFeatures, EpisodeTranslation
+from backend.models import Episode, EpisodeFeatures, EpisodeTranslation, TranscriptSegment
 from backend.services.feature_service import run_feature_extraction
 from backend.services.transcription_service import transcribe_episode
 from backend.services.translation_service import run_translation
@@ -33,6 +33,14 @@ class EpisodePipelineResult:
             "template_id": self.template_id,
             "insight_preview": self.insight_preview,
         }
+
+
+def _transcript_segment_count(db: Session, episode_id: int) -> int:
+    return (
+        db.query(TranscriptSegment)
+        .filter(TranscriptSegment.episode_id == episode_id)
+        .count()
+    )
 
 
 def run_episode_pipeline(
@@ -69,8 +77,16 @@ def run_episode_pipeline(
         segment_count = tr.segment_count
     else:
         transcript_length = len((episode.full_transcript or "").strip())
-        segment_count = 0
-        steps.append({"step": "transcribe", "ok": True, "skipped": True})
+        segment_count = _transcript_segment_count(db, episode_id)
+        steps.append(
+            {
+                "step": "transcribe",
+                "ok": True,
+                "skipped": True,
+                "transcript_length": transcript_length,
+                "segment_count": segment_count,
+            }
+        )
 
     db.refresh(episode)
     feat = run_feature_extraction(db, episode_id)
