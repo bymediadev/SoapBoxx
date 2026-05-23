@@ -7,6 +7,7 @@ Read these first (in order):
 3. [`SOAPBOXX_MASTER_PLAN_FOUNDATION.md`](SOAPBOXX_MASTER_PLAN_FOUNDATION.md) — measurements + patterns are the product; podcasts are sources
 4. [`PRODUCT.md`](PRODUCT.md)
 5. [`docs/SYSTEM_DESIGN_V0_V1.md`](docs/SYSTEM_DESIGN_V0_V1.md) — instrumentation vs coach layers (coach **out of V1**)
+5b. [`docs/SOAPBOXX_V1_TRUTH_CONTRACT.md`](docs/SOAPBOXX_V1_TRUTH_CONTRACT.md) — Layer 1 invariants; no LLM in translation/features
 6. [`ARCHITECTURE.md`](ARCHITECTURE.md)
 7. [`docs/STORAGE.md`](docs/STORAGE.md) — storage model (migrating to Postgres per 7-day plan)
 8. [`WORKFLOW.md`](WORKFLOW.md)
