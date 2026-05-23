@@ -96,6 +96,9 @@ def process_episode_endpoint(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        msg = str(exc).removeprefix("Error: ").strip()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -92,6 +92,49 @@ def _pcm_s16le_to_wav_bytes(pcm: bytes, sample_rate: int = 16000) -> bytes:
     return wav_io.getvalue()
 
 
+def _max_stt_bytes() -> int:
+    return int(os.getenv("SOAPBOXX_STT_MAX_BYTES", str(25 * 1024 * 1024)))
+
+
+def _compress_audio_for_stt(audio_data: bytes, *, bitrate: str = "64k") -> bytes:
+    """Mono 16 kHz MP3 — shrinks large podcast enclosures for cloud Whisper APIs."""
+    try:
+        from pydub import AudioSegment
+
+        seg = AudioSegment.from_file(io.BytesIO(audio_data))
+        seg = seg.set_channels(1).set_frame_rate(16000)
+        out = io.BytesIO()
+        seg.export(out, format="mp3", bitrate=bitrate)
+        return out.getvalue()
+    except Exception as exc:
+        print(f"⚠️ STT audio compress failed ({bitrate}): {exc}")
+        return audio_data
+
+
+def _prepare_cloud_stt_payload(audio_data: bytes) -> tuple[bytes, str]:
+    """Return (bytes, filename) under the cloud Whisper upload size cap."""
+    limit = _max_stt_bytes()
+    if len(audio_data) <= limit:
+        return audio_data, "audio.mp3"
+
+    for bitrate in ("64k", "48k", "32k"):
+        candidate = _compress_audio_for_stt(audio_data, bitrate=bitrate)
+        if len(candidate) <= limit:
+            print(
+                f"✅ STT audio compressed to {len(candidate) / (1024 * 1024):.1f}MB ({bitrate})",
+                flush=True,
+            )
+            return candidate, "audio.mp3"
+
+    last = _compress_audio_for_stt(audio_data, bitrate="32k")
+    mb = len(last) / (1024 * 1024)
+    cap = limit / (1024 * 1024)
+    raise ValueError(
+        f"Audio still too large ({mb:.1f}MB) after compression (max {cap:.0f}MB). "
+        "Use a shorter episode or POST /episodes/{id}/transcribe with a pasted transcript."
+    )
+
+
 def _get_or_load_local_whisper_model(model_size: str) -> Any:
     """
     Load Whisper once per model size. Live recording spawns many TranscriptionThread runs;
@@ -190,10 +233,6 @@ class Transcriber:
 
         if len(audio_data) == 0:
             return "Error: Empty audio data provided"
-
-        # Check file size limit before processing
-        if len(audio_data) > 25 * 1024 * 1024:  # 25MB limit
-            return f"Error: Audio file too large ({len(audio_data) / (1024*1024):.1f}MB) - maximum size is 25MB"
 
         # In test mode, return a mock transcript for non-audio to make stress tests green
         if os.getenv("SOAPBOXX_TEST_MODE") == "1":
@@ -320,16 +359,10 @@ class Transcriber:
             else:
                 return "Error: Rate limited - please try again shortly"
 
-            # Validate audio data size again (defensive programming)
-            if len(audio_data) > 25 * 1024 * 1024:  # 25MB limit
-                error_msg = f"CRITICAL ERROR: Audio file too large ({len(audio_data) / (1024*1024):.1f}MB) for OpenAI API"
-                track_transcription_error(
-                    error_msg, service="openai", size=len(audio_data), critical=True
-                )
-                return f"Error: {error_msg} - Compress audio or use shorter recording"
-
-            # Convert audio to WAV format for OpenAI
-            wav_data = self._convert_audio_to_wav(audio_data)
+            try:
+                payload, fname = _prepare_cloud_stt_payload(audio_data)
+            except ValueError as exc:
+                return f"Error: {exc}"
 
             # OpenAI Python SDK >= 1.0: use client.audio.transcriptions (openai.Audio was removed).
             print("🔑 CRITICAL: Making OpenAI Whisper API call...")
@@ -341,10 +374,10 @@ class Transcriber:
                 return f"Error: {error_msg}"
 
             client = OpenAI(api_key=self.api_key)
-            wav_buf = io.BytesIO(wav_data)
+            file_buf = io.BytesIO(payload)
             create_kw: dict[str, Any] = {
                 "model": self.model,
-                "file": ("audio.wav", wav_buf),
+                "file": (fname, file_buf),
             }
             if self.language:
                 create_kw["language"] = self.language
@@ -394,23 +427,21 @@ class Transcriber:
             return (
                 "Error: No Groq API key — set GROQ_API_KEY (free at https://console.groq.com)"
             )
-        if len(audio_data) > 25 * 1024 * 1024:
-            return (
-                f"Error: Audio file too large ({len(audio_data) / (1024*1024):.1f}MB) "
-                "for Groq free tier (25MB max). Use shorter clip or local Whisper."
-            )
         try:
             from openai import OpenAI
         except ImportError:
             return "Error: Install the openai package for Groq STT support"
 
         try:
-            wav_data = self._convert_audio_to_wav(audio_data)
+            try:
+                payload, fname = _prepare_cloud_stt_payload(audio_data)
+            except ValueError as exc:
+                return f"Error: {exc}"
             client = OpenAI(api_key=self.api_key, base_url=self.groq_base_url)
-            wav_buf = io.BytesIO(wav_data)
+            file_buf = io.BytesIO(payload)
             create_kw: dict[str, Any] = {
                 "model": self.model,
-                "file": ("audio.wav", wav_buf),
+                "file": (fname, file_buf),
             }
             if self.language:
                 create_kw["language"] = self.language

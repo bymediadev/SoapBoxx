@@ -63,7 +63,8 @@ def transcribe_file(file_path: str | Path) -> Dict[str, Any]:
     audio_data = path.read_bytes()
     text = tr.transcribe(audio_data)
     if not text or str(text).startswith("Error"):
-        raise RuntimeError(str(text or "Transcription failed"))
+        msg = str(text or "Transcription failed").removeprefix("Error: ").strip()
+        raise ValueError(msg)
 
     return {
         "transcript": str(text).strip(),
