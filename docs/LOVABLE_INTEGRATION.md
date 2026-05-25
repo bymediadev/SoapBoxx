@@ -1,25 +1,27 @@
 # SoapBoxx — Lovable frontend + V1 API
 
 **Frontend:** [https://soapboxx.lovable.app](https://soapboxx.lovable.app) (hosted on Lovable, independent deploy)  
-**Backend:** FastAPI + Postgres + Redis (your system of record — updates via RSS ingest + pipeline)
+**Backend:** [https://soapboxx-production.up.railway.app](https://soapboxx-production.up.railway.app) (FastAPI + Postgres + Redis)
 
-The Lovable app is the **UI shell**. The API is the **live brain**. They deploy separately; the site calls your API over HTTPS.
+**Status:** Lovable is wired to the live API via `soapboxxApi` only — **no mock data**. Copy [`lovable/api-client.ts`](lovable/api-client.ts) into the Lovable repo as `src/lib/soapboxx-api.ts`.
+
+The Lovable app is the **UI shell**. The API is the **system of record**. They deploy separately; every screen fetches over HTTPS.
 
 ---
 
 ## Architecture
 
 ```text
-soapboxx.lovable.app  ──HTTPS──►  api.soapboxx.com (FastAPI)
+soapboxx.lovable.app  ──HTTPS──►  soapboxx-production.up.railway.app
                                       │
                                       ▼
-                                 Postgres (podcasts, episodes, metrics)
+                                 Postgres (podcasts, episodes, reports)
                                       ▲
-                                 RSS cron / POST /ingest/rss
+                                 POST /ingest/rss
 ```
 
 - Lovable does **not** store the library database.
-- Ingestion and measurements live on the API host.
+- Ingestion and episode reports live on the API host.
 - Re-deploying Lovable only changes UI; data persists in Postgres.
 
 ---
@@ -48,29 +50,22 @@ Verify: `GET https://YOUR_API/health` → `"status": "ok"`.
 
 ## 2. Lovable environment variable
 
-In the Lovable project **Settings → Environment**:
+Canonical client: [`lovable/api-client.ts`](lovable/api-client.ts) → `src/lib/soapboxx-api.ts`.
+
+| Setting | Behavior |
+|---------|----------|
+| *(unset)* | Defaults to `https://soapboxx-production.up.railway.app` |
+| `VITE_API_URL=http://127.0.0.1:8000` | Local FastAPI (`uvicorn main:app --reload --port 8000`) |
+
+Example (Lovable **Settings → Environment** or `.env`):
 
 ```text
-VITE_API_URL=https://YOUR_PUBLIC_API_HOST
+VITE_API_URL=http://127.0.0.1:8000
 ```
 
-Example client (in Lovable-generated code):
+See [`lovable/.env.lovable.example`](lovable/.env.lovable.example).
 
-```typescript
-const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
-
-export async function ingestRss(rssUrl: string) {
-  const r = await fetch(`${API}/ingest/rss`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ rss_url: rssUrl }),
-  });
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
-}
-```
-
-Use `fetch` to the API base URL only — no local SQLite, no mock JSON in production.
+All screens import `soapboxxApi` from that file — do not duplicate `fetch` URLs in components.
 
 ---
 
@@ -105,21 +100,25 @@ After RSS ingest, episodes start as **`queued`**. Ingest emits `ingest.started` 
 
 ---
 
-## 4. Endpoint map (UI → API)
+## 4. Endpoint map (UI → `soapboxxApi`)
 
-| Lovable screen | API |
-|----------------|-----|
-| Library stats + “processing” | `GET /library/stats` (`processing_count`, `queued_count`) |
-| Domain tree sidebar | `GET /library/tree` |
-| Shows under a branch | `tree[].children[].podcasts` |
-| Recent activity list | `GET /library/episodes?limit=20` + `GET /system/activity` |
-| Status chips | `status` on episode + `GET /episodes/{id}/state` for steps |
-| “5 episodes processing” | `GET /pipeline/status` → `processing_count` |
-| Emerging patterns panel | `GET /insights/patterns/weekly` |
-| Ingestion — add RSS | `POST /ingest/rss` → refresh activity + pipeline status |
-| Queue episode | `POST /episodes/{id}/queue` |
-| Run pipeline steps | `POST .../transcribe`, `/features`, `/translate` |
-| Settings / health | `GET /health` |
+| Lovable screen | `soapboxxApi` method | Notes |
+|----------------|----------------------|--------|
+| **Library home** | `libraryHome()` | One bundle: stats, pipeline, tree, episodes, activity, patterns |
+| **Ingestion** | `ingestRss(url)` then `libraryHome()` | RSS form |
+| **Episodes index** | `libraryEpisodes(limit)` or rows from `libraryHome()` | Filter by `podcast_id` when needed |
+| **Shows** | `listPodcasts()` and/or `libraryTree()` | Tree embeds shows per taxonomy branch |
+| **Insights / patterns** | `weeklyPatterns()` or `libraryHome().patterns` | Weekly structural snapshot |
+| **Episode detail** | `getEpisode(id)`, `episodeState(id)`, `getTranslation(id)` | Report view |
+| **Run pipeline** | `processEpisode(id, {})` | Empty body; reuses stored transcript when possible |
+| **Metrics on detail** | `processEpisode(id, {})` → `steps.find(s => s.step === "features")?.metrics` | Not on `getTranslation`; call once when needed |
+| Health check | `health()` | Optional dev banner |
+
+**Episode detail rules**
+
+- `getTranslation` → 404 means “not processed yet”; show **Run pipeline**.
+- Default pipeline: `processEpisode(id, {})` — never `force_retranscribe` in the main UI.
+- Seven metrics only from the **features** step of `processEpisode` (or session cache after one call).
 
 ---
 
@@ -147,20 +146,9 @@ If the browser blocks requests, add your exact Lovable preview URL to `SOAPBOXX_
 
 ---
 
-## 6. Replace mock data in Lovable
+## 6. Re-wire or fix Lovable
 
-The [Library UI](https://soapboxx.lovable.app) currently shows sample numbers (1,492 episodes, Lenny’s Podcast, etc.). In Lovable chat, paste:
-
-```text
-Remove all hardcoded library mock data. Use VITE_API_URL as base.
-
-- Library home: GET /library/stats and GET /library/tree
-- Branch view: filter tree node, show podcasts from tree response
-- Recent activity: GET /library/episodes?limit=12
-- Ingestion form: POST /ingest/rss, then refresh stats + tree
-- Episode page: GET /episodes/:id, optional pipeline POSTs for transcribe/features/translate
-- Show loading and error states when API is down
-```
+If a preview regresses to mock data, use the one-shot prompt: [`lovable/LOVABLE_FREE_CHAT_PROMPT.md`](lovable/LOVABLE_FREE_CHAT_PROMPT.md) (paste prompt + full `api-client.ts` in one message).
 
 ---
 
@@ -188,9 +176,9 @@ uvicorn main:app --reload --port 8000
 
 ## Quick checklist
 
-- [ ] API deployed with public HTTPS URL
-- [ ] `alembic upgrade head` on production DB
+- [x] API deployed (`soapboxx-production.up.railway.app`)
+- [ ] `alembic upgrade head` on production DB after schema changes
 - [ ] `SOAPBOXX_CORS_ORIGINS` includes `https://soapboxx.lovable.app`
-- [ ] Lovable `VITE_API_URL` set to that API URL
-- [ ] Mock data removed; screens wired to endpoints above
+- [x] Lovable uses `soapboxxApi` only (no mock library data)
+- [ ] Optional: `VITE_API_URL` for local backend dev
 - [ ] RSS re-ingest scheduled on server (optional but recommended)

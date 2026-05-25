@@ -84,3 +84,38 @@ def test_transcribe_api(v1_client, v1_db_clean):
     )
     assert r.status_code == 200
     assert r.json()["segment_count"] > 0
+
+
+def test_transcribe_rejects_oversize_remote_audio_before_download(v1_db_clean, monkeypatch):
+    from backend.api.deps import get_session_factory
+    from backend.services.rss_service import ingest_rss_xml
+
+    db = get_session_factory()()
+    try:
+        xml = (Path(__file__).parent / "fixtures" / "sample_rss.xml").read_text(
+            encoding="utf-8"
+        )
+        ing = ingest_rss_xml(db, xml, rss_url="https://example.com/api-feed")
+        eid = ing.episode_ids[0]
+        ep = db.get(Episode, eid)
+        assert ep is not None
+        ep.audio_url = "https://example.com/audio.mp3?size=30000000"
+        db.commit()
+
+        def _unexpected_download(*args, **kwargs):
+            raise AssertionError("oversize audio should be rejected before download")
+
+        monkeypatch.setattr(
+            "backend.services.transcription_service._download_audio",
+            _unexpected_download,
+        )
+
+        with pytest.raises(ValueError, match="cloud STT limit"):
+            transcribe_episode(db, eid)
+
+        db.refresh(ep)
+        assert ep.pipeline_status == "failed"
+        assert ep.pipeline_error
+        assert "cloud STT limit" in ep.pipeline_error
+    finally:
+        db.close()

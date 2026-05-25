@@ -1,7 +1,13 @@
 # Lovable — one-shot wireup prompt
 
+**Current state (production UI):** [soapboxx.lovable.app](https://soapboxx.lovable.app) is wired to Railway via `soapboxxApi` only — library home, ingestion, episodes index, shows, insights, and episode detail; no mock data. Episode detail uses `getEpisode` + `episodeState` + `getTranslation`, with **Run pipeline** → `processEpisode(id, {})` and metrics from the `features` step.
+
+Use the prompt below only to **re-wire** a broken preview or a new Lovable project.
+
 Copy **the entire block below** (from `Wire this SoapBoxx` through the end) into **Lovable project chat** once.  
 No separate follow-up prompts needed.
+
+**Env:** `VITE_API_URL` in Lovable Settings (or `.env`) points at `http://127.0.0.1:8000` for local API; if unset, client defaults to `https://soapboxx-production.up.railway.app`. See [`.env.lovable.example`](.env.lovable.example).
 
 ---
 
@@ -37,9 +43,9 @@ REQUIRED: The sender must paste the full contents of docs/lovable/api-client.ts 
 
 [PASTE FULL api-client.ts HERE — same message as this prompt]
 
-=== STEP 3 — Library home screen ===
+=== STEP 3 — Library home, episodes index, shows, insights ===
 
-On load (and Refresh):
+Library home — on load (and Refresh):
 - const home = await soapboxxApi.libraryHome(15, 25)
 - Map home.stats → stats cards (episodes_total, shows_total, measured_pct, queued_count, processing_count)
 - Map home.pipeline.by_status → pipeline chips
@@ -49,11 +55,21 @@ On load (and Refresh):
 - Map home.episodes → episodes table: columns title, podcast_name, status
 - Make each episode row clickable → navigate to /episode/:id using episode.id (number)
 
+Episodes index:
+- soapboxxApi.libraryEpisodes(limit) OR home.episodes from libraryHome()
+- Optional filter: libraryEpisodes with podcast_id query via libraryEpisodes if exposed; else filter client-side
+
+Shows:
+- soapboxxApi.listPodcasts() for shows list; taxonomy shows also in home.tree[].…podcasts
+
+Insights:
+- home.patterns from libraryHome() OR soapboxxApi.weeklyPatterns()
+
 RSS ingest form:
 - On submit: await soapboxxApi.ingestRss(url) then refetch libraryHome()
 - Show success: episodes_created / episodes_skipped
 
-Loading and error states when API fails. No fake numbers.
+Loading and error states when API fails. No fake numbers. No mock data on any screen.
 
 === STEP 4 — Episode detail screen (/episode/:id) ===
 

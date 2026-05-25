@@ -35,7 +35,7 @@ Your build log showed `pydub` / `ffmpeg` and **no start command** — Railpack u
 2. Builder is **Nixpacks** (ignores `railpack.json`), or  
 3. **`deploy.startCommand` was not read**.
 
-**Fixes in repo:** V1 deps **inlined in `requirements.txt`**; `railpack.json` only sets `startCommand` (do not override `install` — that runs before files are copied). Root **`start.py`**.
+**Fixes in repo:** V1 deps **inlined in `requirements.txt`**; `railpack.json` only sets `deploy.startCommand` (do **not** override `steps.build.inputs` — that drops app source from `/app`). Root **`start.py`** runs wait → alembic → uvicorn.
 
 If you see `No such file: requirements-v1-api.txt` — remove custom `steps.install` from `railpack.json`.
 
@@ -63,20 +63,20 @@ In Railway → Service → Settings → Build:
 Optional override (if deploy still fails):
 
 ```text
-RAILPACK_START_CMD=sh scripts/start_api.sh
+RAILPACK_START_CMD=python start.py
 ```
 
 ### Migrations
 
-**Pre-deploy** (`railway.toml` / `railpack.json` → `preDeployCommand`):
+**At container start** (`start.py` via `railway.toml` / `railpack.json` — **no preDeploy**):
 
-```bash
-sh scripts/migrate_db.sh
-```
+1. `scripts/wait_for_db.py` (retries Postgres; needs repo root on `sys.path` — fixed in repo)
+2. `alembic upgrade head`
+3. uvicorn
 
-Also in Procfile `release:` for Heroku-style platforms. Or run once from Railway shell after first deploy.
+Local-only helpers (not used by Railway deploy): `scripts/migrate_db.sh`, `scripts/start_api.sh`.
 
-**Do not** run migrations in a script named `railway_start.sh` — Railpack may execute it during **build**, where the private network is unavailable (`postgres.railway.internal` DNS failure).
+**Do not** run migrations during **build** or in a script named `railway_start.sh` — Railpack may execute those during build, where `postgres.railway.internal` is unreachable.
 
 ### Verify
 
@@ -90,9 +90,9 @@ curl https://YOUR_SERVICE.up.railway.app/docs
 ## Config files (priority)
 
 1. `RAILPACK_START_CMD` env (highest)
-2. `railway.toml` → `preDeployCommand` / `startCommand`
-3. `railpack.json` → `deploy.preDeployCommand` / `deploy.startCommand`
-4. `Procfile` → `web:` / `release:` processes
+2. `railway.toml` → `startCommand` (and `healthcheckPath`)
+3. `railpack.json` → `deploy.startCommand`
+4. `Procfile` → `web:` process
 5. Auto-detect scripts (avoid `railway_*` names at build time)
 
 See [Railpack Procfile docs](https://railpack.com/config/procfile.md).
@@ -122,6 +122,8 @@ See [`LOVABLE_INTEGRATION.md`](LOVABLE_INTEGRATION.md).
 | `PortAudio` / `sounddevice` crash at startup | `railpack.json` → `deploy.aptPackages: ["libportaudio2"]`; `backend/__init__.py` lazy-loads desktop modules |
 | Nixpacks builder with only `railpack.json` | Config ignored — switch builder to Railpack |
 | `python start.py` as **Build command** in dashboard | Conflicts with `railway.toml` start — clear build command; Railpack installs deps only |
+| `steps.build.inputs` only `{ "step": "install" }` in `railpack.json` | Deploy image has no `/app/start.py` — see [`RAILWAY_502_FIX.md`](RAILWAY_502_FIX.md) |
+| `ModuleNotFoundError: backend` in `wait_for_db.py` | Fixed in repo (`sys.path` + `PYTHONPATH`); redeploy latest `production` |
 
 ---
 
@@ -130,8 +132,8 @@ See [`LOVABLE_INTEGRATION.md`](LOVABLE_INTEGRATION.md).
 ### “No start command detected”
 
 1. Confirm **Railpack** builder (Settings → Build).
-2. Push `railpack.json`, `Procfile`, `railway.toml`, `scripts/start_api.sh`, `scripts/migrate_db.sh`.
-3. Set variable: `RAILPACK_START_CMD=sh scripts/start_api.sh` (optional)
+2. Push `railpack.json`, `Procfile`, `railway.toml`, `start.py`.
+3. Set variable: `RAILPACK_START_CMD=python start.py` (optional)
 4. **Redeploy without cache.**
 
 ### Build OK, crash on start
@@ -140,21 +142,22 @@ See [`LOVABLE_INTEGRATION.md`](LOVABLE_INTEGRATION.md).
 |----------|-----|
 | `could not connect to server` / DB errors | Add **Postgres** plugin; wait for `DATABASE_URL` to appear on the service |
 | `postgres://` driver errors | Fixed in code — pulls latest `backend/api/config.py` (normalizes to `postgresql+psycopg2://`) |
-| `alembic` / migration errors at **build** | Clear build command; migrations belong in **preDeploy** only (`migrate_db.sh`) |
-| `alembic` / migration errors at **preDeploy** | Check `DATABASE_URL` reference; redeploy |
-| `ModuleNotFoundError: backend` | Root directory must be repo root (where `main.py` lives) |
-| Health `degraded` | OK for demo — add **Redis** plugin or ignore; API still serves `/docs` |
+| `can't open file '/app/start.py'` | Fix `railpack.json` (no custom `steps.build`); root directory = repo root; clear build cache — [`RAILWAY_502_FIX.md`](RAILWAY_502_FIX.md) |
+| `ModuleNotFoundError: backend` in `wait_for_db.py` | Pull latest `production` (`wait_for_db.py` + `start.py` PYTHONPATH fix) |
+| `alembic` errors at **start** | Check `DATABASE_URL` reference; see deploy log after `=== SoapBoxx boot ===` |
+| Health `degraded` on `/health` | OK for demo — add **Redis** plugin or ignore; `/health/live` and `/docs` still work |
 
 ### Health check failing
 
-Railway health path: **`/health`** (set in `railway.toml`).  
-Needs Postgres connected for `status: ok`. Redis optional.
+Railway health path: **`/health/live`** (set in `railway.toml`). Liveness only — no DB required.
+
+Full readiness: **`/health`** — needs Postgres for `"status": "ok"`. Redis optional.
 
 ### Still stuck
 
 1. Railway → Deployments → latest → **View logs** (build + deploy).
 2. Copy the **last 20 lines** of the deploy log.
-3. Compare with local: `sh scripts/migrate_db.sh` then `sh scripts/start_api.sh` (Docker Postgres up).
+3. Compare with local: `python start.py` (Docker Postgres up) or `uvicorn main:app --reload`.
 
 ### One-service layout
 

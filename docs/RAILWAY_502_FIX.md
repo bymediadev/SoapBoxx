@@ -158,8 +158,8 @@ Requests **reach** Railway (`GET /health 502` in HTTP logs) but nothing is liste
 
 | Cause | Fix |
 |-------|-----|
-| Alembic ran during **build** (DNS on `postgres.railway.internal`) | Empty build command; migrations in **preDeploy** (`migrate_db.sh`); start `start_api.sh` only |
-| Start script exited before uvicorn | Start: `sh scripts/start_api.sh` (no alembic in start) |
+| Alembic ran during **build** (DNS on `postgres.railway.internal`) | Empty build command; migrations run in **`python start.py`** at container start only |
+| Start script exited before uvicorn | Check deploy log for `=== SoapBoxx boot ===`; leave dashboard start empty; use `railway.toml` |
 | Wrong start command | Leave dashboard start empty; use `railway.toml` |
 | Process crash loop | Deploy logs: look for exit / restart after `Uvicorn running` |
 | Domain → wrong port | Edit icon next to domain in Public Networking → **8080** (match deploy log) |

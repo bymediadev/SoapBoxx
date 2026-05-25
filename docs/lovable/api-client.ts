@@ -3,7 +3,7 @@
  *
  * Default: Railway production (no Lovable Secrets required).
  * Local: add .env with VITE_API_URL=http://127.0.0.1:8000 (see .env.lovable.example).
- * Or change SOAPBOXX_API_BASE below to LOCAL_API before pasting.
+ * Also copy vite-env.d.ts into src/lib/ (or remove the /// reference below if Vite types are global).
  */
 
 /// <reference path="./vite-env.d.ts" />
@@ -12,8 +12,9 @@ export const PRODUCTION_API = "https://soapboxx-production.up.railway.app";
 export const LOCAL_API = "http://127.0.0.1:8000";
 
 /** Active base URL — swap to LOCAL_API for local-only testing without .env */
-export const SOAPBOXX_API_BASE =
-  (import.meta.env.VITE_API_URL?.trim() || PRODUCTION_API).replace(/\/$/, "");
+export const SOAPBOXX_API_BASE = (
+  import.meta.env.VITE_API_URL?.trim() || PRODUCTION_API
+).replace(/\/$/, "");
 
 const API = SOAPBOXX_API_BASE;
 
@@ -43,6 +44,17 @@ export type LibraryStats = {
   processing_count: number;
 };
 
+export type LibraryEpisode = {
+  id: number;
+  podcast_id: number;
+  podcast_name: string;
+  title: string;
+  description?: string | null;
+  audio_url?: string | null;
+  published_at?: string | null;
+  status: string;
+};
+
 export type ActivityEvent = {
   id: number;
   event_type: string;
@@ -64,54 +76,117 @@ export type LibraryHome = {
   stats: LibraryStats;
   pipeline: { processing_count: number; by_status: Record<string, number> };
   tree: unknown[];
-  episodes: unknown[];
+  episodes: LibraryEpisode[];
   activity: ActivityEvent[];
   patterns: WeeklyPatterns;
 };
 
+export type EpisodeState = {
+  episode_id: number;
+  podcast_id: number;
+  podcast_name: string;
+  title: string;
+  status: string;
+  pipeline_error?: string | null;
+  steps: {
+    ingested: boolean;
+    transcribed: boolean;
+    measured: boolean;
+    insight_ready: boolean;
+  };
+  next_action?: string | null;
+};
+
+export type Podcast = {
+  id: number;
+  name: string;
+  description?: string | null;
+  rss_url?: string | null;
+  created_at: string;
+};
+
+export type EpisodeDetail = {
+  id: number;
+  podcast_id: number;
+  title: string;
+  description?: string | null;
+  audio_url?: string | null;
+  full_transcript?: string | null;
+  pipeline_status: string;
+};
+
+export type TranslationDetail = {
+  episode_id: number;
+  template_id: string;
+  insight_text: string;
+};
+
+export type ProcessEpisodeResult = {
+  episode_id: number;
+  status: string;
+  steps: Array<Record<string, unknown>>;
+  transcript_length: number;
+  segment_count: number;
+  template_id?: string;
+  insight_preview?: string;
+  transcript_source?: "existing" | "stt" | "pasted";
+};
+
 export const soapboxxApi = {
-  health: () => api<{ status: string }>("/health"),
-  /** One round-trip for library home (faster than 5+ separate GETs). */
+  health: () => api<{ status: string; database?: unknown; redis?: unknown }>("/health"),
+
+  /** One round-trip for library home (preferred for home screen). */
   libraryHome: (activityLimit = 20, episodesLimit = 25) =>
     api<LibraryHome>(
       `/library/home?activity_limit=${activityLimit}&episodes_limit=${episodesLimit}`
     ),
+
   libraryStats: () => api<LibraryStats>("/library/stats"),
   libraryTree: () => api<unknown[]>("/library/tree"),
   libraryEpisodes: (limit = 20) =>
-    api<unknown[]>(`/library/episodes?limit=${limit}`),
+    api<LibraryEpisode[]>(`/library/episodes?limit=${limit}`),
+
   pipelineStatus: () =>
     api<{ processing_count: number; by_status: Record<string, number> }>(
       "/pipeline/status"
     ),
+
   activity: (limit = 20) =>
     api<ActivityEvent[]>(`/system/activity?limit=${limit}`),
+
   weeklyPatterns: () => api<WeeklyPatterns>("/insights/patterns/weekly"),
+
   ingestRss: (rss_url: string) =>
     api<{
       podcast_id: number;
       episodes_created: number;
       episodes_skipped: number;
+      episode_ids: number[];
     }>("/ingest/rss", {
       method: "POST",
       body: JSON.stringify({ rss_url }),
     }),
-  episodeState: (id: number) => api<unknown>(`/episodes/${id}/state`),
-  /** Transcribe → 7 metrics → template insight (one episode). */
-  processEpisode: (
-    id: number,
-    body?: { transcript?: string; force_retranscribe?: boolean }
-  ) =>
-    api<{
-      episode_id: number;
-      status: string;
-      template_id?: string;
-      insight_preview?: string;
-      steps: unknown[];
-    }>(`/episodes/${id}/process`, {
+
+  /** All shows (podcasts) — use for shows index when not using tree-only navigation. */
+  listPodcasts: () => api<Podcast[]>("/podcasts"),
+
+  getEpisode: (id: number) => api<EpisodeDetail>(`/episodes/${id}`),
+
+  episodeState: (id: number) => api<EpisodeState>(`/episodes/${id}/state`),
+
+  /** 404 if episode has not been translated yet. */
+  getTranslation: (id: number) => api<TranslationDetail>(`/episodes/${id}/translation`),
+
+  /**
+   * Run pipeline: skip STT if transcript exists unless force_retranscribe.
+   * Default body {} — Railway-safe (fast).
+   */
+  processEpisode: (id: number, body?: { transcript?: string; force_retranscribe?: boolean }) =>
+    api<ProcessEpisodeResult>(`/episodes/${id}/process`, {
       method: "POST",
       body: JSON.stringify(body ?? {}),
     }),
+
   /** Process up to `limit` episodes missing translation (max 10). */
   processQueued: (limit = 1) =>
     api<{

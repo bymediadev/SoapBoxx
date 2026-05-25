@@ -1,74 +1,100 @@
 # SoapBoxx
 
-## Podcast Performance Intelligence System
+> SoapBoxx is a private producer library where finished podcast episodes become structured reports that can be stored, compared, and analyzed over time.
 
-Turn finished podcast episodes into **structured measurements and insights** that help you improve the next one.
+## The private library for podcast performance reports
+
+Every episode becomes a **report** you can revisit, compare, and learn from.
+
+Unlike podcast hosting platforms that store episodes for **listeners**, SoapBoxx stores **measurements, structure, and performance insights** for **producers**.
+
+Build a searchable archive of episode reports and uncover patterns that only appear over time.
+
+**The report is the product.** Measurement, transcription, and classification are how each report gets made — not the product itself.
 
 ---
 
 ## What SoapBoxx is
 
-SoapBoxx is a **post-episode analysis system** for podcasters and producers.
+SoapBoxx **stores podcast reports** — it does not merely “analyze and forget.”
 
-Bring in episodes via:
+Each finished episode you bring in becomes a **persistent report** on the shelf: seven structural metrics, a template classification (A / B / C), and fixed structural insight text. Reports stay in your library; value compounds as the archive grows.
 
-- **RSS feeds** (shows you already publish)
-- **Audio files**
-- **Transcripts** (paste or upload)
+**Public catalog vs private library**
 
-SoapBoxx turns them into:
+| | Hosting (Spotify, Apple, RSS) | SoapBoxx |
+|--|-------------------------------|----------|
+| **Audience** | Listeners | Producers |
+| **Stores** | Episodes for playback | Reports for improvement |
+| **Value over time** | Catalog size | Pattern insight from your archive |
 
-- **Structured measurements** — hook length, question density, host/guest balance, pacing signals, and more
-- **Structural insights** — how the episode is organized (interview vs narrative vs guest-led patterns)
-- **A feedback loop across episodes** — compare structure over time in a library, not one-off chat
+Organize by domain → category → show → episode report.
 
-SoapBoxx does **not** record audio and does **not** replace your recorder, DAW, or host platform. It improves what happens **after** the episode exists.
+**Bring material in** (finished episodes only):
+
+- **RSS feeds** — ingest show metadata and audio URLs
+- **Audio** — `audio_url` (from RSS or manual create); transcribe when needed
+- **Transcripts** — paste on process to skip STT
+
+SoapBoxx does **not** record audio (by default) and does **not** replace your recorder, DAW, or host platform.
+
+---
+
+## Category
+
+SoapBoxx does not fit neatly into recording, editing, hosting, analytics dashboards, or chat assistants.
+
+It is closer to:
+
+- **Podcast performance library** (primary framing)
+- Podcast intelligence archive
+- Producer insights repository
+
+The distinction: **the report is persistent.** Analysis is an event; the library is the asset.
 
 ---
 
 ## The problem it solves
 
-Most podcasters publish, maybe edit, and rarely analyze **structure** systematically. The same patterns repeat because there is no closed loop between episodes.
+Most tools treat feedback as a **one-time event**: upload an episode, read output, leave. Nothing accumulates.
 
-SoapBoxx creates that loop:
+Producers repeat the same structural mistakes because there is no **closed loop** and no **archive** to compare against.
 
-> **Import → Transcribe (if needed) → Measure → Insight → Improve the next episode**
+SoapBoxx creates a loop that **builds an asset**:
+
+> **Import → Transcribe (if needed) → Measure → Report on shelf → Compare over time → Improve the next episode**
 
 ---
 
-## How it works
+## How reports get made
 
 ### 1. Input
 
-Connect or upload finished episode material — RSS, audio, or transcript.
+Finished episode material — RSS, audio URL, or pasted transcript.
 
-### 2. Understanding
+### 2. Text (when needed)
 
-When needed, speech is converted to text. Content is broken into measurable components: questions, turns, segments, and flow.
+Speech becomes text; content is split into measurable components (questions, turns, segments).
 
-### 3. Analysis (core value)
+### 3. Measurement → report
 
-SoapBoxx evaluates **structure**, not vibes:
+Deterministic structure, not vibes:
 
-- How long is the opening hook?
-- How balanced is host vs guest talk time?
-- How dense are guiding questions?
-- Does the episode read as interview-shaped, Q&A-heavy, or narrative-driven?
-- How do patterns compare across episodes in your library?
+- Opening hook length, intro block, question density
+- Host vs guest talk share, turn count, topic shifts, CTA presence
+- Template **A / B / C** with consistent structural insight copy
 
-V1 produces **seven deterministic metrics** and classifies each episode into structural templates **A / B / C** with consistent insight text — repeatable outputs you can trust and compare.
+Repeatable outputs you can trust and **file next to other reports** in the same show.
 
-### 4. Output
+### 4. Library
 
-- Episode-level **measurements**
-- **Structural insight** (template + explanation of conversation shape)
-- **Library view** — shows, categories, pipeline status, trends over time
+Browse shows and taxonomy, pipeline status (queued / measured), compare episodes, optional weekly pattern snapshot as volume grows.
 
-Deeper **coaching reports** (host behavior, rewrites, next-episode actions) exist in the broader SoapBoxx codebase and are on the roadmap as an optional enhancement layer — separate from the core measurement contract.
+Optional **coaching reports** (host behavior, rewrites, next actions) exist elsewhere in the codebase and on the roadmap — separate from the core measurement reports.
 
-### 5. Iteration
+### 5. Use on the next episode
 
-Use insights on the **next** episode wherever you record (Riverside, OBS, Descript, etc.). SoapBoxx sits in the stack as intelligence, not production.
+Read a report in a few minutes, change how you produce the next one — wherever you record (Riverside, OBS, Descript, etc.). SoapBoxx sits in the stack as **archive and reference**, not production.
 
 ---
 
@@ -77,10 +103,11 @@ Use insights on the **next** episode wherever you record (Riverside, OBS, Descri
 - Not a recording studio or live podcast tool
 - Not a DAW (Audition, Descript editing mode)
 - Not OBS or streaming software
-- Not Spotify, Apple Podcasts, or YouTube (those stay your catalog)
-- Not transcription-only — measurement and structure are the product
+- Not Spotify, Apple Podcasts, or YouTube (those stay your **listener catalog**)
+- Not a chatbot or AI copilot — no disposable conversation; **stored reports**
+- Not transcription-only — measurement and structure are what you keep
 
-It does not capture content. It analyzes **finished** content.
+It does not capture content. It **archives reports** about finished content.
 
 ---
 
@@ -90,27 +117,27 @@ It does not capture content. It analyzes **finished** content.
 |------|------|
 | Riverside / OBS / local recorder | Capture |
 | Descript / Audition | Edit |
-| Spotify / YouTube / RSS host | Distribute |
-| ChatGPT | Ad-hoc questions |
-| **SoapBoxx** | **Post-episode intelligence + improvement loop** |
+| Spotify / YouTube / RSS host | Distribute (listener catalog) |
+| ChatGPT | Ad-hoc questions (no archive) |
+| **SoapBoxx** | **Private library of episode performance reports** |
 
 ---
 
 ## Mental model
 
-- **Athletes** → game tape review  
-- **Podcasters** → episode structure review (rarely done well today)
+- **Athletes** → game tape on the shelf, reviewed before the next game
+- **Podcasters** → episode structure reports (rarely kept in one searchable place)
 
-SoapBoxx is the missing **measurement and coach layer** for podcasting — starting with facts and structure, not generic AI chat.
+Hosting platforms publish for listeners. SoapBoxx is the **producer archive** — measurement → report → history → patterns.
 
 ---
 
 ## Key value proposition
 
 > Most tools help you **produce** episodes.  
-> SoapBoxx helps you **improve** how you make them.
+> SoapBoxx helps you **build a library** of how you make them.
 
-Success: read the output in a few minutes and know what to change on the **next** episode.
+Success: open a report, compare it to past episodes on the shelf, and know what to change on the **next** recording.
 
 ---
 
@@ -119,10 +146,12 @@ Success: read the output in a few minutes and know what to change on the **next*
 | | |
 |--|--|
 | **Production API** | [soapboxx-production.up.railway.app](https://soapboxx-production.up.railway.app) |
-| **Demo UI** | [soapboxx.lovable.app](https://soapboxx.lovable.app) (library + episode views) |
+| **Demo UI** | [soapboxx.lovable.app](https://soapboxx.lovable.app) — live API only (`soapboxxApi`; no mocks) |
 | **Built-in dashboard** | `/ui/` on the API host |
 
-Typical flow: ingest RSS → run episode pipeline → view measurements and structural insight.
+Typical flow: ingest RSS → run episode pipeline → **report lands on the shelf**.
+
+Lovable client: [`docs/lovable/api-client.ts`](docs/lovable/api-client.ts). Optional local API: `VITE_API_URL=http://127.0.0.1:8000` (defaults to Railway if unset).
 
 Developer docs: [`docs/RAILWAY_DEPLOY.md`](docs/RAILWAY_DEPLOY.md) · [`docs/LOVABLE_INTEGRATION.md`](docs/LOVABLE_INTEGRATION.md)
 
@@ -153,8 +182,9 @@ python -m pytest tests/ -q -m "not integration"
 |-----|--|
 | [`PRODUCT.md`](PRODUCT.md) | Product definition |
 | [`SOAPBOXX_V1_7DAY_EXECUTION.md`](SOAPBOXX_V1_7DAY_EXECUTION.md) | V1 scope |
+| [`docs/SOAPBOXX_V1_TRUTH_CONTRACT.md`](docs/SOAPBOXX_V1_TRUTH_CONTRACT.md) | Layer 1 reports (metrics + templates) |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | System design |
-| [`docs/INTELLIGENCE_V1.md`](docs/INTELLIGENCE_V1.md) | Metrics and intelligence layer |
+| [`docs/INTELLIGENCE_V1.md`](docs/INTELLIGENCE_V1.md) | Metrics layer (desktop path) |
 
 ---
 
@@ -165,10 +195,5 @@ python -m pytest tests/ -q -m "not integration"
 
 ---
 
-## One-line definition
-
-> SoapBoxx is a post-episode podcast intelligence system that turns finished episodes into structured measurements and insights so you can improve every future episode.
-
----
-
 *Built with Python, FastAPI, Postgres, and optional cloud STT (Groq / OpenAI)*
+

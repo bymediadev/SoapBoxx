@@ -11,7 +11,7 @@
 builder = "RAILPACK"
 
 [deploy]
-# No preDeploy — start.py runs alembic + uvicorn (avoids missing scripts/*.sh in image)
+# No preDeploy — start.py runs wait_for_db + alembic + uvicorn (avoids missing scripts/*.sh in image)
 startCommand = "python start.py"
 healthcheckPath = "/health/live"
 healthcheckTimeout = 120

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import re
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
+from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
 from sqlalchemy.orm import Session
@@ -24,6 +26,10 @@ _SPEAKER_LINE = re.compile(
     re.I,
 )
 _WPS = 2.5
+
+
+def _max_cloud_stt_bytes() -> int:
+    return int(os.getenv("SOAPBOXX_STT_MAX_BYTES", str(25 * 1024 * 1024)))
 
 
 @dataclass
@@ -78,10 +84,48 @@ def build_segments_from_transcript(transcript: str) -> List[dict]:
     return segments
 
 
+def _size_hint_from_url(url: str) -> Optional[int]:
+    try:
+        query = parse_qs(urlparse(url).query)
+        raw = (query.get("size") or [None])[0]
+        if raw is None:
+            return None
+        size = int(raw)
+        return size if size > 0 else None
+    except Exception:
+        return None
+
+
+def _probe_remote_audio_size(url: str, *, timeout: int = 20) -> Optional[int]:
+    hinted = _size_hint_from_url(url)
+    if hinted:
+        return hinted
+
+    try:
+        req = Request(
+            url,
+            headers={"User-Agent": "SoapBoxx-V1/1.0"},
+            method="HEAD",
+        )
+        with urlopen(req, timeout=timeout) as resp:
+            raw = resp.headers.get("Content-Length")
+            if raw:
+                size = int(raw)
+                return size if size > 0 else None
+    except Exception:
+        return None
+    return None
+
+
 def _download_audio(url: str, dest: Path, *, timeout: int = 120) -> None:
     req = Request(url, headers={"User-Agent": "SoapBoxx-V1/1.0"})
     with urlopen(req, timeout=timeout) as resp:
-        dest.write_bytes(resp.read())
+        with dest.open("wb") as fh:
+            while True:
+                chunk = resp.read(1024 * 1024)
+                if not chunk:
+                    break
+                fh.write(chunk)
 
 
 def transcribe_episode(
@@ -170,6 +214,16 @@ def _run_transcription(episode: Episode, transcript: Optional[str]) -> str:
         import tempfile
 
         from backend.intelligence_v1.transcribe import transcribe_file
+
+        remote_size = _probe_remote_audio_size(episode.audio_url)
+        max_bytes = _max_cloud_stt_bytes()
+        if remote_size and remote_size > max_bytes:
+            size_mb = remote_size / (1024 * 1024)
+            cap_mb = max_bytes / (1024 * 1024)
+            raise ValueError(
+                f"Audio is {size_mb:.1f}MB, above the {cap_mb:.0f}MB cloud STT limit. "
+                "Paste a transcript or use a shorter episode."
+            )
 
         suffix = ".mp3"
         if "." in episode.audio_url.split("?")[0]:

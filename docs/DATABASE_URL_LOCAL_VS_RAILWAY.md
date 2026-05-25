@@ -75,6 +75,6 @@ Railway:  [API container] ----network--> [Postgres plugin host]
 `start.py` now:
 
 1. Guards against localhost URL on Railway  
-2. Runs `scripts/wait_for_db.py` (retries ~60s)  
+2. Runs `scripts/wait_for_db.py` (retries ~60s; script prepends repo root to `sys.path` so `backend` imports work)  
 3. Runs `alembic upgrade head`  
 4. Starts uvicorn  
