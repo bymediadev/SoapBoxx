@@ -9,6 +9,8 @@ from sqlalchemy import func, select
 
 from backend.models import Episode, TranscriptSegment
 from backend.services.transcription_service import (
+    _maybe_prepare_audio_for_cloud_stt,
+    _size_hint_from_url,
     build_segments_from_transcript,
     transcribe_episode,
 )
@@ -86,36 +88,49 @@ def test_transcribe_api(v1_client, v1_db_clean):
     assert r.json()["segment_count"] > 0
 
 
-def test_transcribe_rejects_oversize_remote_audio_before_download(v1_db_clean, monkeypatch):
-    from backend.api.deps import get_session_factory
-    from backend.services.rss_service import ingest_rss_xml
+def test_size_hint_from_url_reads_query_param():
+    assert _size_hint_from_url("https://example.com/audio.mp3?size=30000000") == 30000000
+    assert _size_hint_from_url("https://example.com/audio.mp3") is None
 
-    db = get_session_factory()()
-    try:
-        xml = (Path(__file__).parent / "fixtures" / "sample_rss.xml").read_text(
-            encoding="utf-8"
-        )
-        ing = ingest_rss_xml(db, xml, rss_url="https://example.com/api-feed")
-        eid = ing.episode_ids[0]
-        ep = db.get(Episode, eid)
-        assert ep is not None
-        ep.audio_url = "https://example.com/audio.mp3?size=30000000"
-        db.commit()
 
-        def _unexpected_download(*args, **kwargs):
-            raise AssertionError("oversize audio should be rejected before download")
+def test_prepare_audio_for_cloud_stt_compresses_when_near_limit(tmp_path, monkeypatch):
+    source = tmp_path / "source.mp3"
+    source.write_bytes(b"x" * 90)
 
-        monkeypatch.setattr(
-            "backend.services.transcription_service._download_audio",
-            _unexpected_download,
-        )
+    monkeypatch.setenv("SOAPBOXX_STT_MAX_BYTES", "100")
+    monkeypatch.setenv("SOAPBOXX_STT_SOFT_BYTES", "80")
 
-        with pytest.raises(ValueError, match="cloud STT limit"):
-            transcribe_episode(db, eid)
+    def _fake_compress(src, dst, *, bitrate):
+        assert src == source
+        dst.write_bytes(b"y" * 60)
 
-        db.refresh(ep)
-        assert ep.pipeline_status == "failed"
-        assert ep.pipeline_error
-        assert "cloud STT limit" in ep.pipeline_error
-    finally:
-        db.close()
+    monkeypatch.setattr(
+        "backend.services.transcription_service._compress_audio_file_for_stt",
+        _fake_compress,
+    )
+
+    prepared, cleanup = _maybe_prepare_audio_for_cloud_stt(source)
+    assert prepared != source
+    assert cleanup == prepared
+    assert prepared.read_bytes() == b"y" * 60
+
+
+def test_prepare_audio_for_cloud_stt_raises_when_compression_still_too_large(
+    tmp_path, monkeypatch
+):
+    source = tmp_path / "source.mp3"
+    source.write_bytes(b"x" * 110)
+
+    monkeypatch.setenv("SOAPBOXX_STT_MAX_BYTES", "100")
+    monkeypatch.setenv("SOAPBOXX_STT_SOFT_BYTES", "80")
+
+    def _fake_compress(src, dst, *, bitrate):
+        dst.write_bytes(b"z" * 105)
+
+    monkeypatch.setattr(
+        "backend.services.transcription_service._compress_audio_file_for_stt",
+        _fake_compress,
+    )
+
+    with pytest.raises(ValueError, match="still .* after compression"):
+        _maybe_prepare_audio_for_cloud_stt(source)

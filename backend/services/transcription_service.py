@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import re
 import os
+import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
@@ -30,6 +32,13 @@ _WPS = 2.5
 
 def _max_cloud_stt_bytes() -> int:
     return int(os.getenv("SOAPBOXX_STT_MAX_BYTES", str(25 * 1024 * 1024)))
+
+
+def _cloud_stt_soft_bytes() -> int:
+    raw = os.getenv("SOAPBOXX_STT_SOFT_BYTES", "").strip()
+    if raw:
+        return int(raw)
+    return int(_max_cloud_stt_bytes() * 0.92)
 
 
 @dataclass
@@ -128,6 +137,101 @@ def _download_audio(url: str, dest: Path, *, timeout: int = 120) -> None:
                 fh.write(chunk)
 
 
+def _compress_audio_file_for_stt(source: Path, target: Path, *, bitrate: str) -> None:
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg:
+        cmd = [
+            ffmpeg,
+            "-y",
+            "-i",
+            str(source),
+            "-vn",
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-b:a",
+            bitrate,
+            str(target),
+        ]
+        proc = subprocess.run(
+            cmd,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode == 0 and target.is_file():
+            return
+        err = (proc.stderr or proc.stdout or "").strip()
+        if err:
+            print(f"⚠️ ffmpeg compression failed ({bitrate}): {err}", flush=True)
+
+    try:
+        from pydub import AudioSegment
+
+        audio = AudioSegment.from_file(source)
+        audio = audio.set_channels(1).set_frame_rate(16000)
+        audio.export(target, format="mp3", bitrate=bitrate)
+    except Exception as exc:
+        raise ValueError(f"Audio compression failed ({bitrate}): {exc}") from exc
+
+
+def _maybe_prepare_audio_for_cloud_stt(source: Path) -> Tuple[Path, Optional[Path]]:
+    """
+    Return an audio file ready for cloud STT.
+
+    Files near the upload cap are normalized and compressed before they hit the
+    cloud STT client so we avoid request-time crashes on constrained hosts.
+    """
+    original_size = source.stat().st_size
+    soft_limit = _cloud_stt_soft_bytes()
+    max_limit = _max_cloud_stt_bytes()
+    if original_size <= soft_limit:
+        return source, None
+
+    import tempfile
+
+    last_size = original_size
+    compressed_path: Optional[Path] = None
+    for bitrate in ("64k", "48k", "32k"):
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+            candidate = Path(tmp.name)
+        try:
+            _compress_audio_file_for_stt(source, candidate, bitrate=bitrate)
+            last_size = candidate.stat().st_size
+            if last_size <= max_limit:
+                print(
+                    (
+                        "✅ STT audio prepared for cloud upload: "
+                        f"{original_size / (1024 * 1024):.1f}MB -> "
+                        f"{last_size / (1024 * 1024):.1f}MB ({bitrate})"
+                    ),
+                    flush=True,
+                )
+                compressed_path = candidate
+                return candidate, compressed_path
+        except Exception:
+            try:
+                candidate.unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise
+
+        try:
+            candidate.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    raise ValueError(
+        (
+            f"Audio is {original_size / (1024 * 1024):.1f}MB and still "
+            f"{last_size / (1024 * 1024):.1f}MB after compression, above the "
+            f"{max_limit / (1024 * 1024):.0f}MB cloud STT limit. "
+            "Paste a transcript or use a shorter episode."
+        )
+    )
+
+
 def transcribe_episode(
     db: Session,
     episode_id: int,
@@ -215,26 +319,24 @@ def _run_transcription(episode: Episode, transcript: Optional[str]) -> str:
 
         from backend.intelligence_v1.transcribe import transcribe_file
 
-        remote_size = _probe_remote_audio_size(episode.audio_url)
-        max_bytes = _max_cloud_stt_bytes()
-        if remote_size and remote_size > max_bytes:
-            size_mb = remote_size / (1024 * 1024)
-            cap_mb = max_bytes / (1024 * 1024)
-            raise ValueError(
-                f"Audio is {size_mb:.1f}MB, above the {cap_mb:.0f}MB cloud STT limit. "
-                "Paste a transcript or use a shorter episode."
-            )
-
         suffix = ".mp3"
         if "." in episode.audio_url.split("?")[0]:
             suffix = Path(episode.audio_url.split("?")[0]).suffix or suffix
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
             tmp_path = Path(tmp.name)
+        prepared_path: Optional[Path] = None
+        cleanup_path: Optional[Path] = None
         try:
             _download_audio(episode.audio_url, tmp_path)
-            tr = transcribe_file(tmp_path)
+            prepared_path, cleanup_path = _maybe_prepare_audio_for_cloud_stt(tmp_path)
+            tr = transcribe_file(prepared_path)
             full_text = str(tr.get("transcript") or "").strip()
         finally:
+            if cleanup_path is not None:
+                try:
+                    cleanup_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
             try:
                 tmp_path.unlink(missing_ok=True)
             except OSError:
