@@ -126,10 +126,12 @@ After RSS ingest, episodes start as **`queued`**. Ingest emits `ingest.started` 
 
 The UI does not need to “download a database.”
 
-1. **On demand:** Ingestion page calls `POST /ingest/rss` when the user adds a feed.
+1. **On demand:** Ingestion page calls `POST /ingest/rss` when the user adds a feed. New episodes are auto-dispatched into the processing queue.
 2. **Scheduled (recommended):** On the API host, cron or Celery beat every N hours:
-   - For each `podcasts.rss_url`, call `ingest_rss_feed(db, url)`.
+   - For each `podcasts.rss_url`, call `ingest_rss_feed(db, url)` and auto-dispatch only newly created episode IDs.
 3. Lovable **refetches** `GET /library/stats` and `GET /library/episodes` on interval or on focus.
+
+Auto-dispatch only finishes end to end if a queue worker is running (`python scripts/run_celery_worker.py` locally, or the `soapboxx-worker` Railway service).
 
 That gives you an independently updating system without redeploying the frontend.
 

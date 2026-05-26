@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingest RSS URLs listed in data/seed_feeds.txt."""
+"""Ingest RSS URLs from file and auto-dispatch new episodes."""
 
 from __future__ import annotations
 
@@ -15,7 +15,10 @@ SEED_FILE = ROOT / "data" / "seed_feeds.txt"
 
 def main() -> int:
     from backend.api.deps import get_session_factory
-    from backend.services.rss_service import ingest_rss_feed
+    from backend.services.rss_service import (
+        dispatch_processing_for_episodes,
+        ingest_rss_feed,
+    )
 
     if not SEED_FILE.is_file():
         print(f"Missing {SEED_FILE}")
@@ -38,8 +41,18 @@ def main() -> int:
             print(f"Ingest {url}")
             try:
                 r = ingest_rss_feed(db, url.strip())
-                print(f"  podcast_id={r.podcast_id} created={r.created} skipped={r.skipped}")
+                dispatched_ids = dispatch_processing_for_episodes(
+                    db,
+                    r.created_episode_ids,
+                    trigger="seed_feeds",
+                )
+                print(
+                    "  "
+                    f"podcast_id={r.podcast_id} created={r.created} "
+                    f"skipped={r.skipped} dispatched={len(dispatched_ids)}"
+                )
             except Exception as exc:
+                db.rollback()
                 print(f"  ERROR: {exc}")
         return 0
     finally:

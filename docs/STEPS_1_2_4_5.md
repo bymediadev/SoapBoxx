@@ -66,9 +66,9 @@ Edit mappings in [`data/taxonomy_seed.json`](../data/taxonomy_seed.json) (e.g. P
 
 ---
 
-## 5 — Automation (worker cron)
+## 5 — Automation (queue worker)
 
-One episode per tick without you clicking Swagger.
+New RSS episodes start processing without you clicking Swagger.
 
 ### A. New Railway service `soapboxx-worker`
 
@@ -76,27 +76,22 @@ One episode per tick without you clicking Swagger.
 |---------|--------|
 | Same repo / branch `production` | yes |
 | Config file | `railway.worker.toml` |
-| Variables | `DATABASE_URL` + `GROQ_API_KEY` (same references as API) |
-| `SOAPBOXX_WORKER_BATCH` | `1` |
+| Variables | `DATABASE_URL` + `REDIS_URL` + `GROQ_API_KEY` (same references as API/Redis) |
+| Start command | `python scripts/run_celery_worker.py` |
 | Networking | no public domain needed |
 
-Cron in `railway.worker.toml`: every **30 minutes**, runs `python scripts/worker_tick.py`.
+This service stays up and consumes `soapboxx.process_episode` jobs pushed by RSS ingest.
 
-### B. Free demo mode (no Groq)
+### B. Feed sync remains separate
 
-On worker service only:
-
-```text
-SOAPBOXX_DEMO_TRANSCRIPT=1
-```
-
-Uses [`tests/fixtures/sample_transcript.txt`](../tests/fixtures/sample_transcript.txt) for each pending episode (same insight shape, not real audio).
+Keep RSS re-ingest on the existing cron service (`soapboxx-sync` / `railway.cron.toml`).
+That service checks stored feeds; the worker service consumes queued processing jobs.
 
 ### C. Pass criteria
 
-- Worker deploy logs show JSON with `"succeeded": 1`
-- Over a few hours, `/ui/` **ready** count climbs slowly
-- Activity feed shows `pipeline.ready` events
+- Worker deploy logs show Celery boot + task consumption
+- `POST /ingest/rss` returns `episodes_dispatched > 0` for brand-new feed entries
+- Activity feed shows processing events without a manual `/process` click
 
 ---
 

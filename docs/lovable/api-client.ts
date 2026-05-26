@@ -161,6 +161,7 @@ export const soapboxxApi = {
       podcast_id: number;
       episodes_created: number;
       episodes_skipped: number;
+      episodes_dispatched: number;
       episode_ids: number[];
     }>("/ingest/rss", {
       method: "POST",

@@ -22,6 +22,14 @@ alembic upgrade head
 uvicorn main:app --reload --port 8000
 ```
 
+Second terminal for queued episode processing after RSS ingest:
+
+```powershell
+cd c:\Users\yasuk\SoapBoxx
+.\.venv\Scripts\Activate.ps1
+python scripts/run_celery_worker.py
+```
+
 | Check | URL / command |
 |-------|----------------|
 | Health | http://127.0.0.1:8000/health → `"status": "ok"` |
@@ -60,7 +68,7 @@ Troubleshooting: [`RAILWAY_DEPLOY.md`](RAILWAY_DEPLOY.md)
 | Task | Command |
 |------|---------|
 | Add feeds from file | Edit `data/seed_feeds.txt` → `python scripts/seed_feeds_from_file.py` |
-| Re-sync all known feeds | `python scripts/sync_all_feeds.py` |
+| Re-sync all known feeds | `python scripts/sync_all_feeds.py` (new episodes auto-dispatch into processing) |
 | Single feed (API) | `POST /ingest/rss` `{ "rss_url": "..." }` |
 
 Schedule on Railway: **separate cron service** — see [`RAILWAY_POSTGRES_CRON.md`](RAILWAY_POSTGRES_CRON.md).

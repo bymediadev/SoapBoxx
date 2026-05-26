@@ -123,7 +123,45 @@ cronSchedule = "0 6 * * *"
 
 ## Episode pipeline (transcribe → insights)
 
-RSS ingest only stores **metadata**. To turn an episode into structure + translation:
+RSS ingest now auto-dispatches new episodes into the processing queue, but that queue needs a worker.
+
+### Queue worker service (`soapboxx-worker`)
+
+Use repo file **[`railway.worker.toml`](../railway.worker.toml)** on a separate long-running service:
+
+1. Same repo, same branch (`production`).
+2. Click service **soapboxx-worker**.
+3. **Settings** → **Config-as-code** → set **Config file path** to:
+
+   ```text
+   railway.worker.toml
+   ```
+
+4. Leave dashboard **Build / Start / Pre-deploy** empty.
+5. **Variables:**
+   - Reference `DATABASE_URL` from Postgres
+   - Reference `REDIS_URL` from Redis
+   - Add `GROQ_API_KEY` for real audio transcription
+6. **Networking:** no public domain.
+
+That file starts:
+
+```toml
+startCommand = "python scripts/run_celery_worker.py"
+```
+
+Local equivalent:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python scripts/run_celery_worker.py
+```
+
+Without this worker, RSS ingest still creates episodes, but queued auto-processing will not be consumed.
+
+### Manual / fallback paths
+
+If you need to run the pipeline manually, you still can:
 
 | Action | How |
 |--------|-----|

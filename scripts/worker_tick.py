@@ -2,7 +2,8 @@
 """
 Process one batch of queued episodes (transcribe → features → translate).
 
-Railway: run on a cron service every N minutes (see railway.worker.toml).
+Manual / fallback runner for cron-style processing.
+Primary queue consumer for auto-dispatched RSS work is `scripts/run_celery_worker.py`.
 Uses GROQ_API_KEY or pasted transcript fallback when SOAPBOXX_DEMO_TRANSCRIPT=1.
 """
 

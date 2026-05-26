@@ -1,18 +1,21 @@
-# Railway config — soapboxx-worker (pipeline cron) ONLY
+# Railway config — soapboxx-worker (queue consumer) ONLY
 #
 # Create a third service in the same repo/branch:
 #   Settings → Config-as-code → railway.worker.toml
 #
-# Variables (same as API):
+# Variables (same as API / worker):
 #   DATABASE_URL  (reference from Postgres)
+#   REDIS_URL     (reference from Redis)
 #   GROQ_API_KEY  (for audio transcription)
 # Optional:
-#   SOAPBOXX_WORKER_BATCH=1
-#   SOAPBOXX_DEMO_TRANSCRIPT=1   # use fixture text when no Groq / for free demos
+#   SOAPBOXX_WORKER_POOL=solo
+#   SOAPBOXX_WORKER_CONCURRENCY=1
+#   SOAPBOXX_WORKER_LOGLEVEL=info
 
 [build]
 builder = "RAILPACK"
 
 [deploy]
-startCommand = "python scripts/worker_tick.py"
-cronSchedule = "*/30 * * * *"
+startCommand = "python scripts/run_celery_worker.py"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

@@ -33,3 +33,16 @@ def process_episode_task(episode_id: int) -> dict:
         return result.to_dict()
     finally:
         db.close()
+
+
+@celery_app.task(name="soapboxx.sync_rss_feeds")
+def sync_rss_feeds_task() -> dict:
+    from backend.api.deps import get_session_factory
+    from backend.services.rss_service import sync_saved_rss_feeds
+
+    db = get_session_factory()()
+    try:
+        result = sync_saved_rss_feeds(db, dispatch_processing=True)
+        return result.to_dict()
+    finally:
+        db.close()

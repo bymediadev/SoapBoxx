@@ -52,6 +52,7 @@ def test_rss_ingest_creates_episodes(v1_db_clean):
         assert result.created == 2
         assert result.skipped == 0
         assert len(result.episode_ids) == 2
+        assert result.created_episode_ids == result.episode_ids
 
         count = db.scalar(select(func.count()).select_from(Episode))
         assert count == 2
@@ -82,6 +83,8 @@ def test_no_duplicate_ingestion(v1_db_clean):
         assert first.created == 2
         assert second.created == 0
         assert second.skipped == 2
+        assert first.created_episode_ids == first.episode_ids
+        assert second.created_episode_ids == []
 
         count = db.scalar(select(func.count()).select_from(Episode))
         assert count == 2
@@ -115,6 +118,7 @@ def test_duplicate_fallback_title_and_date(v1_db_clean):
 
 def test_ingest_rss_api(v1_client, v1_db_clean, monkeypatch):
     xml = FIXTURE_RSS.read_text(encoding="utf-8")
+    dispatched_calls = []
 
     monkeypatch.setattr(
         "backend.api.routes.ingest.ingest_rss_feed",
@@ -122,13 +126,26 @@ def test_ingest_rss_api(v1_client, v1_db_clean, monkeypatch):
             db, xml, rss_url=url, podcast_id=podcast_id
         ),
     )
+    monkeypatch.setattr(
+        "backend.api.routes.ingest.dispatch_processing_for_episodes",
+        lambda db, episode_ids, trigger: dispatched_calls.append(
+            {"episode_ids": list(episode_ids), "trigger": trigger}
+        )
+        or list(episode_ids),
+    )
 
     r = v1_client.post("/ingest/rss", json={"rss_url": RSS_URL})
     assert r.status_code == 201
     body = r.json()
     assert body["episodes_created"] == 2
+    assert body["episodes_dispatched"] == 2
     assert body["podcast_id"] > 0
+    assert dispatched_calls == [
+        {"episode_ids": body["episode_ids"], "trigger": "rss_ingest"}
+    ]
 
     r2 = v1_client.post("/ingest/rss", json={"rss_url": RSS_URL})
     assert r2.json()["episodes_created"] == 0
     assert r2.json()["episodes_skipped"] == 2
+    assert r2.json()["episodes_dispatched"] == 0
+    assert len(dispatched_calls) == 1

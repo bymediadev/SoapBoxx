@@ -7,7 +7,7 @@ generate insights.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, List, Optional
 
@@ -44,6 +44,27 @@ class RssIngestResult:
     created: int
     skipped: int
     episode_ids: List[int]
+    created_episode_ids: List[int]
+
+
+@dataclass
+class RssSyncResult:
+    podcasts_checked: int = 0
+    episodes_created: int = 0
+    episodes_skipped: int = 0
+    episodes_dispatched: int = 0
+    failed_podcasts: int = 0
+    results: List[dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "podcasts_checked": self.podcasts_checked,
+            "episodes_created": self.episodes_created,
+            "episodes_skipped": self.episodes_skipped,
+            "episodes_dispatched": self.episodes_dispatched,
+            "failed_podcasts": self.failed_podcasts,
+            "results": self.results,
+        }
 
 
 def _entry_datetime(entry: Any) -> Optional[datetime]:
@@ -274,6 +295,7 @@ def _ingest_parsed(
     created = 0
     skipped = 0
     episode_ids: List[int] = []
+    created_episode_ids: List[int] = []
 
     for item in items:
         existing = _find_existing_episode(db, int(podcast.id), item)
@@ -297,6 +319,7 @@ def _ingest_parsed(
         db.flush()
         created += 1
         episode_ids.append(int(row.id))
+        created_episode_ids.append(int(row.id))
         record_event(
             db,
             "episode.ingested",
@@ -321,4 +344,144 @@ def _ingest_parsed(
         created=created,
         skipped=skipped,
         episode_ids=episode_ids,
+        created_episode_ids=created_episode_ids,
     )
+
+
+def dispatch_processing_for_episodes(
+    db: Session,
+    episode_ids: List[int],
+    *,
+    trigger: str,
+) -> List[int]:
+    """Dispatch new episodes into the async processing queue."""
+    unique_ids: List[int] = []
+    seen: set[int] = set()
+    for episode_id in episode_ids:
+        if episode_id in seen:
+            continue
+        seen.add(episode_id)
+        unique_ids.append(episode_id)
+
+    if not unique_ids:
+        return []
+
+    process_episode_task = None
+    dispatch_error: Optional[str] = None
+    try:
+        from backend.workers.tasks import process_episode_task as celery_process_episode_task
+
+        process_episode_task = celery_process_episode_task
+    except Exception as exc:
+        dispatch_error = str(exc)
+
+    dispatched_ids: List[int] = []
+    for episode_id in unique_ids:
+        episode = db.get(Episode, episode_id)
+        if not episode:
+            continue
+        if process_episode_task is None:
+            record_event(
+                db,
+                "pipeline.dispatch_failed",
+                f"Auto-processing unavailable: {episode.title}",
+                podcast_id=int(episode.podcast_id),
+                episode_id=int(episode.id),
+                meta={"trigger": trigger, "error": dispatch_error or "dispatch unavailable"},
+                commit=False,
+            )
+            continue
+        try:
+            process_episode_task.delay(episode_id)
+        except Exception as exc:
+            record_event(
+                db,
+                "pipeline.dispatch_failed",
+                f"Auto-processing dispatch failed: {episode.title}",
+                podcast_id=int(episode.podcast_id),
+                episode_id=int(episode.id),
+                meta={"trigger": trigger, "error": str(exc)},
+                commit=False,
+            )
+            continue
+
+        dispatched_ids.append(int(episode.id))
+        record_event(
+            db,
+            "episode.processing_dispatched",
+            f"Auto-processing started: {episode.title}",
+            podcast_id=int(episode.podcast_id),
+            episode_id=int(episode.id),
+            meta={"trigger": trigger},
+            commit=False,
+        )
+
+    db.commit()
+    return dispatched_ids
+
+
+def sync_saved_rss_feeds(
+    db: Session,
+    *,
+    dispatch_processing: bool = True,
+) -> RssSyncResult:
+    """
+    Re-ingest every stored RSS feed and optionally dispatch new episodes.
+
+    Safe to run from cron or Celery beat because `ingest_rss_feed()` is idempotent.
+    """
+    rows = (
+        db.query(Podcast)
+        .filter(Podcast.rss_url.isnot(None), Podcast.rss_url != "")
+        .order_by(Podcast.id)
+        .all()
+    )
+
+    summary = RssSyncResult(podcasts_checked=len(rows))
+    for pod in rows:
+        url = (pod.rss_url or "").strip()
+        if not url:
+            continue
+
+        try:
+            ingest_result = ingest_rss_feed(db, url, podcast_id=int(pod.id))
+            dispatched_ids = (
+                dispatch_processing_for_episodes(
+                    db,
+                    ingest_result.created_episode_ids,
+                    trigger="rss_sync",
+                )
+                if dispatch_processing and ingest_result.created_episode_ids
+                else []
+            )
+            summary.episodes_created += ingest_result.created
+            summary.episodes_skipped += ingest_result.skipped
+            summary.episodes_dispatched += len(dispatched_ids)
+            summary.results.append(
+                {
+                    "podcast_id": int(pod.id),
+                    "podcast_name": pod.name,
+                    "created": ingest_result.created,
+                    "skipped": ingest_result.skipped,
+                    "dispatched": len(dispatched_ids),
+                }
+            )
+        except Exception as exc:
+            db.rollback()
+            summary.failed_podcasts += 1
+            record_event(
+                db,
+                "ingest.failed",
+                f"RSS sync failed: {pod.name}",
+                podcast_id=int(pod.id),
+                meta={"rss_url": url, "error": str(exc)},
+            )
+            summary.results.append(
+                {
+                    "podcast_id": int(pod.id),
+                    "podcast_name": pod.name,
+                    "error": str(exc),
+                }
+            )
+
+    return summary

@@ -5,9 +5,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from backend.api.config import get_settings
 from backend.api.deps import get_db
 from backend.api.schemas import RssIngestRequest, RssIngestResponse
-from backend.services.rss_service import ingest_rss_feed
+from backend.services.rss_service import (
+    dispatch_processing_for_episodes,
+    ingest_rss_feed,
+)
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
 
@@ -28,9 +32,20 @@ def ingest_rss(body: RssIngestRequest, db: Session = Depends(get_db)) -> RssInge
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"RSS ingest failed: {exc}",
         ) from exc
+    settings = get_settings()
+    dispatched_ids = (
+        dispatch_processing_for_episodes(
+            db,
+            result.created_episode_ids,
+            trigger="rss_ingest",
+        )
+        if settings.auto_process_on_ingest and result.created_episode_ids
+        else []
+    )
     return RssIngestResponse(
         podcast_id=result.podcast_id,
         episodes_created=result.created,
         episodes_skipped=result.skipped,
+        episodes_dispatched=len(dispatched_ids),
         episode_ids=result.episode_ids,
     )

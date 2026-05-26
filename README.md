@@ -170,6 +170,12 @@ uvicorn main:app --reload --host 127.0.0.1 --port 8000
 
 Optional: `GROQ_API_KEY` or `OPENAI_API_KEY` for cloud transcription when processing audio.
 
+For automatic RSS-triggered processing, run the queue worker in a second terminal:
+
+```bash
+python scripts/run_celery_worker.py
+```
+
 ```bash
 python -m pytest tests/ -q -m "not integration"
 ```

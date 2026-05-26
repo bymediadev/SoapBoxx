@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Re-ingest every podcast that has an rss_url (cron / weekly sync)."""
+"""Re-ingest stored feeds and auto-dispatch new episodes for processing."""
 
 from __future__ import annotations
 
 import sys
+import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,37 +14,20 @@ if str(ROOT) not in sys.path:
 
 def main() -> int:
     from backend.api.deps import get_session_factory
-    from backend.models import Podcast
-    from backend.services.rss_service import ingest_rss_feed
+    from backend.services.rss_service import sync_saved_rss_feeds
 
     db = get_session_factory()()
     try:
-        rows = (
-            db.query(Podcast)
-            .filter(Podcast.rss_url.isnot(None), Podcast.rss_url != "")
-            .order_by(Podcast.id)
-            .all()
-        )
-        if not rows:
-            print("No podcasts with rss_url. Add feeds via POST /ingest/rss first.")
-            return 0
-
-        total_created = 0
-        total_skipped = 0
-        for pod in rows:
-            url = (pod.rss_url or "").strip()
-            print(f"[{pod.id}] {pod.name}")
-            try:
-                result = ingest_rss_feed(db, url, podcast_id=int(pod.id))
-                total_created += result.created
-                total_skipped += result.skipped
-                print(f"    created={result.created} skipped={result.skipped}")
-            except Exception as exc:
-                print(f"    ERROR: {exc}")
-        print(f"Done. created={total_created} skipped={total_skipped}")
-        return 0
+        payload = sync_saved_rss_feeds(db, dispatch_processing=True).to_dict()
     finally:
         db.close()
+
+    if payload["podcasts_checked"] == 0:
+        print("No podcasts with rss_url. Add feeds via POST /ingest/rss first.")
+        return 0
+
+    print(json.dumps(payload, indent=2))
+    return 0 if payload["failed_podcasts"] == 0 else 1
 
 
 if __name__ == "__main__":
