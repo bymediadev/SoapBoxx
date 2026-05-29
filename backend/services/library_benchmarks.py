@@ -110,6 +110,50 @@ def benchmark_turns(count: int, lib: LibraryBenchmarks) -> Optional[str]:
     return f"Turn count near the library middle ({n} episodes)"
 
 
+def library_comparison_bullets(
+    *,
+    hook: float,
+    intro: float,
+    questions: int,
+    turns: int,
+    ratio: float,
+    lib: LibraryBenchmarks,
+    narrative_led: bool,
+) -> List[str]:
+    """Game-film lines: this episode vs measured library (no quality judgment)."""
+    if lib.n_measured < MIN_SAMPLES:
+        return [
+            "Compared with your library: add more measured episodes to unlock "
+            "side-by-side structural comparisons."
+        ]
+
+    bullets: List[str] = []
+    hook_b = benchmark_hook(hook, lib)
+    if hook_b and "faster" in hook_b.lower():
+        bullets.append(f"Opening: {hook_b}")
+    q_b = benchmark_questions(questions, lib)
+    if q_b and "fewer" in q_b.lower():
+        bullets.append(f"Questions: {q_b}")
+    t_b = benchmark_turns(turns, lib)
+    if t_b and "fewer" in t_b.lower():
+        bullets.append(f"Speaking turns: {t_b}")
+    g_b = benchmark_guest_ratio(ratio, lib)
+    if g_b and "balanced" in g_b.lower():
+        bullets.append(f"Talk share: {g_b}")
+
+    if narrative_led and bullets:
+        bullets.append(
+            "Shape: sits in the narrative-led band in your library "
+            "(sparse questions, longer segments)."
+        )
+    elif not bullets:
+        bullets.append(
+            f"Compared with {lib.n_measured} measured episodes in your library, "
+            "this episode sits near the middle on opening length, questions, and turns."
+        )
+    return bullets[:5]
+
+
 def benchmark_guest_ratio(ratio: float, lib: LibraryBenchmarks) -> Optional[str]:
     if len(lib.guest_ratios) < MIN_SAMPLES:
         return None

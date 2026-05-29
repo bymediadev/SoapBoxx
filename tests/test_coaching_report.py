@@ -52,11 +52,13 @@ def test_narrative_episode_coaching_bullets():
     )
     lib = _library()
     report = build_coaching_report(_FakeSession(), f, library=lib)
-    text = " ".join(report.what_this_means).lower()
-    assert "only 3 questions" in text or "3 questions" in text
-    assert "8 speaking turns" in text or "only 8" in text
+    listener = " ".join(report.listener_experience).lower()
+    assert "sparingly" in listener or "narration" in listener
+    assert "documentary" in listener or "storytelling" in listener
+    assert "single narrative" in listener or "few" in listener
     assert report.topic_shift_note
-    assert "continuous arc" in report.topic_shift_note.lower() or "zero" in report.topic_shift_note.lower()
+    assert "detection" in report.topic_shift_note.lower() or "0" in report.topic_shift_note
+    assert report.compared_with_library
     assert report.similar_to
     assert report.episode_structure[0].benchmark
 

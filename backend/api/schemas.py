@@ -117,6 +117,8 @@ class CoachingMetricRow(BaseModel):
 class CoachingReportRead(BaseModel):
     episode_structure: List[CoachingMetricRow] = []
     conversation_dynamics: List[CoachingMetricRow] = []
+    listener_experience: List[str] = []
+    compared_with_library: List[str] = []
     what_this_means: List[str] = []
     similar_to: Optional[str] = None
     topic_shift_note: Optional[str] = None

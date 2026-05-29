@@ -27,6 +27,14 @@ _TOPIC_SHIFT_MARKERS = re.compile(
     r"before we go|next topic|switching gears|pivot)\b",
     re.I,
 )
+# Narrative / produced-show transitions (Planet Money, documentary beats)
+_DISCOURSE_PIVOT = re.compile(
+    r"\b(but first|but now|years later|meanwhile|back in \d{4}|today on the show|"
+    r"we(?:'re| are) (?:going to|here in)|let'?s (?:start|go to)|first stop|"
+    r"second(?:ly)?|that said|on the other hand|in the (?:\d{4}s|meantime)|"
+    r"when we come back|after the break|part (?:one|two|three))\b",
+    re.I,
+)
 _CTA_MARKERS = re.compile(
     r"\b(subscribe|subscribed|patreon|follow the show|rate and review|"
     r"link in the description|apple podcasts|spotify|youtube channel)\b",
@@ -130,9 +138,21 @@ def followup_question_count(text: str) -> int:
 
 
 def topic_changes(text: str) -> int:
-    hits = len(_TOPIC_SHIFT_MARKERS.findall(text or ""))
-    paras = len([p for p in re.split(r"\n\s*\n", (text or "").strip()) if len(p.split()) > 30])
-    return max(hits, max(0, paras - 1))
+    """Count structural pivot signals (explicit phrases, discourse beats, paragraph breaks)."""
+    t = (text or "").strip()
+    if not t:
+        return 0
+    phrase_hits = len(_TOPIC_SHIFT_MARKERS.findall(t))
+    discourse_hits = len(_DISCOURSE_PIVOT.findall(t))
+    paras = len([p for p in re.split(r"\n\s*\n", t) if len(p.split()) > 30])
+    sent_pivots = sum(
+        1
+        for s in _sentences(t)
+        if _TOPIC_SHIFT_MARKERS.search(s) or _DISCOURSE_PIVOT.search(s)
+    )
+    from_paras = max(0, paras - 1)
+    from_sents = max(0, min(sent_pivots - 1, 6))
+    return min(12, max(phrase_hits, discourse_hits, from_paras, from_sents))
 
 
 def cta_present(text: str) -> bool:

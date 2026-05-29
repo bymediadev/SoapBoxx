@@ -1,4 +1,4 @@
-"""Rule-based coaching report: metrics + library benchmarks + what-this-means bullets."""
+"""Rule-based coaching report: benchmarks, listener experience, library comparisons."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from backend.services.library_benchmarks import (
     benchmark_intro,
     benchmark_questions,
     benchmark_turns,
+    library_comparison_bullets,
     load_library_benchmarks,
 )
 
@@ -43,6 +44,8 @@ class MetricRow:
 class CoachingReport:
     episode_structure: List[MetricRow] = field(default_factory=list)
     conversation_dynamics: List[MetricRow] = field(default_factory=list)
+    listener_experience: List[str] = field(default_factory=list)
+    compared_with_library: List[str] = field(default_factory=list)
     what_this_means: List[str] = field(default_factory=list)
     similar_to: Optional[str] = None
     topic_shift_note: Optional[str] = None
@@ -67,6 +70,8 @@ class CoachingReport:
                 }
                 for r in self.conversation_dynamics
             ],
+            "listener_experience": list(self.listener_experience),
+            "compared_with_library": list(self.compared_with_library),
             "what_this_means": list(self.what_this_means),
             "similar_to": self.similar_to,
             "topic_shift_note": self.topic_shift_note,
@@ -88,147 +93,6 @@ def _fmt_ratio(ratio: float) -> str:
     return f"{round(float(ratio or 0.5) * 100)}%"
 
 
-def _coach_hook(seconds: float) -> str:
-    if seconds >= 90:
-        return (
-            "The opening beat is extended before the conversation turns — "
-            "listeners may wait longer to hear where the episode is going."
-        )
-    if seconds >= 45:
-        return (
-            "The opening runs mid-length before a pivot — "
-            "not abrupt, not a long runway."
-        )
-    return (
-        "The opening turns quickly — "
-        "listeners hear direction early in the episode."
-    )
-
-
-def _coach_intro(seconds: float) -> str:
-    if seconds >= 120:
-        return (
-            "The intro block is long before guest voice or a clear topic shift — "
-            "a listener may still be waiting for the core story."
-        )
-    if seconds >= 60:
-        return "Guest voice or a topic shift appears after a moderate intro block."
-    return "The story or guest enters early — little runway before the main thread."
-
-
-def _coach_questions(count: int) -> str:
-    if count >= 18:
-        return (
-            f"{count} questions drive the episode — "
-            "information advances through frequent interviewer-led cycles."
-        )
-    if count >= 8:
-        return (
-            f"{count} questions mix guided interview pacing "
-            "with longer explanation blocks."
-        )
-    if count > 0:
-        return (
-            f"Only {count} questions across the conversation — "
-            "most runtime is extended explanation rather than interviewer exploration."
-        )
-    return (
-        "No question marks detected — "
-        "the episode reads as continuous narration rather than explicit Q&A."
-    )
-
-
-def _coach_turns(count: int) -> str:
-    if count >= 26:
-        return (
-            f"{count} speaking turns — "
-            "rapid back-and-forth pacing with frequent handoffs."
-        )
-    if count >= 11:
-        return (
-            f"{count} speaking turns — "
-            "a mix of exchange and longer explanation segments."
-        )
-    if count > 0:
-        return (
-            f"Only {count} speaking turns — "
-            "segments run long, closer to storytelling or lecture pacing than ping-pong interview."
-        )
-    return "Speaking turns were not detected from labeled lines in the transcript."
-
-
-def _coach_guest_ratio(ratio: float) -> str:
-    if 0.42 <= ratio <= 0.58:
-        return "Speaking time is relatively balanced — neither voice clearly dominates."
-    if ratio < 0.42:
-        return "Host-led airtime — the host carries more of the spoken runtime."
-    return "Guest-led airtime — the guest carries more of the spoken runtime."
-
-
-def _topic_shift_note(count: int) -> str:
-    if count >= 2:
-        return (
-            f"{count} topic-shift markers appear — "
-            "several distinct beats in how the conversation moves."
-        )
-    if count == 1:
-        return "One topic-shift marker appears — a single noticeable pivot in the thread."
-    return (
-        "Zero topic-shift markers in the transcript. "
-        "Either the episode stays on one continuous arc, or pivot language may not appear "
-        "in the text (worth listening to confirm)."
-    )
-
-
-def _archetype_bullet(template_id: str, f: EpisodeFeatures) -> str:
-    hook = float(f.hook_length_seconds or 0)
-    questions = int(f.question_count or 0)
-    turns = int(f.speaking_turns or 0)
-    topic_shifts = int(f.topic_shift_count or 0)
-
-    if template_id == "A":
-        return (
-            "The episode spends substantial runtime in the opening before the core thread — "
-            "review that block as a listener would: when does the story actually start?"
-        )
-    if template_id == "B":
-        return (
-            "The episode is question-led — "
-            "depth and rhythm depend on how follow-ups and clarifiers are used between questions."
-        )
-    return (
-        "The episode runs as a story-first arc with fewer explicit questions "
-        f"({questions} questions, {turns} turns, {topic_shifts} topic-shift markers) — "
-        "listeners stay for the through-line rather than rapid conversational pivots."
-    )
-
-
-def _similar_to(f: EpisodeFeatures, lib: LibraryBenchmarks) -> str:
-    if lib.n_measured < 3:
-        return (
-            "Similar-to comparisons appear after more episodes are measured in your library."
-        )
-    qs = int(f.question_count or 0)
-    turns = int(f.speaking_turns or 0)
-    avg_q = lib.avg_questions
-    avg_t = lib.avg_turns
-
-    if avg_q > 0 and qs <= avg_q * 0.65 and (avg_t <= 0 or turns <= avg_t * 0.75):
-        return (
-            "Within your library, this episode reads closer to narrative or story-first structure "
-            "(fewer questions, longer segments) than interview-heavy episodes."
-        )
-    if avg_q > 0 and qs >= avg_q * 1.35:
-        return (
-            "Within your library, this episode reads closer to question-led interview pacing "
-            "than narrative-led episodes."
-        )
-    return (
-        "Within your library, this episode sits in a mixed structural band — "
-        "not strongly narrative-only or interview-heavy."
-    )
-
-
 def _template_id(f: EpisodeFeatures) -> str:
     hook = float(f.hook_length_seconds or 0)
     intro = float(f.intro_length_seconds or 0)
@@ -238,6 +102,164 @@ def _template_id(f: EpisodeFeatures) -> str:
     if questions >= 12:
         return "B"
     return "C"
+
+
+def _listener_opening(hook: float, intro: float) -> str:
+    if hook >= 90 or intro >= 120:
+        return (
+            "Listeners spend a long stretch in setup before the core thread lands — "
+            "the experience is front-loaded with context before the story fully opens."
+        )
+    if hook < 45 and intro < 60:
+        return (
+            "Listeners reach the main thread quickly — the episode does not linger "
+            "in runway before the story or guest voice takes over."
+        )
+    return (
+        "The opening moves at a moderate pace — enough runway to orient, "
+        "then a turn into the main narrative."
+    )
+
+
+def _listener_questions(count: int) -> str:
+    if count >= 18:
+        return (
+            "Questions arrive often — the listener experiences frequent "
+            "interviewer-led pivots rather than long uninterrupted explanation."
+        )
+    if count >= 8:
+        return (
+            "Questions appear regularly, alternating guided interview beats "
+            "with longer explanatory passages."
+        )
+    if count > 0:
+        return (
+            "Questions are used sparingly — most information is delivered "
+            "through explanation and narration rather than interviewer exploration."
+        )
+    return (
+        "The transcript carries little explicit Q&A — the listener experience "
+        "reads as continuous narration."
+    )
+
+
+def _listener_turns(count: int) -> str:
+    if count >= 26:
+        return (
+            "Voices trade often — the listener hears rapid handoffs and "
+            "short bursts rather than long monologue blocks."
+        )
+    if count >= 11:
+        return (
+            "Turn-taking is moderate — stretches of explanation alternate "
+            "with exchange, without feeling like a single uninterrupted lecture."
+        )
+    if count > 0:
+        return (
+            "The episode relies on extended storytelling segments rather than rapid "
+            "host–guest exchanges — information arrives in larger narrative blocks, "
+            "closer to documentary pacing than ping-pong interview."
+        )
+    return (
+        "Speaker handoffs were not detected from labeled lines — pacing may read "
+        "as one continuous voice in the transcript."
+    )
+
+
+def _listener_topic_arc(topic_shifts: int, template_id: str) -> str:
+    if topic_shifts >= 3:
+        return (
+            "The listener hears several structural pivots — distinct beats "
+            "as the conversation moves between threads."
+        )
+    if topic_shifts >= 1:
+        return (
+            "At least one clear pivot appears in the transcript — "
+            "the thread shifts once or twice rather than staying on a single rail."
+        )
+    if template_id == "C":
+        return (
+            "The episode stays focused on a single narrative thread with few "
+            "detected structural pivots — produced storytelling rather than "
+            "frequent scene changes (sub-stories may still sit inside one arc)."
+        )
+    return (
+        "Few pivot phrases or scene breaks were detected — "
+        "either one continuous thread or transitions that do not surface in the text."
+    )
+
+
+def _listener_balance(ratio: float) -> str:
+    if 0.42 <= ratio <= 0.58:
+        return (
+            "Neither voice clearly dominates airtime — "
+            "the listener hears a relatively even conversation."
+        )
+    if ratio < 0.42:
+        return "The host carries more of the spoken runtime — guest voice is supporting."
+    return "The guest carries more of the spoken runtime — host voice frames more than leads."
+
+
+def _listener_cta(present: bool) -> Optional[str]:
+    if present:
+        return (
+            "A subscribe or follow-style call appears near the end — "
+            "listeners get an explicit next-step cue."
+        )
+    return None
+
+
+def _topic_shift_detection_note(count: int) -> Optional[str]:
+    if count > 0:
+        return None
+    return (
+        "Topic shifts: 0 in measurement. Pivot detection uses explicit transition phrases "
+        "and paragraph breaks in the transcript — dense narrative without those cues "
+        "can read as one arc even when the story covers several sub-topics. "
+        "Worth spot-checking against the audio."
+    )
+
+
+def _pattern_synthesis(template_id: str, f: EpisodeFeatures) -> str:
+    if template_id == "A":
+        return (
+            "Pattern: extended opening before the core thread — "
+            "common in shows that front-load context; review when the listener "
+            "would feel the story has actually started."
+        )
+    if template_id == "B":
+        return (
+            "Pattern: question-led interview — "
+            "rhythm and depth come from how the host uses questions and follow-ups, "
+            "not from long uninterrupted monologue blocks."
+        )
+    return (
+        "Pattern: narrative-led produced story — "
+        "sparse questions, longer segments, and a single through-line "
+        "rather than rapid conversational pivots."
+    )
+
+
+def _similar_to(f: EpisodeFeatures, lib: LibraryBenchmarks, template_id: str) -> str:
+    if lib.n_measured < 3:
+        return (
+            "Library comparison unlocks after more episodes are measured."
+        )
+    if template_id == "C":
+        return (
+            "Within your measured library, this episode aligns with narrative-led "
+            "story-first structure (explanation blocks, sparse Q&A) rather than "
+            "interview-heavy formats."
+        )
+    if template_id == "B":
+        return (
+            "Within your measured library, this episode aligns with question-led "
+            "interview pacing rather than sparse narrative structure."
+        )
+    return (
+        "Within your measured library, this episode is distinguished by opening "
+        "length more than question density."
+    )
 
 
 def build_coaching_report(
@@ -253,31 +275,15 @@ def build_coaching_report(
     turns = int(features.speaking_turns or 0)
     ratio = float(features.host_guest_ratio or 0.5)
     topic_shifts = int(features.topic_shift_count or 0)
-    cta = features.cta_present
+    cta = bool(features.cta_present)
 
     template_id = _template_id(features)
+    narrative_led = template_id == "C"
 
     structure = [
-        MetricRow(
-            "Hook",
-            _fmt_seconds(hook),
-            benchmark_hook(hook, lib),
-            _coach_hook(hook),
-        ),
-        MetricRow(
-            "Intro",
-            _fmt_seconds(intro),
-            benchmark_intro(intro, lib),
-            _coach_intro(intro),
-        ),
-        MetricRow(
-            "CTA",
-            "Present" if cta else "Not detected",
-            None,
-            "A call-to-action phrase appears near the end."
-            if cta
-            else "No standard CTA phrase detected in the transcript.",
-        ),
+        MetricRow("Hook", _fmt_seconds(hook), benchmark_hook(hook, lib), None),
+        MetricRow("Intro", _fmt_seconds(intro), benchmark_intro(intro, lib), None),
+        MetricRow("CTA", "Present" if cta else "Not detected", None, None),
     ]
 
     dynamics = [
@@ -285,44 +291,52 @@ def build_coaching_report(
             "Questions",
             str(questions),
             benchmark_questions(questions, lib),
-            _coach_questions(questions),
+            None,
         ),
         MetricRow(
             "Speaking turns",
             str(turns),
             benchmark_turns(turns, lib),
-            _coach_turns(turns),
+            None,
         ),
         MetricRow(
             "Guest talk ratio",
             _fmt_ratio(ratio),
             benchmark_guest_ratio(ratio, lib),
-            _coach_guest_ratio(ratio),
-        ),
-        MetricRow(
-            "Topic shifts",
-            str(topic_shifts),
             None,
-            _topic_shift_note(topic_shifts).split(". ")[0] + "."
-            if topic_shifts > 0
-            else None,
         ),
+        MetricRow("Topic shifts", str(topic_shifts), None, None),
     ]
 
-    bullets: List[str] = []
-    seen: set[str] = set()
-    for row in structure + dynamics:
-        if row.coaching and row.coaching not in seen:
-            bullets.append(row.coaching)
-            seen.add(row.coaching)
-    bullets.append(_archetype_bullet(template_id, features))
+    listener: List[str] = [
+        _listener_opening(hook, intro),
+        _listener_questions(questions),
+        _listener_turns(turns),
+        _listener_topic_arc(topic_shifts, template_id),
+        _listener_balance(ratio),
+    ]
+    cta_line = _listener_cta(cta)
+    if cta_line:
+        listener.append(cta_line)
+
+    compared = library_comparison_bullets(
+        hook=hook,
+        intro=intro,
+        questions=questions,
+        turns=turns,
+        ratio=ratio,
+        lib=lib,
+        narrative_led=narrative_led,
+    )
 
     report = CoachingReport(
         episode_structure=structure,
         conversation_dynamics=dynamics,
-        what_this_means=bullets,
-        similar_to=_similar_to(features, lib),
-        topic_shift_note=_topic_shift_note(topic_shifts) if topic_shifts == 0 else None,
+        listener_experience=listener,
+        compared_with_library=compared,
+        what_this_means=[_pattern_synthesis(template_id, features)],
+        similar_to=_similar_to(features, lib, template_id),
+        topic_shift_note=_topic_shift_detection_note(topic_shifts),
     )
     _assert_no_forbidden(report)
     return report
@@ -330,7 +344,7 @@ def build_coaching_report(
 
 def synthesis_insight_text(report: CoachingReport) -> str:
     """Short lead paragraph for API ``insight_text`` field."""
-    lead = report.what_this_means[:2]
+    lead = report.listener_experience[:2]
     body = " ".join(lead) if lead else "Structure measured for this episode."
     return f"{body} {_DISCLAIMER}"
 
@@ -349,6 +363,8 @@ def _assert_no_forbidden(report: CoachingReport) -> None:
         for part in (row.benchmark, row.coaching):
             if part:
                 chunks.append(part)
+    chunks.extend(report.listener_experience)
+    chunks.extend(report.compared_with_library)
     chunks.extend(report.what_this_means)
     if report.similar_to:
         chunks.append(report.similar_to)

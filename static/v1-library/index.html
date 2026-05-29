@@ -732,14 +732,22 @@
             <div id="detailDynamics" class="report-section">
               <h3 class="font-serif">Conversation dynamics</h3>
               <table class="coaching-table" id="detailDynamicsTable"></table>
+            </div>
+            <div id="detailListener" class="report-section">
+              <h3 class="font-serif">Listener experience</h3>
+              <ul id="detailListenerList" class="coaching-list"></ul>
               <p id="detailTopicNote" class="topic-note" style="display:none"></p>
             </div>
+            <div id="detailCompared" class="report-section">
+              <h3 class="font-serif">Compared with your library</h3>
+              <ul id="detailComparedList" class="coaching-list"></ul>
+            </div>
             <div id="detailMeans" class="report-section">
-              <h3 class="font-serif">What this means</h3>
+              <h3 class="font-serif">Pattern <span id="detailTemplate" class="pill"></span></h3>
               <ul id="detailMeansList" class="coaching-list"></ul>
             </div>
             <div id="detailSimilar" class="report-section">
-              <h3 class="font-serif">Similar to <span id="detailTemplate" class="pill"></span></h3>
+              <h3 class="font-serif">Similar to</h3>
               <p id="detailSimilarText"></p>
             </div>
           </div>
@@ -1084,6 +1092,10 @@
           document.getElementById("detailDynamicsTable"),
           report.conversation_dynamics
         );
+        const listener = report.listener_experience || [];
+        document.getElementById("detailListenerList").innerHTML = listener
+          .map((b) => `<li>${esc(b)}</li>`)
+          .join("");
         const topicNote = document.getElementById("detailTopicNote");
         if (report.topic_shift_note) {
           topicNote.textContent = report.topic_shift_note;
@@ -1091,6 +1103,10 @@
         } else {
           topicNote.style.display = "none";
         }
+        const compared = report.compared_with_library || [];
+        document.getElementById("detailComparedList").innerHTML = compared
+          .map((b) => `<li>${esc(b)}</li>`)
+          .join("");
         const means = report.what_this_means || [];
         document.getElementById("detailMeansList").innerHTML = means
           .map((b) => `<li>${esc(b)}</li>`)

@@ -125,6 +125,8 @@ export type CoachingMetricRow = {
 export type CoachingReport = {
   episode_structure: CoachingMetricRow[];
   conversation_dynamics: CoachingMetricRow[];
+  listener_experience: string[];
+  compared_with_library: string[];
   what_this_means: string[];
   similar_to?: string | null;
   topic_shift_note?: string | null;

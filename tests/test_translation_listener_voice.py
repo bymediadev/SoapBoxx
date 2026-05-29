@@ -70,7 +70,7 @@ def test_question_led_uses_template_b():
     )
     assert _template_id(f) == "B"
     report = build_coaching_report(_FakeSession(), f, library=_library())
-    blob = " ".join(report.what_this_means).lower()
+    blob = " ".join(report.listener_experience).lower()
     assert "question" in blob
 
 
@@ -84,8 +84,8 @@ def test_narrative_uses_template_c():
     )
     assert _template_id(f) == "C"
     report = build_coaching_report(_FakeSession(), f, library=_library())
-    text = " ".join(report.what_this_means).lower()
-    assert "story" in text or "narrative" in text or "questions" in text
+    text = " ".join(report.listener_experience + report.what_this_means).lower()
+    assert "narrative" in text or "story" in text or "thread" in text
 
 
 def test_no_forbidden_language():
