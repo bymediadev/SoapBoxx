@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.config import get_settings
-from backend.api.routes.ui import _UI_INDEX
+from backend.api.routes.ui import _ui_index_path
 from backend.api.routes import (
     episodes,
     health,
@@ -58,10 +58,11 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     def _log_ui_bundle() -> None:
-        if _UI_INDEX.is_file():
-            logger.info("UI index ready at %s", _UI_INDEX)
+        ui_index = _ui_index_path()
+        if ui_index.is_file():
+            logger.info("UI index ready at %s", ui_index)
         else:
-            logger.error("UI index MISSING at %s (cwd=%s)", _UI_INDEX, Path.cwd())
+            logger.error("UI index MISSING at %s (cwd=%s)", ui_index, Path.cwd())
 
     @app.get("/")
     def root() -> dict:
