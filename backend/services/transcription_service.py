@@ -27,7 +27,11 @@ _SPEAKER_LINE = re.compile(
     r"^\s*(host|guest|speaker\s*\d+|interviewer|narrator)\s*:\s*",
     re.I,
 )
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 _WPS = 2.5
+# Target paragraph size for an unstructured transcript blob (~44s of speech at
+# _WPS). Keeps segments conversational instead of one giant block.
+_WORDS_PER_SEGMENT = 110
 
 
 def _max_cloud_stt_bytes() -> int:
@@ -56,11 +60,74 @@ def _estimate_seconds(word_count: int) -> float:
     return round(max(0.0, word_count / _WPS), 2)
 
 
+def normalize_stt_segments(raw: Optional[List[dict]]) -> List[dict]:
+    """
+    Normalize Whisper STT segments into DB-ready rows.
+
+    Accepts rows from ``transcribe_detailed`` (``start_time``/``end_time``) or raw
+    Whisper API keys (``start``/``end``).
+    """
+    try:
+        from backend.transcriber import normalize_whisper_segments
+    except ImportError:
+        from transcriber import normalize_whisper_segments  # type: ignore
+
+    return normalize_whisper_segments(raw or [])
+
+
+def segments_for_transcript(
+    full_text: str,
+    stt_segments: Optional[List[dict]] = None,
+) -> List[dict]:
+    """Prefer real Whisper timestamps; fall back to text-based chunking."""
+    normalized = normalize_stt_segments(stt_segments)
+    if normalized:
+        return normalized
+    return build_segments_from_transcript(full_text)
+
+
+def _chunk_unstructured_text(text: str) -> List[str]:
+    """
+    Split a structureless transcript blob into ~paragraph-sized chunks.
+
+    Cloud STT (Whisper/Groq) returns plain text with no speaker labels and no
+    blank-line paragraphs, which previously collapsed the whole episode into a
+    single segment. We group sentences up to ``_WORDS_PER_SEGMENT`` words; if the
+    text has no sentence punctuation we fall back to fixed word windows.
+    """
+    sentences = [s.strip() for s in _SENTENCE_SPLIT.split(text) if s.strip()]
+    if len(sentences) <= 1:
+        words = text.split()
+        if len(words) <= _WORDS_PER_SEGMENT:
+            return [text]
+        return [
+            " ".join(words[i : i + _WORDS_PER_SEGMENT])
+            for i in range(0, len(words), _WORDS_PER_SEGMENT)
+        ]
+
+    chunks: List[str] = []
+    current: List[str] = []
+    current_words = 0
+    for sentence in sentences:
+        current.append(sentence)
+        current_words += len(sentence.split())
+        if current_words >= _WORDS_PER_SEGMENT:
+            chunks.append(" ".join(current))
+            current = []
+            current_words = 0
+    if current:
+        chunks.append(" ".join(current))
+    return chunks or [text]
+
+
 def build_segments_from_transcript(transcript: str) -> List[dict]:
     """
     Build time-estimated segments from transcript text.
 
-    Uses speaker lines or paragraphs; assigns synthetic start/end times.
+    Prefers real structure (speaker lines, then blank-line paragraphs). When the
+    transcript is one unstructured blob (typical cloud STT output) it is chunked
+    into paragraph-sized segments so downstream metrics measure structure instead
+    of treating the entire episode as a single segment.
     """
     text = (transcript or "").strip()
     if not text:
@@ -79,6 +146,8 @@ def build_segments_from_transcript(transcript: str) -> List[dict]:
 
     if len(chunks) <= 1:
         chunks = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+    if len(chunks) <= 1:
+        chunks = _chunk_unstructured_text(text)
     if not chunks:
         chunks = [text]
 
@@ -259,7 +328,7 @@ def transcribe_episode(
     )
 
     try:
-        full_text = _run_transcription(episode, transcript)
+        full_text, stt_segments = _run_transcription(episode, transcript)
     except Exception as exc:
         set_episode_status(
             db, episode, STATUS_FAILED, error=str(exc), commit=False
@@ -275,7 +344,7 @@ def transcribe_episode(
         db.commit()
         raise
 
-    segments = build_segments_from_transcript(full_text)
+    segments = segments_for_transcript(full_text, stt_segments)
     episode.full_transcript = full_text
 
     db.query(TranscriptSegment).filter(
@@ -309,7 +378,10 @@ def transcribe_episode(
     )
 
 
-def _run_transcription(episode: Episode, transcript: Optional[str]) -> str:
+def _run_transcription(
+    episode: Episode, transcript: Optional[str]
+) -> Tuple[str, Optional[List[dict]]]:
+    stt_segments: Optional[List[dict]] = None
     if transcript is not None:
         full_text = transcript.strip()
     else:
@@ -331,6 +403,9 @@ def _run_transcription(episode: Episode, transcript: Optional[str]) -> str:
             prepared_path, cleanup_path = _maybe_prepare_audio_for_cloud_stt(tmp_path)
             tr = transcribe_file(prepared_path)
             full_text = str(tr.get("transcript") or "").strip()
+            raw_segments = tr.get("segments")
+            if raw_segments:
+                stt_segments = list(raw_segments)
         finally:
             if cleanup_path is not None:
                 try:
@@ -344,4 +419,4 @@ def _run_transcription(episode: Episode, transcript: Optional[str]) -> str:
 
     if len(full_text) < 40:
         raise ValueError("Transcript too short")
-    return full_text
+    return full_text, stt_segments

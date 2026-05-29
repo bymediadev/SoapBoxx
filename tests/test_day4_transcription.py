@@ -12,6 +12,8 @@ from backend.services.transcription_service import (
     _maybe_prepare_audio_for_cloud_stt,
     _size_hint_from_url,
     build_segments_from_transcript,
+    normalize_stt_segments,
+    segments_for_transcript,
     transcribe_episode,
 )
 from tests.utils.db_reset import reset_v1_tables
@@ -64,6 +66,60 @@ def test_transcript_not_empty(v1_db_clean):
     segs = build_segments_from_transcript(text)
     assert len(text) > 100
     assert len(segs) > 0
+
+
+def test_unstructured_blob_is_chunked():
+    # Cloud STT returns one unpunctuated/unlabeled blob; it must still split into
+    # multiple time-estimated segments instead of one giant block.
+    blob = " ".join(
+        f"This is sentence number {i} about a topic we discuss in some depth."
+        for i in range(60)
+    )
+    segs = build_segments_from_transcript(blob)
+    assert len(segs) > 1
+    # Synthetic timestamps are ordered and non-overlapping.
+    for prev, nxt in zip(segs, segs[1:]):
+        assert prev["end_time"] <= nxt["start_time"] + 1e-6
+        assert nxt["end_time"] >= nxt["start_time"]
+
+
+def test_blob_without_sentence_punctuation_uses_word_windows():
+    blob = " ".join(f"word{i}" for i in range(300))
+    segs = build_segments_from_transcript(blob)
+    assert len(segs) > 1
+
+
+def test_normalize_stt_segments_accepts_whisper_keys():
+    raw = [
+        {"start": 0.0, "end": 2.5, "text": " Hello there"},
+        {"start_time": 2.5, "end_time": 5.0, "text": "General Kenobi"},
+    ]
+    segs = normalize_stt_segments(raw)
+    assert len(segs) == 2
+    assert segs[0]["start_time"] == 0.0
+    assert segs[0]["end_time"] == 2.5
+    assert segs[0]["text"] == "Hello there"
+    assert segs[1]["text"] == "General Kenobi"
+
+
+def test_segments_for_transcript_prefers_stt_timestamps():
+    stt = [{"start": 0.0, "end": 12.0, "text": "Opening monologue."}]
+    segs = segments_for_transcript("Opening monologue.", stt)
+    assert len(segs) == 1
+    assert segs[0]["end_time"] == 12.0
+
+
+def test_extract_transcript_payload_parses_verbose_json_dict():
+    from backend.transcriber import _extract_transcript_payload
+
+    payload = {
+        "text": " Hello world",
+        "segments": [{"start": 0.0, "end": 1.2, "text": " Hello world"}],
+    }
+    text, segs = _extract_transcript_payload(payload)
+    assert text == "Hello world"
+    assert len(segs) == 1
+    assert segs[0]["start_time"] == 0.0
 
 
 def test_transcribe_api(v1_client, v1_db_clean):

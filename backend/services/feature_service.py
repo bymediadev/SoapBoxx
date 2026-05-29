@@ -27,6 +27,9 @@ from backend.services.pipeline_status import (
 )
 
 _WPS = 2.5
+# The intro is an opening block, never the full episode. Bounded so a
+# structureless transcript can't report the whole runtime as "intro".
+_INTRO_CAP_SECONDS = 240.0
 
 
 @dataclass
@@ -39,8 +42,31 @@ def _estimate_seconds(word_count: int) -> float:
     return round(max(0.0, word_count / _WPS), 2)
 
 
+def _intro_from_segments(segments: List[Dict[str, Any]]) -> float:
+    """Intro ends at guest entry or first topic shift; else the opening block."""
+    for i, seg in enumerate(segments):
+        seg_text = str(seg.get("text") or "").strip()
+        m = _SPEAKER_LINE.match(seg_text)
+        is_guest = bool(m and m.group(1).lower().startswith("guest"))
+        if i > 0 and (is_guest or _TOPIC_SHIFT_MARKERS.search(seg_text)):
+            try:
+                return round(min(float(seg.get("start") or 0), _INTRO_CAP_SECONDS), 1)
+            except (TypeError, ValueError):
+                break
+    # No clear boundary: opening block = up to the first two segments.
+    opening = segments[: min(2, len(segments))]
+    try:
+        end = float(opening[-1].get("end") or 0)
+    except (TypeError, ValueError, IndexError):
+        end = 0.0
+    return round(min(end, _INTRO_CAP_SECONDS), 1)
+
+
 def intro_length_seconds(text: str, segments: Optional[List[Dict[str, Any]]] = None) -> float:
     """Seconds until guest voice or first topic shift (opening block)."""
+    if segments:
+        return _intro_from_segments(segments)
+
     lines = [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
     intro_words = 0
     for ln in lines:
@@ -55,7 +81,7 @@ def intro_length_seconds(text: str, segments: Optional[List[Dict[str, Any]]] = N
         intro_words += _words(ln)
     if intro_words < 10:
         intro_words = min(120, _words(text) // 8)
-    return _estimate_seconds(intro_words)
+    return round(min(_estimate_seconds(intro_words), _INTRO_CAP_SECONDS), 1)
 
 
 def extract_v1_features(

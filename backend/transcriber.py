@@ -4,7 +4,7 @@ import os
 import tempfile
 import threading
 import time
-from typing import Any, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import requests
 
@@ -155,6 +155,65 @@ def _openai_stt_client(*, api_key: str, base_url: Optional[str] = None) -> Any:
     return OpenAI(api_key=api_key, timeout=timeout)
 
 
+def normalize_whisper_segments(raw: Any) -> List[Dict[str, Any]]:
+    """
+    Whisper API / local Whisper segment list → SoapBoxx rows.
+
+    Each row: ``{"start_time": float, "end_time": float, "text": str}``.
+    """
+    out: List[Dict[str, Any]] = []
+    if not raw:
+        return out
+    items = raw if isinstance(raw, (list, tuple)) else []
+    for seg in items:
+        if seg is None:
+            continue
+        if isinstance(seg, dict):
+            start = seg.get("start_time", seg.get("start"))
+            end = seg.get("end_time", seg.get("end"))
+            text = seg.get("text")
+        else:
+            start = getattr(seg, "start", None)
+            end = getattr(seg, "end", None)
+            text = getattr(seg, "text", None)
+        try:
+            start_f = float(start if start is not None else 0.0)
+            end_f = float(end if end is not None else start_f)
+        except (TypeError, ValueError):
+            continue
+        cleaned = str(text or "").strip()
+        if not cleaned:
+            continue
+        if end_f < start_f:
+            end_f = start_f
+        out.append(
+            {"start_time": round(start_f, 3), "end_time": round(end_f, 3), "text": cleaned}
+        )
+    return out
+
+
+def _extract_transcript_payload(resp: Any) -> tuple[str, List[Dict[str, Any]]]:
+    """Parse OpenAI SDK / dict verbose_json transcription response."""
+    if isinstance(resp, str):
+        return resp.strip(), []
+    if hasattr(resp, "model_dump"):
+        try:
+            data: Any = resp.model_dump()
+        except Exception:
+            data = None
+    elif isinstance(resp, dict):
+        data = resp
+    else:
+        data = None
+
+    if isinstance(data, dict):
+        text = str(data.get("text") or "").strip()
+        return text, normalize_whisper_segments(data.get("segments"))
+
+    text = (getattr(resp, "text", None) or "").strip()
+    return text, normalize_whisper_segments(getattr(resp, "segments", None))
+
+
 def _get_or_load_local_whisper_model(model_size: str) -> Any:
     """
     Load Whisper once per model size. Live recording spawns many TranscriptionThread runs;
@@ -283,6 +342,80 @@ class Transcriber:
             )
             return f"Error: {error_msg}"
 
+    def transcribe_detailed(self, audio_data: bytes) -> Dict[str, Any]:
+        """
+        Transcribe audio and return timestamped segments when the STT backend supports them.
+
+        Returns ``{"transcript": str, "segments": list, "service": str}`` on success.
+        On failure, ``transcript`` is empty and ``error`` is set.
+        """
+        if audio_data is None:
+            return {"transcript": "", "segments": [], "error": "Error: No audio data provided"}
+
+        if not isinstance(audio_data, bytes):
+            try:
+                audio_data = bytes(audio_data)
+            except Exception:
+                return {
+                    "transcript": "",
+                    "segments": [],
+                    "error": "Error: Invalid audio data format",
+                }
+
+        if len(audio_data) == 0:
+            return {"transcript": "", "segments": [], "error": "Error: Empty audio data provided"}
+
+        if os.getenv("SOAPBOXX_TEST_MODE") == "1":
+            if not self._is_valid_audio_data(audio_data):
+                return {
+                    "transcript": "Mock transcript for testing",
+                    "segments": [],
+                    "service": self.service,
+                }
+
+        try:
+            if not self._is_valid_audio_data(audio_data):
+                return {
+                    "transcript": "",
+                    "segments": [],
+                    "error": (
+                        "Error: Invalid audio data format - audio appears to be "
+                        "corrupted or unsupported"
+                    ),
+                }
+
+            if self.service == "openai":
+                result = self._transcribe_openai(audio_data, verbose=True)
+            elif self.service == "groq":
+                result = self._transcribe_groq(audio_data, verbose=True)
+            elif self.service == "local":
+                result = self._transcribe_local(audio_data, verbose=True)
+            elif self.service == "assemblyai":
+                text = self._transcribe_assemblyai(audio_data)
+                result = text
+            else:
+                text = self.transcribe(audio_data)
+                result = text
+
+            if isinstance(result, dict):
+                return {
+                    "transcript": str(result.get("transcript") or "").strip(),
+                    "segments": list(result.get("segments") or []),
+                    "service": self.service,
+                }
+
+            text = str(result or "").strip()
+            if not text or text.startswith("Error"):
+                return {"transcript": "", "segments": [], "error": text or "Transcription failed"}
+            return {"transcript": text, "segments": [], "service": self.service}
+
+        except Exception as e:
+            error_msg = f"Transcription failed: {str(e)}"
+            track_transcription_error(
+                error_msg, service=self.service, audio_size=len(audio_data)
+            )
+            return {"transcript": "", "segments": [], "error": f"Error: {error_msg}"}
+
     def _is_valid_audio_data(self, audio_data: bytes) -> bool:
         """Validate that audio data appears to be valid"""
         try:
@@ -345,7 +478,7 @@ class Transcriber:
                 print(f"⚠️ Audio conversion failed: {e}; raw PCM wrap failed: {wrap_e}")
                 return audio_data
 
-    def _transcribe_openai(self, audio_data: bytes) -> str:
+    def _transcribe_openai(self, audio_data: bytes, *, verbose: bool = False) -> Union[str, Dict[str, Any]]:
         """Transcribe using OpenAI Whisper API with comprehensive error handling - CRITICAL OPERATION"""
         if not self.api_key:
             error_msg = (
@@ -399,22 +532,41 @@ class Transcriber:
             }
             if self.language:
                 create_kw["language"] = self.language
+            if verbose:
+                create_kw["response_format"] = "verbose_json"
+                create_kw["timestamp_granularities"] = ["segment"]
 
-            resp = client.audio.transcriptions.create(**create_kw)
-            if isinstance(resp, str):
-                transcript = resp.strip()
-            else:
-                transcript = (getattr(resp, "text", None) or "").strip()
+            try:
+                resp = client.audio.transcriptions.create(**create_kw)
+            except Exception as verbose_exc:
+                if not verbose:
+                    raise
+                err = str(verbose_exc).lower()
+                if "response_format" not in err and "timestamp" not in err:
+                    raise
+                print(
+                    f"⚠️ OpenAI verbose_json unavailable ({verbose_exc}); falling back to text-only",
+                    flush=True,
+                )
+                create_kw.pop("response_format", None)
+                create_kw.pop("timestamp_granularities", None)
+                resp = client.audio.transcriptions.create(**create_kw)
+                verbose = False
+
+            transcript, segments = _extract_transcript_payload(resp)
 
             # Validate response
             if not transcript:
                 error_msg = "CRITICAL ERROR: OpenAI returned empty transcription"
                 track_transcription_error(error_msg, service="openai", critical=True)
-                return f"Error: {error_msg} - Try again or check audio quality"
+                err = f"Error: {error_msg} - Try again or check audio quality"
+                return err if not verbose else {"transcript": "", "segments": [], "error": err}
 
             print(
                 f"✅ CRITICAL SUCCESS: OpenAI transcription completed ({len(transcript)} characters)"
             )
+            if verbose:
+                return {"transcript": transcript, "segments": segments}
             return transcript
 
         except Exception as api_error:
@@ -449,7 +601,7 @@ class Transcriber:
             )
             return f"Error: {error_msg} - This is a CRITICAL system component"
 
-    def _transcribe_groq(self, audio_data: bytes) -> str:
+    def _transcribe_groq(self, audio_data: bytes, *, verbose: bool = False) -> Union[str, Dict[str, Any]]:
         """Transcribe via Groq Whisper (OpenAI-compatible API, free tier available)."""
         if not self.api_key:
             return (
@@ -471,13 +623,33 @@ class Transcriber:
             }
             if self.language:
                 create_kw["language"] = self.language
-            resp = client.audio.transcriptions.create(**create_kw)
-            if isinstance(resp, str):
-                transcript = resp.strip()
-            else:
-                transcript = (getattr(resp, "text", None) or "").strip()
+            if verbose:
+                create_kw["response_format"] = "verbose_json"
+                create_kw["timestamp_granularities"] = ["segment"]
+
+            try:
+                resp = client.audio.transcriptions.create(**create_kw)
+            except Exception as verbose_exc:
+                if not verbose:
+                    raise
+                err = str(verbose_exc).lower()
+                if "response_format" not in err and "timestamp" not in err:
+                    raise
+                print(
+                    f"⚠️ Groq verbose_json unavailable ({verbose_exc}); falling back to text-only",
+                    flush=True,
+                )
+                create_kw.pop("response_format", None)
+                create_kw.pop("timestamp_granularities", None)
+                resp = client.audio.transcriptions.create(**create_kw)
+                verbose = False
+
+            transcript, segments = _extract_transcript_payload(resp)
             if not transcript:
-                return "Error: Groq returned empty transcription"
+                err = "Error: Groq returned empty transcription"
+                return err if not verbose else {"transcript": "", "segments": [], "error": err}
+            if verbose:
+                return {"transcript": transcript, "segments": segments}
             return transcript
         except Exception as exc:
             err = str(exc)
@@ -555,7 +727,7 @@ class Transcriber:
         except Exception as e:
             return f"Azure transcription failed: {str(e)}"
 
-    def _transcribe_local(self, audio_data: bytes) -> str:
+    def _transcribe_local(self, audio_data: bytes, *, verbose: bool = False) -> Union[str, Dict[str, Any]]:
         """Transcribe using local Whisper model"""
         if not WHISPER_AVAILABLE:
             return (
@@ -594,7 +766,13 @@ class Transcriber:
                         )
                     audio_np = whisper.pad_or_trim(audio_np)
                     result = self.local_model.transcribe(audio_np, **_kw)
-                return (result.get("text") or "").strip()
+                transcript = (result.get("text") or "").strip()
+                if verbose:
+                    return {
+                        "transcript": transcript,
+                        "segments": normalize_whisper_segments(result.get("segments")),
+                    }
+                return transcript
             finally:
                 if os.path.exists(temp_path):
                     os.unlink(temp_path)

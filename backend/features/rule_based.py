@@ -36,6 +36,10 @@ _SPEAKER_LINE = re.compile(
     r"^\s*(host|guest|speaker\s*\d+|interviewer|narrator)\s*:\s*",
     re.I,
 )
+# Structural metrics describe the opening of an episode, so they are bounded.
+# Without these caps a structureless transcript made the "hook"/"intro" equal to
+# the entire runtime.
+_HOOK_CAP_SECONDS = 120.0
 
 
 def _sentences(text: str) -> List[str]:
@@ -89,11 +93,13 @@ def hook_time_seconds(text: str, segments: Optional[Sequence[Dict[str, Any]]] = 
             t = str(seg.get("text") or "")
             if _TOPIC_SHIFT_MARKERS.search(t):
                 try:
-                    return float(seg.get("start") or 0)
+                    return round(min(float(seg.get("start") or 0), _HOOK_CAP_SECONDS), 1)
                 except (TypeError, ValueError):
                     break
+        # No explicit topic shift: the hook is the opening beat (first segment),
+        # not the whole episode.
         try:
-            return float(segments[-1].get("end") or 0) if segments else 0.0
+            return round(min(float(segments[0].get("end") or 0), _HOOK_CAP_SECONDS), 1)
         except (TypeError, ValueError):
             pass
 
@@ -104,7 +110,7 @@ def hook_time_seconds(text: str, segments: Optional[Sequence[Dict[str, Any]]] = 
         words_before_shift += _words(para)
     if words_before_shift == 0:
         words_before_shift = min(150, _words(text) // 10)
-    return round(_estimate_seconds_from_words(words_before_shift), 1)
+    return round(min(_estimate_seconds_from_words(words_before_shift), _HOOK_CAP_SECONDS), 1)
 
 
 def question_count(text: str) -> int:

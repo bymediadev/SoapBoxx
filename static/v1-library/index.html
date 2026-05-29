@@ -427,6 +427,72 @@
     footer a { color: var(--amber); text-decoration: none; }
     footer a:hover { text-decoration: underline; }
     .hairline { border-color: var(--border); }
+
+    tr.ep-row { cursor: pointer; }
+    tr.ep-row:hover td { background: oklch(0.28 0.018 65 / 0.35); }
+    tr.ep-row.selected td { background: oklch(0.78 0.14 75 / 0.08); }
+
+    #episodeDetail { display: none; margin-top: 16px; }
+    #episodeDetail.open { display: block; }
+    .detail-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .detail-head h2 { font-size: 1.25rem; line-height: 1.2; }
+    .detail-meta { font-size: 12px; color: var(--muted-foreground); margin-bottom: 12px; }
+    .detail-steps { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .step-pill {
+      font-size: 10px;
+      font-family: "JetBrains Mono", monospace;
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      color: var(--muted-foreground);
+    }
+    .step-pill.done {
+      color: var(--amber);
+      border-color: oklch(0.78 0.14 75 / 0.35);
+    }
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px;
+      margin: 12px 0;
+    }
+    .metric {
+      background: var(--background);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 10px;
+    }
+    .metric .k {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted-foreground);
+      font-family: "JetBrains Mono", monospace;
+    }
+    .metric .v {
+      font-size: 1.1rem;
+      margin-top: 4px;
+      font-family: "JetBrains Mono", monospace;
+    }
+    .insight-box {
+      margin-top: 12px;
+      padding: 14px;
+      border-radius: var(--radius-md);
+      border: 1px solid oklch(0.78 0.14 75 / 0.25);
+      background: oklch(0.78 0.14 75 / 0.05);
+    }
+    .insight-box h3 { font-size: 1rem; margin-bottom: 8px; }
+    .insight-box p { font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
+    .detail-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .detail-msg { font-size: 12px; margin-top: 8px; font-family: "JetBrains Mono", monospace; }
+    .detail-msg.ok { color: var(--amber); }
+    .detail-msg.err { color: var(--destructive); }
   </style>
 </head>
 <body>
@@ -487,6 +553,30 @@
             </tbody>
           </table>
         </section>
+
+        <section class="card" id="episodeDetail" aria-live="polite">
+          <div class="detail-head">
+            <div>
+              <div class="card-title">Episode report</div>
+              <h2 class="font-serif" id="detailTitle">Select an episode</h2>
+            </div>
+            <button type="button" class="btn btn-ghost" id="detailCloseBtn">Close</button>
+          </div>
+          <p class="detail-meta" id="detailMeta"></p>
+          <div class="detail-steps" id="detailSteps"></div>
+          <div class="metrics-grid" id="detailMetrics"></div>
+          <div class="insight-box" id="detailInsight" style="display:none">
+            <h3 class="font-serif">Structural insight <span id="detailTemplate" class="pill"></span></h3>
+            <p id="detailInsightText"></p>
+          </div>
+          <p id="detailNoInsight" class="empty" style="display:none">
+            No insight yet. Run the pipeline on this episode (paste transcript on Railway if STT is slow).
+          </p>
+          <div class="detail-actions">
+            <button type="button" class="btn btn-primary" id="detailProcessBtn">Run pipeline</button>
+          </div>
+          <p id="detailMsg" class="detail-msg"></p>
+        </section>
       </div>
 
       <footer>
@@ -510,6 +600,7 @@
 
   <script>
     const API = "";
+    let selectedEpisodeId = null;
 
     function esc(s) {
       if (s == null) return "";
@@ -630,13 +721,152 @@
       body.innerHTML = eps
         .map((ep) => {
           const st = (ep.status || "unknown").toLowerCase().replace(/\s+/g, "-");
-          return `<tr>
+          const sel = selectedEpisodeId === ep.id ? " selected" : "";
+          return `<tr class="ep-row${sel}" data-episode-id="${esc(ep.id)}">
             <td class="title">${esc(ep.title || "Untitled")}</td>
             <td class="show">${esc(ep.podcast_name)}</td>
             <td><span class="status status-${esc(st)}">${esc(ep.status)}</span></td>
           </tr>`;
         })
         .join("");
+      body.querySelectorAll("tr.ep-row").forEach((row) => {
+        row.addEventListener("click", () => {
+          const id = Number(row.getAttribute("data-episode-id"));
+          if (id) openEpisode(id);
+        });
+      });
+    }
+
+    function closeEpisodeDetail() {
+      selectedEpisodeId = null;
+      document.getElementById("episodeDetail").classList.remove("open");
+      document.querySelectorAll("tr.ep-row.selected").forEach((r) => r.classList.remove("selected"));
+    }
+
+    function renderDetailSteps(steps) {
+      const el = document.getElementById("detailSteps");
+      const items = [
+        ["ingested", "Ingested"],
+        ["transcribed", "Transcript"],
+        ["measured", "Measured"],
+        ["insight_ready", "Insight"],
+      ];
+      el.innerHTML = items
+        .map(([key, label]) => {
+          const done = steps && steps[key];
+          return `<span class="step-pill${done ? " done" : ""}">${label}</span>`;
+        })
+        .join("");
+    }
+
+    function renderDetailMetrics(features) {
+      const el = document.getElementById("detailMetrics");
+      if (!features) {
+        el.innerHTML = "";
+        return;
+      }
+      const rows = [
+        ["Hook (s)", features.hook_length_seconds],
+        ["Intro (s)", features.intro_length_seconds],
+        ["Questions", features.question_count],
+        ["Turns", features.speaking_turns],
+        ["Host ratio", features.host_guest_ratio],
+        ["Topic shifts", features.topic_shift_count],
+        ["CTA", features.cta_present == null ? "—" : features.cta_present ? "yes" : "no"],
+      ];
+      el.innerHTML = rows
+        .map(
+          ([k, v]) =>
+            `<div class="metric"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`
+        )
+        .join("");
+    }
+
+    function showInsight(translation) {
+      const box = document.getElementById("detailInsight");
+      const none = document.getElementById("detailNoInsight");
+      if (!translation) {
+        box.style.display = "none";
+        none.style.display = "block";
+        return;
+      }
+      none.style.display = "none";
+      box.style.display = "block";
+      document.getElementById("detailTemplate").textContent = `Template ${translation.template_id || "?"}`;
+      document.getElementById("detailInsightText").textContent = translation.insight_text || "";
+    }
+
+    async function openEpisode(episodeId) {
+      selectedEpisodeId = episodeId;
+      document.getElementById("episodeDetail").classList.add("open");
+      document.querySelectorAll("tr.ep-row").forEach((r) => {
+        r.classList.toggle("selected", Number(r.getAttribute("data-episode-id")) === episodeId);
+      });
+
+      const msg = document.getElementById("detailMsg");
+      msg.textContent = "Loading…";
+      msg.className = "detail-msg";
+      document.getElementById("detailTitle").textContent = "Loading…";
+      document.getElementById("detailMeta").textContent = "";
+      renderDetailSteps(null);
+      renderDetailMetrics(null);
+      showInsight(null);
+
+      try {
+        const [episode, state] = await Promise.all([
+          api(`/episodes/${episodeId}`),
+          api(`/episodes/${episodeId}/state`),
+        ]);
+
+        document.getElementById("detailTitle").textContent = episode.title || "Untitled";
+        document.getElementById("detailMeta").textContent =
+          `Episode #${episodeId} · ${state.podcast_name || ""} · status: ${state.status || "unknown"}`;
+        renderDetailSteps(state.steps || {});
+
+        let features = null;
+        try {
+          features = await api(`/episodes/${episodeId}/features`);
+        } catch (e) {
+          if (!String(e.message).includes("404")) throw e;
+        }
+        renderDetailMetrics(features);
+
+        let translation = null;
+        try {
+          translation = await api(`/episodes/${episodeId}/translation`);
+        } catch (e) {
+          if (!String(e.message).includes("404")) throw e;
+        }
+        showInsight(translation);
+        msg.textContent = "";
+      } catch (e) {
+        msg.textContent = e.message;
+        msg.className = "detail-msg err";
+      }
+    }
+
+    async function runEpisodePipeline() {
+      if (!selectedEpisodeId) return;
+      const btn = document.getElementById("detailProcessBtn");
+      const msg = document.getElementById("detailMsg");
+      btn.disabled = true;
+      msg.textContent = "Running pipeline… (may take a while on long audio)";
+      msg.className = "detail-msg";
+      try {
+        const result = await api(`/episodes/${selectedEpisodeId}/process`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+        msg.textContent = `Pipeline finished: ${result.status || "ok"}`;
+        msg.className = "detail-msg ok";
+        await openEpisode(selectedEpisodeId);
+        await refresh();
+      } catch (e) {
+        msg.textContent = e.message;
+        msg.className = "detail-msg err";
+      } finally {
+        btn.disabled = false;
+      }
     }
 
     async function refresh() {
@@ -664,6 +894,8 @@
     }
 
     document.getElementById("refreshBtn").addEventListener("click", refresh);
+    document.getElementById("detailCloseBtn").addEventListener("click", closeEpisodeDetail);
+    document.getElementById("detailProcessBtn").addEventListener("click", runEpisodePipeline);
     document.getElementById("ingestBtn").addEventListener("click", async () => {
       const url = document.getElementById("rssUrl").value.trim();
       const msg = document.getElementById("ingestMsg");

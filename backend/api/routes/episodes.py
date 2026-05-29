@@ -128,6 +128,19 @@ def transcribe_episode_endpoint(
     )
 
 
+@router.get("/{episode_id}/features", response_model=EpisodeFeaturesRead)
+def get_features_endpoint(
+    episode_id: int, db: Session = Depends(get_db)
+) -> EpisodeFeaturesRead:
+    feat = db.get(EpisodeFeatures, episode_id)
+    if not feat:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Features not found",
+        )
+    return feat
+
+
 @router.post("/{episode_id}/features", response_model=EpisodeFeaturesRead)
 def extract_features_endpoint(
     episode_id: int, db: Session = Depends(get_db)

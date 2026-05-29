@@ -38,7 +38,10 @@ def transcribe_file(file_path: str | Path) -> Dict[str, Any]:
     Transcribe an audio file.
 
     Returns ``{"transcript": str, "segments": list, "service": str}``.
-    Segments are empty unless a future STT backend provides them.
+
+    When the STT backend supports Whisper ``verbose_json`` (OpenAI/Groq) or local
+    Whisper, ``segments`` contains real ``start_time``/``end_time`` timestamps.
+    Otherwise segments are empty and the pipeline falls back to text chunking.
     """
     path = Path(file_path)
     if not path.is_file():
@@ -61,14 +64,16 @@ def transcribe_file(file_path: str | Path) -> Dict[str, Any]:
     service = _resolve_stt_service()
     tr = Transcriber(service=service)
     audio_data = path.read_bytes()
-    text = tr.transcribe(audio_data)
-    if not text or str(text).startswith("Error"):
-        msg = str(text or "Transcription failed").removeprefix("Error: ").strip()
+    detail = tr.transcribe_detailed(audio_data)
+    error = str(detail.get("error") or "").strip()
+    text = str(detail.get("transcript") or "").strip()
+    if error or not text:
+        msg = error.removeprefix("Error: ").strip() if error else "Transcription failed"
         raise ValueError(msg)
 
     return {
-        "transcript": str(text).strip(),
-        "segments": [],
+        "transcript": text,
+        "segments": list(detail.get("segments") or []),
         "service": service,
         "source_path": str(path.resolve()),
     }
