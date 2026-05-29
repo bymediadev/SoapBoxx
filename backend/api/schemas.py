@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -107,10 +107,26 @@ class PodcastTaxonomyMapRequest(BaseModel):
     taxonomy_node_id: int
 
 
+class CoachingMetricRow(BaseModel):
+    metric: str
+    value: str
+    benchmark: Optional[str] = None
+    coaching: Optional[str] = None
+
+
+class CoachingReportRead(BaseModel):
+    episode_structure: List[CoachingMetricRow] = []
+    conversation_dynamics: List[CoachingMetricRow] = []
+    what_this_means: List[str] = []
+    similar_to: Optional[str] = None
+    topic_shift_note: Optional[str] = None
+
+
 class TranslationRead(BaseModel):
     episode_id: int
     template_id: str
     insight_text: str
+    report: Optional[CoachingReportRead] = None
 
     model_config = {"from_attributes": True}
 

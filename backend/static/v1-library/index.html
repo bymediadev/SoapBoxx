@@ -547,6 +547,61 @@
       line-height: 1.55;
       color: var(--foreground);
     }
+    .coaching-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+    .coaching-table th {
+      text-align: left;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted-foreground);
+      font-family: "JetBrains Mono", monospace;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .coaching-table td {
+      padding: 8px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .coaching-table .metric-name { font-weight: 600; width: 28%; }
+    .coaching-table .metric-value {
+      font-family: "JetBrains Mono", monospace;
+      color: var(--amber);
+      width: 18%;
+    }
+    .coaching-table .metric-bench {
+      color: var(--muted-foreground);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .coaching-table tr.metric-coach td {
+      font-size: 12px;
+      color: var(--foreground);
+      line-height: 1.5;
+      padding-top: 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .coaching-list {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .coaching-list li { margin-bottom: 8px; }
+    .topic-note {
+      font-size: 12px;
+      color: var(--muted-foreground);
+      line-height: 1.5;
+      margin-top: 8px;
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      border: 1px dashed var(--border);
+    }
     .hero-metrics {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -669,17 +724,36 @@
             Listen like a listener: when does the story start, how does the conversation move,
             and where might attention drop. Structure signals only — not a quality score or audience prediction.
           </p>
-          <div id="detailOpening" class="report-section" style="display:none">
-            <h3 class="font-serif">Opening</h3>
-            <div class="hero-metrics" id="detailHeroMetrics"></div>
+          <div id="detailCoaching" style="display:none">
+            <div id="detailStructure" class="report-section">
+              <h3 class="font-serif">Episode structure</h3>
+              <table class="coaching-table" id="detailStructureTable"></table>
+            </div>
+            <div id="detailDynamics" class="report-section">
+              <h3 class="font-serif">Conversation dynamics</h3>
+              <table class="coaching-table" id="detailDynamicsTable"></table>
+              <p id="detailTopicNote" class="topic-note" style="display:none"></p>
+            </div>
+            <div id="detailMeans" class="report-section">
+              <h3 class="font-serif">What this means</h3>
+              <ul id="detailMeansList" class="coaching-list"></ul>
+            </div>
+            <div id="detailSimilar" class="report-section">
+              <h3 class="font-serif">Similar to <span id="detailTemplate" class="pill"></span></h3>
+              <p id="detailSimilarText"></p>
+            </div>
           </div>
-          <div class="insight-box" id="detailInsight" style="display:none">
-            <h3 class="font-serif">Structural insight <span id="detailTemplate" class="pill"></span></h3>
+          <div class="insight-box" id="detailInsightLegacy" style="display:none">
+            <h3 class="font-serif">Insight</h3>
             <p id="detailInsightText"></p>
           </div>
           <p id="detailNoInsight" class="empty" style="display:none">
             No insight yet. Run the pipeline on this episode (paste transcript on Railway if STT is slow).
           </p>
+          <div id="detailOpening" class="report-section" style="display:none">
+            <h3 class="font-serif">Opening</h3>
+            <div class="hero-metrics" id="detailHeroMetrics"></div>
+          </div>
           <div id="detailShape" class="report-section" style="display:none">
             <h3 class="font-serif">Conversation shape</h3>
             <div class="metrics-grid" id="detailShapeMetrics"></div>
@@ -954,18 +1028,94 @@
       renderEpisodeReport(features);
     }
 
-    function showInsight(translation) {
-      const box = document.getElementById("detailInsight");
-      const none = document.getElementById("detailNoInsight");
-      if (!translation) {
-        box.style.display = "none";
-        none.style.display = "block";
+    function renderCoachingTable(tableEl, rows) {
+      if (!rows || !rows.length) {
+        tableEl.innerHTML = "";
         return;
       }
+      const body = rows
+        .map((r) => {
+          const bench = r.benchmark ? esc(r.benchmark) : "—";
+          const coach = r.coaching
+            ? `<tr class="metric-coach"><td colspan="3">${esc(r.coaching)}</td></tr>`
+            : "";
+          return `<tr>
+            <td class="metric-name">${esc(r.metric)}</td>
+            <td class="metric-value">${esc(r.value)}</td>
+            <td class="metric-bench">${bench}</td>
+          </tr>${coach}`;
+        })
+        .join("");
+      tableEl.innerHTML = `<thead><tr><th>Metric</th><th>Value</th><th>Benchmark</th></tr></thead><tbody>${body}</tbody>`;
+    }
+
+    function showCoachingReport(translation, features) {
+      const coaching = document.getElementById("detailCoaching");
+      const legacy = document.getElementById("detailInsightLegacy");
+      const none = document.getElementById("detailNoInsight");
+      const opening = document.getElementById("detailOpening");
+      const shape = document.getElementById("detailShape");
+
+      if (!translation) {
+        coaching.style.display = "none";
+        legacy.style.display = "none";
+        none.style.display = "block";
+        opening.style.display = "none";
+        shape.style.display = "none";
+        document.getElementById("detailAllMetricsWrap").style.display = "none";
+        return;
+      }
+
       none.style.display = "none";
-      box.style.display = "block";
-      document.getElementById("detailTemplate").textContent = `Template ${translation.template_id || "?"}`;
-      document.getElementById("detailInsightText").textContent = translation.insight_text || "";
+      document.getElementById("detailTemplate").textContent =
+        `Template ${translation.template_id || "?"}`;
+
+      const report = translation.report;
+      if (report && report.episode_structure) {
+        coaching.style.display = "block";
+        legacy.style.display = "none";
+        opening.style.display = "none";
+        shape.style.display = "none";
+        renderCoachingTable(
+          document.getElementById("detailStructureTable"),
+          report.episode_structure
+        );
+        renderCoachingTable(
+          document.getElementById("detailDynamicsTable"),
+          report.conversation_dynamics
+        );
+        const topicNote = document.getElementById("detailTopicNote");
+        if (report.topic_shift_note) {
+          topicNote.textContent = report.topic_shift_note;
+          topicNote.style.display = "block";
+        } else {
+          topicNote.style.display = "none";
+        }
+        const means = report.what_this_means || [];
+        document.getElementById("detailMeansList").innerHTML = means
+          .map((b) => `<li>${esc(b)}</li>`)
+          .join("");
+        document.getElementById("detailSimilarText").textContent =
+          report.similar_to || "—";
+        if (features) {
+          document.getElementById("detailAllMetricsWrap").style.display = "block";
+          renderEpisodeReport(features);
+          opening.style.display = "none";
+          shape.style.display = "none";
+        }
+        return;
+      }
+
+      coaching.style.display = "none";
+      legacy.style.display = "block";
+      document.getElementById("detailInsightText").textContent =
+        translation.insight_text || "";
+      if (features) renderEpisodeReport(features);
+      else {
+        opening.style.display = "none";
+        shape.style.display = "none";
+        document.getElementById("detailAllMetricsWrap").style.display = "none";
+      }
     }
 
     async function openEpisode(episodeId) {
@@ -984,7 +1134,7 @@
       document.getElementById("detailMeta").textContent = "";
       renderDetailSteps(null);
       renderDetailMetrics(null);
-      showInsight(null);
+      showCoachingReport(null, null);
 
       try {
         const [episode, state] = await Promise.all([
@@ -1011,7 +1161,7 @@
         } catch (e) {
           if (!String(e.message).includes("404")) throw e;
         }
-        showInsight(translation);
+        showCoachingReport(translation, features);
         msg.textContent = "";
       } catch (e) {
         msg.textContent = e.message;

@@ -115,10 +115,26 @@ export type EpisodeDetail = {
   pipeline_status: string;
 };
 
+export type CoachingMetricRow = {
+  metric: string;
+  value: string;
+  benchmark?: string | null;
+  coaching?: string | null;
+};
+
+export type CoachingReport = {
+  episode_structure: CoachingMetricRow[];
+  conversation_dynamics: CoachingMetricRow[];
+  what_this_means: string[];
+  similar_to?: string | null;
+  topic_shift_note?: string | null;
+};
+
 export type TranslationDetail = {
   episode_id: number;
   template_id: string;
   insight_text: string;
+  report?: CoachingReport | null;
 };
 
 export type ProcessEpisodeResult = {

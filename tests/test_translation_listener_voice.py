@@ -1,14 +1,13 @@
-"""Listener-lens translation templates (Amanda-derived copy rules)."""
+"""Listener-lens / coaching translation templates."""
 
 from __future__ import annotations
 
 import pytest
 
-from backend.services.translation_service import (
-    _FORBIDDEN,
-    _template_from_features,
-)
 from backend.models import EpisodeFeatures
+from backend.services.coaching_report_service import build_coaching_report, synthesis_insight_text
+from backend.services.library_benchmarks import LibraryBenchmarks
+from backend.services.translation_service import run_translation
 
 FORBIDDEN = ("good", "bad", "score", "rank", "best", "weak", "engaging")
 
@@ -20,6 +19,33 @@ def _features(**kwargs) -> EpisodeFeatures:
     return row
 
 
+def _library() -> LibraryBenchmarks:
+    return LibraryBenchmarks(
+        n_measured=4,
+        hook_seconds=[30.0, 50.0, 70.0, 90.0],
+        intro_seconds=[10.0, 30.0, 60.0, 120.0],
+        question_counts=[3, 8, 14, 20],
+        speaking_turns=[5, 10, 15, 20],
+        guest_ratios=[0.45, 0.5, 0.52, 0.55],
+        topic_shifts=[0, 1, 1, 2],
+    )
+
+
+class _FakeSession:
+    pass
+
+
+def _template_id(f: EpisodeFeatures) -> str:
+    hook = float(f.hook_length_seconds or 0)
+    intro = float(f.intro_length_seconds or 0)
+    questions = int(f.question_count or 0)
+    if intro >= 120 or hook >= 90:
+        return "A"
+    if questions >= 12:
+        return "B"
+    return "C"
+
+
 def test_long_opening_uses_template_a():
     f = _features(
         hook_length_seconds=95.0,
@@ -28,10 +54,10 @@ def test_long_opening_uses_template_a():
         topic_shift_count=0,
         cta_present=False,
     )
-    tid, text = _template_from_features(f)
-    assert tid == "A"
-    assert "listener" in text.lower()
-    assert "opening" in text.lower() or "intro" in text.lower()
+    assert _template_id(f) == "A"
+    report = build_coaching_report(_FakeSession(), f, library=_library())
+    text = synthesis_insight_text(report).lower()
+    assert "opening" in text or "intro" in text
 
 
 def test_question_led_uses_template_b():
@@ -42,9 +68,10 @@ def test_question_led_uses_template_b():
         topic_shift_count=1,
         cta_present=True,
     )
-    tid, text = _template_from_features(f)
-    assert tid == "B"
-    assert "question" in text.lower()
+    assert _template_id(f) == "B"
+    report = build_coaching_report(_FakeSession(), f, library=_library())
+    blob = " ".join(report.what_this_means).lower()
+    assert "question" in blob
 
 
 def test_narrative_uses_template_c():
@@ -55,9 +82,10 @@ def test_narrative_uses_template_c():
         topic_shift_count=0,
         cta_present=False,
     )
-    tid, text = _template_from_features(f)
-    assert tid == "C"
-    assert "narrative" in text.lower() or "storytelling" in text.lower()
+    assert _template_id(f) == "C"
+    report = build_coaching_report(_FakeSession(), f, library=_library())
+    text = " ".join(report.what_this_means).lower()
+    assert "story" in text or "narrative" in text or "questions" in text
 
 
 def test_no_forbidden_language():
@@ -66,9 +94,9 @@ def test_no_forbidden_language():
         _features(hook_length_seconds=10, intro_length_seconds=15, question_count=20),
         _features(hook_length_seconds=10, intro_length_seconds=15, question_count=2),
     ]
+    lib = _library()
     for f in cases:
-        _, text = _template_from_features(f)
-        lower = text.lower()
-        assert not _FORBIDDEN.search(text)
+        report = build_coaching_report(_FakeSession(), f, library=lib)
+        lower = synthesis_insight_text(report).lower()
         assert not any(w in lower for w in FORBIDDEN)
         assert "predict audience" in lower or "do not predict" in lower

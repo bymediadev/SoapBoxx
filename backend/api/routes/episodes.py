@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.api.deps import get_db
 from backend.api.schemas import (
+    CoachingReportRead,
     EpisodeCreate,
     EpisodeFeaturesRead,
     EpisodeRead,
@@ -16,6 +17,7 @@ from backend.api.schemas import (
     TranscribeResponse,
     TranslationRead,
 )
+from backend.services.coaching_report_service import coaching_report_for_episode
 from backend.services.episode_pipeline_service import run_episode_pipeline
 from backend.models import Episode, EpisodeFeatures, EpisodeTranslation, Podcast
 from backend.services.feature_service import run_feature_extraction
@@ -28,6 +30,18 @@ from backend.services.transcription_service import transcribe_episode
 from backend.services.translation_service import run_translation
 
 router = APIRouter(prefix="/episodes", tags=["episodes"])
+
+
+def _translation_read(db: Session, row: EpisodeTranslation) -> TranslationRead:
+    features = db.get(EpisodeFeatures, row.episode_id)
+    report_raw = coaching_report_for_episode(db, features)
+    report = CoachingReportRead.model_validate(report_raw) if report_raw else None
+    return TranslationRead(
+        episode_id=row.episode_id,
+        template_id=row.template_id,
+        insight_text=row.insight_text,
+        report=report,
+    )
 
 
 @router.post("", response_model=EpisodeRead, status_code=status.HTTP_201_CREATED)
@@ -166,7 +180,7 @@ def translate_episode_endpoint(
     row = db.get(EpisodeTranslation, episode_id)
     if not row:
         raise HTTPException(status_code=500, detail="Translation not saved")
-    return row
+    return _translation_read(db, row)
 
 
 @router.get("/{episode_id}/translation", response_model=TranslationRead)
@@ -177,4 +191,4 @@ def get_translation(episode_id: int, db: Session = Depends(get_db)) -> Translati
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Translation not found",
         )
-    return row
+    return _translation_read(db, row)
