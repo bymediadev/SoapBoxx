@@ -9,7 +9,7 @@ from backend.services.coaching_report_service import (
     build_coaching_report,
     synthesis_insight_text,
 )
-from backend.services.library_benchmarks import LibraryBenchmarks
+from backend.services.library_benchmarks import LibraryBenchmarks, benchmark_turns
 FORBIDDEN = ("good", "bad", "score", "rank", "best", "weak", "engaging")
 
 
@@ -61,6 +61,14 @@ def test_narrative_episode_coaching_bullets():
     assert report.compared_with_library
     assert report.similar_to
     assert report.episode_structure[0].benchmark
+
+
+def test_turns_benchmark_at_library_high_end_not_more_than_most():
+    lib = _library(speaking_turns=[2, 4, 6, 8])
+    label = benchmark_turns(8, lib)
+    assert label is not None
+    assert "more turn-taking than most" not in label.lower()
+    assert "high end" in label.lower() or "longer" in label.lower()
 
 
 def test_no_forbidden_language_in_report():

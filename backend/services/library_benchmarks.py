@@ -99,14 +99,27 @@ def benchmark_questions(count: int, lib: LibraryBenchmarks) -> Optional[str]:
 
 
 def benchmark_turns(count: int, lib: LibraryBenchmarks) -> Optional[str]:
-    pct = _pct_higher_than([float(x) for x in lib.speaking_turns], float(count))
-    if pct is None:
+    values = [float(x) for x in lib.speaking_turns]
+    current = float(count)
+    pct_more = _pct_higher_than(values, current)
+    pct_less = _pct_lower_than(values, current)
+    if pct_more is None:
         return None
     n = lib.n_measured
-    if pct >= 60:
-        return f"Fewer speaking turns than {pct}% of measured episodes ({n} episodes)"
-    if pct <= 30:
-        return f"More turn-taking than most measured episodes ({n} episodes)"
+    if values and current >= max(values) and (pct_less or 0) >= 50:
+        return (
+            f"Turn count at the high end of your measured library ({int(current)}) — "
+            f"handoffs can still read as long narrative blocks ({n} episodes)"
+        )
+    if pct_more >= 55:
+        return (
+            f"Longer uninterrupted segments than {pct_more}% of measured episodes "
+            f"({n} episodes)"
+        )
+    if pct_less is not None and pct_less >= 55:
+        return (
+            f"More frequent handoffs than {pct_less}% of measured episodes ({n} episodes)"
+        )
     return f"Turn count near the library middle ({n} episodes)"
 
 
@@ -135,7 +148,7 @@ def library_comparison_bullets(
     if q_b and "fewer" in q_b.lower():
         bullets.append(f"Questions: {q_b}")
     t_b = benchmark_turns(turns, lib)
-    if t_b and "fewer" in t_b.lower():
+    if t_b and ("longer" in t_b.lower() or "high end" in t_b.lower()):
         bullets.append(f"Speaking turns: {t_b}")
     g_b = benchmark_guest_ratio(ratio, lib)
     if g_b and "balanced" in g_b.lower():
