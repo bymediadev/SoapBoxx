@@ -35,4 +35,11 @@ def soapboxx_ui() -> FileResponse:
             status_code=503,
             detail="UI bundle not deployed (missing static/v1-library/index.html)",
         )
-    return FileResponse(ui_index, media_type="text/html")
+    return FileResponse(
+        ui_index,
+        media_type="text/html",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+        },
+    )

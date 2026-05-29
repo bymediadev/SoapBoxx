@@ -365,6 +365,8 @@
     .tree .podcast span { color: var(--muted-foreground); font-family: "JetBrains Mono", monospace; }
 
     .activity { list-style: none; max-height: 220px; overflow-y: auto; }
+    .activity li.activity-click { cursor: pointer; border-radius: var(--radius-sm); }
+    .activity li.activity-click:hover { background: oklch(0.28 0.018 65 / 0.35); }
     .activity li {
       padding: 10px 0;
       border-bottom: 1px solid var(--border);
@@ -431,8 +433,38 @@
     tr.ep-row { cursor: pointer; }
     tr.ep-row:hover td { background: oklch(0.28 0.018 65 / 0.35); }
     tr.ep-row.selected td { background: oklch(0.78 0.14 75 / 0.08); }
+    .card-hint {
+      font-size: 12px;
+      color: var(--muted-foreground);
+      margin: -4px 0 12px;
+    }
 
-    #episodeDetail { display: none; margin-top: 16px; }
+    .episode-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: oklch(0.08 0.01 60 / 0.55);
+      z-index: 90;
+    }
+    .episode-backdrop.open { display: block; }
+
+    #episodeDetail {
+      display: none;
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: min(540px, 100vw);
+      z-index: 100;
+      margin: 0;
+      border-radius: 0;
+      border-left: 1px solid var(--border);
+      border-top: none;
+      border-right: none;
+      border-bottom: none;
+      overflow-y: auto;
+      box-shadow: -12px 0 40px oklch(0 0 0 / 0.35);
+    }
     #episodeDetail.open { display: block; }
     .detail-head {
       display: flex;
@@ -607,6 +639,7 @@
 
         <section class="card">
           <div class="card-title">Episodes</div>
+          <p class="card-hint">Click a row to open the episode report.</p>
           <table>
             <thead>
               <tr>
@@ -621,7 +654,8 @@
           </table>
         </section>
 
-        <section class="card" id="episodeDetail" aria-live="polite">
+        <div id="episodeBackdrop" class="episode-backdrop" aria-hidden="true"></div>
+        <section class="card" id="episodeDetail" aria-live="polite" role="dialog" aria-modal="true">
           <div class="detail-head">
             <div>
               <div class="card-title">Episode report</div>
@@ -716,6 +750,11 @@
     }
 
     function renderStats(s) {
+      if (!s) {
+        document.getElementById("stats").innerHTML =
+          '<div class="stat"><div class="stat-label empty">No stats</div></div>';
+        return;
+      }
       const pct = s.measured_pct ?? 0;
       document.getElementById("stats").innerHTML = `
         <div class="stat highlight">
@@ -775,7 +814,9 @@
       el.innerHTML = events
         .map((ev) => {
           const t = ev.created_at ? new Date(ev.created_at).toLocaleString() : "";
-          return `<li><span class="type">${esc(ev.event_type)}</span><div>${esc(ev.message)}</div><div class="time">${esc(t)}</div></li>`;
+          const clickCls = ev.episode_id ? " activity-click" : "";
+          const epAttr = ev.episode_id ? ` data-episode-id="${esc(ev.episode_id)}"` : "";
+          return `<li class="${clickCls.trim()}"${epAttr}><span class="type">${esc(ev.event_type)}</span><div>${esc(ev.message)}</div><div class="time">${esc(t)}</div></li>`;
         })
         .join("");
     }
@@ -804,24 +845,22 @@
         .map((ep) => {
           const st = (ep.status || "unknown").toLowerCase().replace(/\s+/g, "-");
           const sel = selectedEpisodeId === ep.id ? " selected" : "";
-          return `<tr class="ep-row${sel}" data-episode-id="${esc(ep.id)}">
+          const id = Number(ep.id) || 0;
+          return `<tr class="ep-row${sel}" data-episode-id="${id}" role="button" tabindex="0"
+            onclick="__openEpisode(${id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();__openEpisode(${id})}">
             <td class="title">${esc(ep.title || "Untitled")}</td>
             <td class="show">${esc(ep.podcast_name)}</td>
             <td><span class="status status-${esc(st)}">${esc(ep.status)}</span></td>
           </tr>`;
         })
         .join("");
-      body.querySelectorAll("tr.ep-row").forEach((row) => {
-        row.addEventListener("click", () => {
-          const id = Number(row.getAttribute("data-episode-id"));
-          if (id) openEpisode(id);
-        });
-      });
     }
 
     function closeEpisodeDetail() {
       selectedEpisodeId = null;
       document.getElementById("episodeDetail").classList.remove("open");
+      document.getElementById("episodeBackdrop").classList.remove("open");
+      document.body.style.overflow = "";
       document.querySelectorAll("tr.ep-row.selected").forEach((r) => r.classList.remove("selected"));
     }
 
@@ -931,7 +970,9 @@
 
     async function openEpisode(episodeId) {
       selectedEpisodeId = episodeId;
+      document.getElementById("episodeBackdrop").classList.add("open");
       document.getElementById("episodeDetail").classList.add("open");
+      document.body.style.overflow = "hidden";
       document.querySelectorAll("tr.ep-row").forEach((r) => {
         r.classList.toggle("selected", Number(r.getAttribute("data-episode-id")) === episodeId);
       });
@@ -1028,6 +1069,22 @@
 
     document.getElementById("refreshBtn").addEventListener("click", refresh);
     document.getElementById("detailCloseBtn").addEventListener("click", closeEpisodeDetail);
+    document.getElementById("episodeBackdrop").addEventListener("click", closeEpisodeDetail);
+    document.getElementById("episodesBody").addEventListener("click", (e) => {
+      const row = e.target.closest("tr.ep-row");
+      if (!row) return;
+      const id = Number(row.getAttribute("data-episode-id"));
+      if (id) openEpisode(id);
+    });
+    document.getElementById("activity").addEventListener("click", (e) => {
+      const item = e.target.closest("li[data-episode-id]");
+      if (!item) return;
+      const id = Number(item.getAttribute("data-episode-id"));
+      if (id) openEpisode(id);
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && selectedEpisodeId) closeEpisodeDetail();
+    });
     document.getElementById("detailProcessBtn").addEventListener("click", runEpisodePipeline);
     document.getElementById("ingestBtn").addEventListener("click", async () => {
       const url = document.getElementById("rssUrl").value.trim();
@@ -1055,7 +1112,18 @@
       }
     });
 
-    refresh();
+    function openEpisodeFromHash() {
+      const m = location.hash.match(/^#episode\/(\d+)/);
+      if (m) openEpisode(Number(m[1]));
+    }
+
+    window.__openEpisode = (id) => {
+      const n = Number(id);
+      if (n > 0) openEpisode(n);
+    };
+
+    refresh().then(() => openEpisodeFromHash());
+    window.addEventListener("hashchange", openEpisodeFromHash);
     setInterval(refresh, 45000);
   </script>
 </body>
