@@ -6,9 +6,14 @@ import re
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, joinedload
 
-from backend.models import EpisodeFeatures
+from backend.models import Episode, EpisodeFeatures
+from backend.services.show_variance_service import (
+    load_show_benchmarks,
+    structural_variance_bullets,
+)
 from backend.services.library_benchmarks import (
     LibraryBenchmarks,
     benchmark_guest_ratio,
@@ -22,7 +27,7 @@ from backend.services.library_benchmarks import (
 
 _FORBIDDEN = re.compile(
     r"\b(good|bad|best|worst|score|rank|rating|rated|should improve|you must|"
-    r"weak|strong|engaging|improve|fix this)\b",
+    r"weak|strong|engaging|engagement|improve|fix this|audience will|listeners will)\b",
     re.I,
 )
 
@@ -47,6 +52,7 @@ class CoachingReport:
     listener_experience: List[str] = field(default_factory=list)
     compared_with_library: List[str] = field(default_factory=list)
     editorial_tradeoffs: List[str] = field(default_factory=list)
+    structural_variance: List[str] = field(default_factory=list)
     what_this_means: List[str] = field(default_factory=list)
     similar_to: Optional[str] = None
     topic_shift_note: Optional[str] = None
@@ -74,6 +80,7 @@ class CoachingReport:
             "listener_experience": list(self.listener_experience),
             "compared_with_library": list(self.compared_with_library),
             "editorial_tradeoffs": list(self.editorial_tradeoffs),
+            "structural_variance": list(self.structural_variance),
             "what_this_means": list(self.what_this_means),
             "similar_to": self.similar_to,
             "topic_shift_note": self.topic_shift_note,
@@ -272,7 +279,7 @@ def _editorial_tradeoffs(f: EpisodeFeatures, template_id: str) -> List[str]:
     if questions <= 6 and turns <= 12:
         notes.append(
             "Trade-off: information rides on long explanation blocks rather than "
-            "back-and-forth exchange — narrative clarity over interview energy."
+            "rapid conversational exchanges — narrative continuity over frequent handoffs."
         )
     elif questions >= 12:
         notes.append(
@@ -384,12 +391,30 @@ def build_coaching_report(
         narrative_led=narrative_led,
     )
 
+    podcast_name = None
+    variance: List[str] = []
+    if hasattr(db, "execute"):
+        episode = db.execute(
+            select(Episode)
+            .where(Episode.id == features.episode_id)
+            .options(joinedload(Episode.podcast))
+        ).scalar_one_or_none()
+        if episode:
+            podcast_name = episode.podcast.name if episode.podcast else None
+            show_lib = load_show_benchmarks(
+                db, int(episode.podcast_id), exclude_episode_id=int(features.episode_id)
+            )
+            variance = structural_variance_bullets(
+                features, show_lib, podcast_name=podcast_name
+            )
+
     report = CoachingReport(
         episode_structure=structure,
         conversation_dynamics=dynamics,
         listener_experience=listener,
         compared_with_library=compared,
         editorial_tradeoffs=_editorial_tradeoffs(features, template_id),
+        structural_variance=variance,
         what_this_means=[_pattern_synthesis(template_id, features)],
         similar_to=_similar_to(features, lib, template_id),
         topic_shift_note=_topic_shift_detection_note(topic_shifts),
@@ -422,6 +447,7 @@ def _assert_no_forbidden(report: CoachingReport) -> None:
     chunks.extend(report.listener_experience)
     chunks.extend(report.compared_with_library)
     chunks.extend(report.editorial_tradeoffs)
+    chunks.extend(report.structural_variance)
     chunks.extend(report.what_this_means)
     if report.similar_to:
         chunks.append(report.similar_to)

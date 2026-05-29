@@ -89,6 +89,7 @@ def test_narrative_episode_has_editorial_tradeoffs():
     report = build_coaching_report(_FakeSession(), f, library=_library(n_measured=4))
     assert report.editorial_tradeoffs
     assert any("trade-off" in t.lower() for t in report.editorial_tradeoffs)
+    assert "engagement" not in " ".join(report.editorial_tradeoffs).lower()
 
 
 def test_turns_benchmark_at_library_high_end_not_more_than_most():

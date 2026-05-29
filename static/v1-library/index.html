@@ -762,6 +762,11 @@
               <h3 class="font-serif">Compared with your library</h3>
               <ul id="detailComparedList" class="coaching-list"></ul>
             </div>
+            <div id="detailVariance" class="report-section">
+              <h3 class="font-serif">Your show</h3>
+              <p class="card-hint" style="margin-top:0">How this episode differs from other measured episodes on the same feed.</p>
+              <ul id="detailVarianceList" class="coaching-list"></ul>
+            </div>
             <div id="detailEditorial" class="report-section">
               <h3 class="font-serif">Editorial trade-offs</h3>
               <ul id="detailEditorialList" class="coaching-list"></ul>
@@ -1143,6 +1148,12 @@
         document.getElementById("detailComparedList").innerHTML = compared
           .map((b) => `<li>${esc(b)}</li>`)
           .join("");
+        const variance = report.structural_variance || [];
+        document.getElementById("detailVarianceList").innerHTML = variance
+          .map((b) => `<li>${esc(b)}</li>`)
+          .join("");
+        document.getElementById("detailVariance").style.display =
+          variance.length ? "block" : "none";
         const editorial = report.editorial_tradeoffs || [];
         document.getElementById("detailEditorialList").innerHTML = editorial
           .map((b) => `<li>${esc(b)}</li>`)

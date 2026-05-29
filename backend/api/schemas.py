@@ -120,6 +120,7 @@ class CoachingReportRead(BaseModel):
     listener_experience: List[str] = []
     compared_with_library: List[str] = []
     editorial_tradeoffs: List[str] = []
+    structural_variance: List[str] = []
     what_this_means: List[str] = []
     similar_to: Optional[str] = None
     topic_shift_note: Optional[str] = None

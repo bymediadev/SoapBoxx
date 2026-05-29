@@ -128,6 +128,7 @@ export type CoachingReport = {
   listener_experience: string[];
   compared_with_library: string[];
   editorial_tradeoffs: string[];
+  structural_variance: string[];
   what_this_means: string[];
   similar_to?: string | null;
   topic_shift_note?: string | null;
