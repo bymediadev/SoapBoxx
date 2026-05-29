@@ -10,8 +10,17 @@ from fastapi.responses import FileResponse
 
 logger = logging.getLogger(__name__)
 
-# backend/api/routes/ui.py -> backend/static/v1-library/index.html
-_UI_INDEX = Path(__file__).resolve().parents[2] / "static" / "v1-library" / "index.html"
+# Served path: backend/static/v1-library (deploy). Repo root static/ is kept in sync;
+# resolve both so a missed copy does not ship a stale UI on Railway.
+_BACKEND_STATIC = Path(__file__).resolve().parents[2] / "static" / "v1-library" / "index.html"
+_REPO_STATIC = Path(__file__).resolve().parents[3] / "static" / "v1-library" / "index.html"
+
+
+def _ui_index_path() -> Path:
+    for candidate in (_BACKEND_STATIC, _REPO_STATIC):
+        if candidate.is_file():
+            return candidate
+    return _BACKEND_STATIC
 
 router = APIRouter(tags=["ui"])
 
@@ -19,10 +28,11 @@ router = APIRouter(tags=["ui"])
 @router.get("/ui", include_in_schema=False)
 @router.get("/ui/", include_in_schema=False)
 def soapboxx_ui() -> FileResponse:
-    if not _UI_INDEX.is_file():
-        logger.error("UI index missing at %s (cwd=%s)", _UI_INDEX, Path.cwd())
+    ui_index = _ui_index_path()
+    if not ui_index.is_file():
+        logger.error("UI index missing (cwd=%s)", Path.cwd())
         raise HTTPException(
             status_code=503,
-            detail=f"UI bundle not deployed (missing {_UI_INDEX.name} at backend/static/v1-library)",
+            detail="UI bundle not deployed (missing static/v1-library/index.html)",
         )
-    return FileResponse(_UI_INDEX, media_type="text/html")
+    return FileResponse(ui_index, media_type="text/html")
