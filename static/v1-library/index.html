@@ -602,6 +602,24 @@
       border-radius: var(--radius-md);
       border: 1px dashed var(--border);
     }
+    .listener-lead {
+      font-size: 15px;
+      line-height: 1.55;
+      color: var(--foreground);
+      margin: 0 0 16px;
+      padding: 14px 16px;
+      border-radius: var(--radius-md);
+      border: 1px solid oklch(0.78 0.14 75 / 0.35);
+      background: oklch(0.78 0.14 75 / 0.08);
+    }
+    .report-version {
+      font-size: 10px;
+      font-family: "JetBrains Mono", monospace;
+      color: var(--muted-foreground);
+      margin-bottom: 8px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
     .hero-metrics {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -725,6 +743,8 @@
             and where might attention drop. Structure signals only — not a quality score or audience prediction.
           </p>
           <div id="detailCoaching" style="display:none">
+            <p class="report-version">Coaching report · v2</p>
+            <p id="detailLead" class="listener-lead" style="display:none"></p>
             <div id="detailStructure" class="report-section">
               <h3 class="font-serif">Episode structure</h3>
               <table class="coaching-table" id="detailStructureTable"></table>
@@ -1079,11 +1099,23 @@
         `Template ${translation.template_id || "?"}`;
 
       const report = translation.report;
-      if (report && report.episode_structure) {
+      const hasCoaching =
+        report &&
+        ((report.listener_experience && report.listener_experience.length) ||
+          (report.episode_structure && report.episode_structure.length));
+      if (hasCoaching) {
         coaching.style.display = "block";
         legacy.style.display = "none";
         opening.style.display = "none";
         shape.style.display = "none";
+        const leadEl = document.getElementById("detailLead");
+        const lead = (report.listener_experience && report.listener_experience[0]) || "";
+        if (lead) {
+          leadEl.textContent = lead;
+          leadEl.style.display = "block";
+        } else {
+          leadEl.style.display = "none";
+        }
         renderCoachingTable(
           document.getElementById("detailStructureTable"),
           report.episode_structure

@@ -17,7 +17,10 @@ from backend.api.schemas import (
     TranscribeResponse,
     TranslationRead,
 )
-from backend.services.coaching_report_service import coaching_report_for_episode
+from backend.services.coaching_report_service import (
+    build_coaching_report,
+    synthesis_insight_text,
+)
 from backend.services.episode_pipeline_service import run_episode_pipeline
 from backend.models import Episode, EpisodeFeatures, EpisodeTranslation, Podcast
 from backend.services.feature_service import run_feature_extraction
@@ -34,13 +37,19 @@ router = APIRouter(prefix="/episodes", tags=["episodes"])
 
 def _translation_read(db: Session, row: EpisodeTranslation) -> TranslationRead:
     features = db.get(EpisodeFeatures, row.episode_id)
-    report_raw = coaching_report_for_episode(db, features)
-    report = CoachingReportRead.model_validate(report_raw) if report_raw else None
+    if not features:
+        return TranslationRead(
+            episode_id=row.episode_id,
+            template_id=row.template_id,
+            insight_text=row.insight_text,
+            report=None,
+        )
+    report_obj = build_coaching_report(db, features)
     return TranslationRead(
         episode_id=row.episode_id,
         template_id=row.template_id,
-        insight_text=row.insight_text,
-        report=report,
+        insight_text=synthesis_insight_text(report_obj),
+        report=CoachingReportRead.model_validate(report_obj.to_dict()),
     )
 
 

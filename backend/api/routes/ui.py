@@ -41,5 +41,6 @@ def soapboxx_ui() -> FileResponse:
         headers={
             "Cache-Control": "no-cache, no-store, must-revalidate",
             "Pragma": "no-cache",
+            "X-SoapBoxx-Ui-Version": "coaching-v2",
         },
     )
