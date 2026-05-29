@@ -56,8 +56,8 @@ def test_long_opening_uses_template_a():
     )
     assert _template_id(f) == "A"
     report = build_coaching_report(_FakeSession(), f, library=_library())
-    text = synthesis_insight_text(report).lower()
-    assert "opening" in text or "intro" in text
+    blob = " ".join(report.listener_experience).lower()
+    assert "opening" in blob or "setup" in blob or "intro" in blob
 
 
 def test_question_led_uses_template_b():

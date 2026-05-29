@@ -739,8 +739,8 @@
           <p class="detail-meta" id="detailMeta"></p>
           <div class="detail-steps" id="detailSteps"></div>
           <p class="report-disclaimer">
-            Listen like a listener: when does the story start, how does the conversation move,
-            and where might attention drop. Structure signals only — not a quality score or audience prediction.
+            We show how the episode is built — not a quality verdict.
+            Structure signals only; not audience prediction.
           </p>
           <div id="detailCoaching" style="display:none">
             <p class="report-version">Coaching report · v2</p>
@@ -761,6 +761,10 @@
             <div id="detailCompared" class="report-section">
               <h3 class="font-serif">Compared with your library</h3>
               <ul id="detailComparedList" class="coaching-list"></ul>
+            </div>
+            <div id="detailEditorial" class="report-section">
+              <h3 class="font-serif">Editorial trade-offs</h3>
+              <ul id="detailEditorialList" class="coaching-list"></ul>
             </div>
             <div id="detailMeans" class="report-section">
               <h3 class="font-serif">Pattern <span id="detailTemplate" class="pill"></span></h3>
@@ -1139,6 +1143,12 @@
         document.getElementById("detailComparedList").innerHTML = compared
           .map((b) => `<li>${esc(b)}</li>`)
           .join("");
+        const editorial = report.editorial_tradeoffs || [];
+        document.getElementById("detailEditorialList").innerHTML = editorial
+          .map((b) => `<li>${esc(b)}</li>`)
+          .join("");
+        document.getElementById("detailEditorial").style.display =
+          editorial.length ? "block" : "none";
         const means = report.what_this_means || [];
         document.getElementById("detailMeansList").innerHTML = means
           .map((b) => `<li>${esc(b)}</li>`)

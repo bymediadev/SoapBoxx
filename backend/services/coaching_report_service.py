@@ -27,8 +27,8 @@ _FORBIDDEN = re.compile(
 )
 
 _DISCLAIMER = (
-    "These are structure signals — how a listener might experience the opening "
-    "and pacing. They do not predict audience response."
+    "We show how the episode is built — not a quality verdict. "
+    "Structure signals only; they do not predict audience response."
 )
 
 
@@ -46,6 +46,7 @@ class CoachingReport:
     conversation_dynamics: List[MetricRow] = field(default_factory=list)
     listener_experience: List[str] = field(default_factory=list)
     compared_with_library: List[str] = field(default_factory=list)
+    editorial_tradeoffs: List[str] = field(default_factory=list)
     what_this_means: List[str] = field(default_factory=list)
     similar_to: Optional[str] = None
     topic_shift_note: Optional[str] = None
@@ -72,6 +73,7 @@ class CoachingReport:
             ],
             "listener_experience": list(self.listener_experience),
             "compared_with_library": list(self.compared_with_library),
+            "editorial_tradeoffs": list(self.editorial_tradeoffs),
             "what_this_means": list(self.what_this_means),
             "similar_to": self.similar_to,
             "topic_shift_note": self.topic_shift_note,
@@ -240,6 +242,59 @@ def _pattern_synthesis(template_id: str, f: EpisodeFeatures) -> str:
     )
 
 
+def _editorial_tradeoffs(f: EpisodeFeatures, template_id: str) -> List[str]:
+    """Structural trade-offs (not quality judgments)."""
+    hook = float(f.hook_length_seconds or 0)
+    intro = float(f.intro_length_seconds or 0)
+    questions = int(f.question_count or 0)
+    turns = int(f.speaking_turns or 0)
+    topic = int(f.topic_shift_count or 0)
+    ratio = float(f.host_guest_ratio or 0.5)
+    notes: List[str] = []
+
+    if hook < 50 and intro < 60:
+        if topic <= 1:
+            notes.append(
+                "Trade-off: the episode enters the story quickly and holds one arc — "
+                "clarity stays high, with few detected pivots for side-path exploration."
+            )
+        else:
+            notes.append(
+                "Trade-off: a quick entry with several pivot markers — "
+                "pace moves between threads rather than one uninterrupted runway."
+            )
+    elif hook >= 90 or intro >= 120:
+        notes.append(
+            "Trade-off: extended opening runway — listeners get context before the "
+            "core thread, at the cost of later story time."
+        )
+
+    if questions <= 6 and turns <= 12:
+        notes.append(
+            "Trade-off: information rides on long explanation blocks rather than "
+            "back-and-forth exchange — narrative clarity over interview energy."
+        )
+    elif questions >= 12:
+        notes.append(
+            "Trade-off: frequent questions drive pacing — depth comes from follow-ups, "
+            "not from long uninterrupted monologue."
+        )
+
+    if 0.42 <= ratio <= 0.58 and questions <= 8:
+        notes.append(
+            "Trade-off: even speaker balance, though most runtime is still delivered "
+            "in extended segments rather than rapid handoffs."
+        )
+
+    if template_id == "C" and not notes:
+        notes.append(
+            "Trade-off: story-first structure prioritizes through-line over "
+            "conversational surprise."
+        )
+
+    return notes[:3]
+
+
 def _similar_to(f: EpisodeFeatures, lib: LibraryBenchmarks, template_id: str) -> str:
     if lib.n_measured < 3:
         return (
@@ -334,6 +389,7 @@ def build_coaching_report(
         conversation_dynamics=dynamics,
         listener_experience=listener,
         compared_with_library=compared,
+        editorial_tradeoffs=_editorial_tradeoffs(features, template_id),
         what_this_means=[_pattern_synthesis(template_id, features)],
         similar_to=_similar_to(features, lib, template_id),
         topic_shift_note=_topic_shift_detection_note(topic_shifts),
@@ -365,6 +421,7 @@ def _assert_no_forbidden(report: CoachingReport) -> None:
                 chunks.append(part)
     chunks.extend(report.listener_experience)
     chunks.extend(report.compared_with_library)
+    chunks.extend(report.editorial_tradeoffs)
     chunks.extend(report.what_this_means)
     if report.similar_to:
         chunks.append(report.similar_to)

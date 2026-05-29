@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 from backend.models import EpisodeFeatures
 
 MIN_SAMPLES = 3
+# Below this count, use "most / few" language — not hard percentiles.
+PCT_PRECISION_MIN = 10
 
 
 @dataclass(frozen=True)
@@ -62,40 +64,94 @@ def _pct_lower_than(values: Sequence[float], current: float) -> Optional[int]:
     return round(100 * sum(1 for v in values if v < current) / len(values))
 
 
+def _library_ctx(n: int) -> str:
+    word = "episode" if n == 1 else "episodes"
+    return f"in your current library ({n} measured {word})"
+
+
+def _compare_higher_is_faster(
+    pct_more: int,
+    n: int,
+    *,
+    fast_label: str,
+    slow_label: str,
+    mid_label: str,
+) -> str:
+    """``pct_more`` = share of library with a higher (slower) value than current."""
+    ctx = _library_ctx(n)
+    if n >= PCT_PRECISION_MIN:
+        if pct_more >= 55:
+            return f"{fast_label} than {pct_more}% of measured episodes {ctx}"
+        if pct_more <= 35:
+            return f"{slow_label} than most measured episodes {ctx}"
+        return f"{mid_label} {ctx}"
+    if pct_more >= 50:
+        return f"{fast_label} than most episodes {ctx}"
+    if pct_more <= 25:
+        return f"{slow_label} than most episodes {ctx}"
+    return f"{mid_label} {ctx}"
+
+
+def _compare_higher_means_more(
+    pct_more: int,
+    n: int,
+    *,
+    more_label: str,
+    fewer_label: str,
+    mid_label: str,
+) -> str:
+    """``pct_more`` = share of library strictly above current (current is lower)."""
+    ctx = _library_ctx(n)
+    if n >= PCT_PRECISION_MIN:
+        if pct_more >= 55:
+            return f"{fewer_label} than {pct_more}% of measured episodes {ctx}"
+        if pct_more <= 35:
+            return f"{more_label} than most measured episodes {ctx}"
+        return f"{mid_label} {ctx}"
+    if pct_more >= 50:
+        return f"{fewer_label} than most episodes {ctx}"
+    if pct_more <= 25:
+        return f"{more_label} than most episodes {ctx}"
+    return f"{mid_label} {ctx}"
+
+
 def benchmark_hook(seconds: float, lib: LibraryBenchmarks) -> Optional[str]:
     pct = _pct_higher_than(lib.hook_seconds, seconds)
     if pct is None:
         return None
-    n = lib.n_measured
-    if pct >= 55:
-        return f"Faster opening than {pct}% of episodes measured in your library ({n} episodes)"
-    if pct <= 35:
-        return f"Longer opening than most measured episodes in your library ({n} episodes)"
-    return f"Near the middle of measured openings in your library ({n} episodes)"
+    return _compare_higher_is_faster(
+        pct,
+        lib.n_measured,
+        fast_label="Faster opening",
+        slow_label="Longer opening",
+        mid_label="Opening length near the middle of your library",
+    )
 
 
 def benchmark_intro(seconds: float, lib: LibraryBenchmarks) -> Optional[str]:
     pct = _pct_higher_than(lib.intro_seconds, seconds)
     if pct is None:
         return None
-    n = lib.n_measured
-    if pct >= 55:
-        return f"Story or guest enters earlier than {pct}% of measured episodes ({n} episodes)"
-    if pct <= 35:
-        return f"Longer intro block than most measured episodes ({n} episodes)"
-    return f"Intro length near the library median ({n} episodes)"
+    return _compare_higher_is_faster(
+        pct,
+        lib.n_measured,
+        fast_label="Story or guest enters earlier",
+        slow_label="Longer intro block",
+        mid_label="Intro length near the middle of your library",
+    )
 
 
 def benchmark_questions(count: int, lib: LibraryBenchmarks) -> Optional[str]:
     pct = _pct_higher_than([float(x) for x in lib.question_counts], float(count))
     if pct is None:
         return None
-    n = lib.n_measured
-    if pct >= 60:
-        return f"Fewer questions than {pct}% of measured episodes ({n} episodes)"
-    if pct <= 30:
-        return f"Higher question density than most measured episodes ({n} episodes)"
-    return f"Question count near the library middle ({n} episodes)"
+    return _compare_higher_means_more(
+        pct,
+        lib.n_measured,
+        more_label="Higher question density",
+        fewer_label="Fewer questions",
+        mid_label="Question count near the middle of your library",
+    )
 
 
 def benchmark_turns(count: int, lib: LibraryBenchmarks) -> Optional[str]:
@@ -106,21 +162,37 @@ def benchmark_turns(count: int, lib: LibraryBenchmarks) -> Optional[str]:
     if pct_more is None:
         return None
     n = lib.n_measured
+    ctx = _library_ctx(n)
+
     if values and current >= max(values) and (pct_less or 0) >= 50:
         return (
             f"Turn count at the high end of your measured library ({int(current)}) — "
-            f"handoffs can still read as long narrative blocks ({n} episodes)"
+            f"handoffs can still read as long narrative blocks {ctx}"
         )
-    if pct_more >= 55:
-        return (
-            f"Longer uninterrupted segments than {pct_more}% of measured episodes "
-            f"({n} episodes)"
-        )
-    if pct_less is not None and pct_less >= 55:
-        return (
-            f"More frequent handoffs than {pct_less}% of measured episodes ({n} episodes)"
-        )
-    return f"Turn count near the library middle ({n} episodes)"
+
+    if n >= PCT_PRECISION_MIN:
+        if pct_more >= 55:
+            return f"Longer uninterrupted segments than {pct_more}% of measured episodes {ctx}"
+        if pct_less is not None and pct_less >= 55:
+            return f"More frequent handoffs than {pct_less}% of measured episodes {ctx}"
+        return f"Turn count near the middle of your library {ctx}"
+
+    if pct_more >= 50:
+        return f"Longer uninterrupted segments than most episodes {ctx}"
+    if pct_less is not None and pct_less >= 50:
+        return f"More frequent handoffs than most episodes {ctx}"
+    return f"Turn count near the middle of your library {ctx}"
+
+
+def benchmark_guest_ratio(ratio: float, lib: LibraryBenchmarks) -> Optional[str]:
+    if len(lib.guest_ratios) < MIN_SAMPLES:
+        return None
+    ctx = _library_ctx(lib.n_measured)
+    if 0.42 <= ratio <= 0.58:
+        return f"Balanced guest/host share among measured episodes {ctx}"
+    if ratio < 0.42:
+        return f"Guest talk share is lower than most measured episodes {ctx}"
+    return f"Guest talk share is higher than most measured episodes {ctx}"
 
 
 def library_comparison_bullets(
@@ -165,14 +237,3 @@ def library_comparison_bullets(
             "this episode sits near the middle on opening length, questions, and turns."
         )
     return bullets[:5]
-
-
-def benchmark_guest_ratio(ratio: float, lib: LibraryBenchmarks) -> Optional[str]:
-    if len(lib.guest_ratios) < MIN_SAMPLES:
-        return None
-    n = lib.n_measured
-    if 0.42 <= ratio <= 0.58:
-        return f"Balanced guest/host share among measured episodes ({n} episodes)"
-    if ratio < 0.42:
-        return f"Guest talk share is lower than most measured episodes ({n} episodes)"
-    return f"Guest talk share is higher than most measured episodes ({n} episodes)"

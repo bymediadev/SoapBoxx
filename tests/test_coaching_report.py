@@ -9,7 +9,11 @@ from backend.services.coaching_report_service import (
     build_coaching_report,
     synthesis_insight_text,
 )
-from backend.services.library_benchmarks import LibraryBenchmarks, benchmark_turns
+from backend.services.library_benchmarks import (
+    LibraryBenchmarks,
+    benchmark_hook,
+    benchmark_turns,
+)
 FORBIDDEN = ("good", "bad", "score", "rank", "best", "weak", "engaging")
 
 
@@ -61,6 +65,30 @@ def test_narrative_episode_coaching_bullets():
     assert report.compared_with_library
     assert report.similar_to
     assert report.episode_structure[0].benchmark
+
+
+def test_small_library_avoids_hard_percentiles():
+    lib = _library(n_measured=4)
+    label = benchmark_hook(32.0, lib)
+    assert label is not None
+    assert "%" not in label
+    assert "current library" in label.lower()
+    assert "4 measured" in label.lower()
+
+
+def test_narrative_episode_has_editorial_tradeoffs():
+    f = _features(
+        hook_length_seconds=32.0,
+        intro_length_seconds=6.0,
+        question_count=3,
+        speaking_turns=8,
+        host_guest_ratio=0.542,
+        topic_shift_count=0,
+        cta_present=True,
+    )
+    report = build_coaching_report(_FakeSession(), f, library=_library(n_measured=4))
+    assert report.editorial_tradeoffs
+    assert any("trade-off" in t.lower() for t in report.editorial_tradeoffs)
 
 
 def test_turns_benchmark_at_library_high_end_not_more_than_most():
