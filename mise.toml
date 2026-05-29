@@ -1,0 +1,5 @@
+# Railpack/mise 2026.5+ verifies GitHub artifact attestations when installing
+# Python from runtime.txt. CPython 3.11.9 has no attestation yet, which breaks
+# Railway builds until we bump the runtime or disable this check.
+[settings]
+python.github_attestations = false
