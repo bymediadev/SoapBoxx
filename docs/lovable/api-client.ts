@@ -122,6 +122,17 @@ export type CoachingMetricRow = {
   coaching?: string | null;
 };
 
+export type TemplatePlaybook = {
+  template_id: string;
+  form: string;
+  tagline: string;
+  feels_like: string;
+  review_these: string[];
+  how_its_built: string[];
+  trade_offs: string[];
+  similar_form: string;
+};
+
 export type CoachingReport = {
   episode_structure: CoachingMetricRow[];
   conversation_dynamics: CoachingMetricRow[];
@@ -129,6 +140,7 @@ export type CoachingReport = {
   compared_with_library: string[];
   editorial_tradeoffs: string[];
   structural_variance: string[];
+  template_playbook?: TemplatePlaybook | null;
   what_this_means: string[];
   similar_to?: string | null;
   topic_shift_note?: string | null;

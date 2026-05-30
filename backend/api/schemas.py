@@ -114,6 +114,17 @@ class CoachingMetricRow(BaseModel):
     coaching: Optional[str] = None
 
 
+class TemplatePlaybookRead(BaseModel):
+    template_id: str
+    form: str
+    tagline: str
+    feels_like: str
+    review_these: List[str] = []
+    how_its_built: List[str] = []
+    trade_offs: List[str] = []
+    similar_form: str
+
+
 class CoachingReportRead(BaseModel):
     episode_structure: List[CoachingMetricRow] = []
     conversation_dynamics: List[CoachingMetricRow] = []
@@ -121,6 +132,7 @@ class CoachingReportRead(BaseModel):
     compared_with_library: List[str] = []
     editorial_tradeoffs: List[str] = []
     structural_variance: List[str] = []
+    template_playbook: Optional[TemplatePlaybookRead] = None
     what_this_means: List[str] = []
     similar_to: Optional[str] = None
     topic_shift_note: Optional[str] = None

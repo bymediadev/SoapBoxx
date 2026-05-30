@@ -57,12 +57,8 @@ def test_narrative_episode_coaching_bullets():
     lib = _library()
     report = build_coaching_report(_FakeSession(), f, library=lib)
     listener = " ".join(report.listener_experience).lower()
-    assert "sparingly" in listener or "narration" in listener
-    assert "documentary" in listener or "storytelling" in listener
-    assert "single narrative" in listener or "few" in listener
-    assert report.topic_shift_note
-    assert "detection" in report.topic_shift_note.lower() or "0" in report.topic_shift_note
-    assert report.compared_with_library
+    assert "reporter" in listener or "documentary" in listener or "planet money" in listener
+    assert report.template_playbook
     assert report.similar_to
     assert report.episode_structure[0].benchmark
 
@@ -88,8 +84,7 @@ def test_narrative_episode_has_editorial_tradeoffs():
     )
     report = build_coaching_report(_FakeSession(), f, library=_library(n_measured=4))
     assert report.editorial_tradeoffs
-    assert any("trade-off" in t.lower() for t in report.editorial_tradeoffs)
-    assert "engagement" not in " ".join(report.editorial_tradeoffs).lower()
+    assert any("arc" in t.lower() or "explanation" in t.lower() for t in report.editorial_tradeoffs)
 
 
 def test_turns_benchmark_at_library_high_end_not_more_than_most():

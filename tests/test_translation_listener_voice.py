@@ -84,8 +84,15 @@ def test_narrative_uses_template_c():
     )
     assert _template_id(f) == "C"
     report = build_coaching_report(_FakeSession(), f, library=_library())
-    text = " ".join(report.listener_experience + report.what_this_means).lower()
-    assert "narrative" in text or "story" in text or "thread" in text
+    assert report.template_playbook is not None
+    assert report.template_playbook["form"] == "Narrative documentary"
+    assert report.template_playbook["review_these"]
+    blob = " ".join(
+        report.listener_experience
+        + report.template_playbook["how_its_built"]
+        + report.template_playbook["review_these"]
+    ).lower()
+    assert "story" in blob or "documentary" in blob or "planet money" in blob
 
 
 def test_no_forbidden_language():

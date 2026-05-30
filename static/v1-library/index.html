@@ -771,8 +771,17 @@
               <h3 class="font-serif">Editorial trade-offs</h3>
               <ul id="detailEditorialList" class="coaching-list"></ul>
             </div>
+            <div id="detailPlaybook" class="report-section" style="display:none">
+              <h3 class="font-serif"><span id="detailFormName">Narrative documentary</span> <span id="detailTemplate" class="pill"></span></h3>
+              <p id="detailPlaybookTagline" class="listener-lead" style="margin-top:8px"></p>
+              <p id="detailPlaybookFeels" class="card-hint" style="margin-bottom:12px"></p>
+              <h4 class="font-serif" style="font-size:0.9rem;margin:12px 0 6px">How it's built</h4>
+              <ul id="detailPlaybookBuilt" class="coaching-list"></ul>
+              <h4 class="font-serif" style="font-size:0.9rem;margin:12px 0 6px">Review these on replay</h4>
+              <ul id="detailPlaybookReview" class="coaching-list"></ul>
+            </div>
             <div id="detailMeans" class="report-section">
-              <h3 class="font-serif">Pattern <span id="detailTemplate" class="pill"></span></h3>
+              <h3 class="font-serif">Pattern</h3>
               <ul id="detailMeansList" class="coaching-list"></ul>
             </div>
             <div id="detailSimilar" class="report-section">
@@ -1104,8 +1113,6 @@
       }
 
       none.style.display = "none";
-      document.getElementById("detailTemplate").textContent =
-        `Template ${translation.template_id || "?"}`;
 
       const report = translation.report;
       const hasCoaching =
@@ -1117,14 +1124,43 @@
         legacy.style.display = "none";
         opening.style.display = "none";
         shape.style.display = "none";
-        const leadEl = document.getElementById("detailLead");
-        const lead = (report.listener_experience && report.listener_experience[0]) || "";
-        if (lead) {
-          leadEl.textContent = lead;
-          leadEl.style.display = "block";
+
+        const playbook = report.template_playbook;
+        if (playbook && playbook.form) {
+          document.getElementById("detailTemplate").textContent =
+            `Template ${playbook.template_id || "?"}`;
+          document.getElementById("detailFormName").textContent = playbook.form;
+          document.getElementById("detailPlaybook").style.display = "block";
+          document.getElementById("detailPlaybookTagline").textContent = playbook.tagline || "";
+          document.getElementById("detailPlaybookFeels").textContent = playbook.feels_like || "";
+          document.getElementById("detailPlaybookBuilt").innerHTML = (playbook.how_its_built || [])
+            .map((b) => `<li>${esc(b)}</li>`)
+            .join("");
+          document.getElementById("detailPlaybookReview").innerHTML = (playbook.review_these || [])
+            .map((b) => `<li>${esc(b)}</li>`)
+            .join("");
+          document.getElementById("detailMeans").style.display = "none";
+          document.getElementById("detailLead").textContent = playbook.tagline || "";
+          document.getElementById("detailLead").style.display = playbook.tagline ? "block" : "none";
         } else {
-          leadEl.style.display = "none";
+          document.getElementById("detailPlaybook").style.display = "none";
+          document.getElementById("detailTemplate").textContent =
+            `Template ${translation.template_id || "?"}`;
+          document.getElementById("detailMeans").style.display = "block";
+          const means = report.what_this_means || [];
+          document.getElementById("detailMeansList").innerHTML = means
+            .map((b) => `<li>${esc(b)}</li>`)
+            .join("");
+          const leadEl = document.getElementById("detailLead");
+          const lead = (report.listener_experience && report.listener_experience[0]) || "";
+          if (lead) {
+            leadEl.textContent = lead;
+            leadEl.style.display = "block";
+          } else {
+            leadEl.style.display = "none";
+          }
         }
+
         renderCoachingTable(
           document.getElementById("detailStructureTable"),
           report.episode_structure
@@ -1160,12 +1196,8 @@
           .join("");
         document.getElementById("detailEditorial").style.display =
           editorial.length ? "block" : "none";
-        const means = report.what_this_means || [];
-        document.getElementById("detailMeansList").innerHTML = means
-          .map((b) => `<li>${esc(b)}</li>`)
-          .join("");
         document.getElementById("detailSimilarText").textContent =
-          report.similar_to || "—";
+          (playbook && playbook.similar_form) || report.similar_to || "—";
         if (features) {
           document.getElementById("detailAllMetricsWrap").style.display = "block";
           renderEpisodeReport(features);

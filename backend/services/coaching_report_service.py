@@ -14,6 +14,10 @@ from backend.services.show_variance_service import (
     load_show_benchmarks,
     structural_variance_bullets,
 )
+from backend.services.template_c_playbook import (
+    build_template_c_playbook,
+    template_c_listener_experience,
+)
 from backend.services.library_benchmarks import (
     LibraryBenchmarks,
     benchmark_guest_ratio,
@@ -53,6 +57,7 @@ class CoachingReport:
     compared_with_library: List[str] = field(default_factory=list)
     editorial_tradeoffs: List[str] = field(default_factory=list)
     structural_variance: List[str] = field(default_factory=list)
+    template_playbook: Optional[dict] = None
     what_this_means: List[str] = field(default_factory=list)
     similar_to: Optional[str] = None
     topic_shift_note: Optional[str] = None
@@ -81,6 +86,7 @@ class CoachingReport:
             "compared_with_library": list(self.compared_with_library),
             "editorial_tradeoffs": list(self.editorial_tradeoffs),
             "structural_variance": list(self.structural_variance),
+            "template_playbook": self.template_playbook,
             "what_this_means": list(self.what_this_means),
             "similar_to": self.similar_to,
             "topic_shift_note": self.topic_shift_note,
@@ -341,6 +347,11 @@ def build_coaching_report(
 
     template_id = _template_id(features)
     narrative_led = template_id == "C"
+    playbook = None
+    if template_id == "C":
+        playbook = build_template_c_playbook(
+            features, library_measured=lib.n_measured
+        ).to_dict()
 
     structure = [
         MetricRow("Hook", _fmt_seconds(hook), benchmark_hook(hook, lib), None),
@@ -370,16 +381,40 @@ def build_coaching_report(
         MetricRow("Topic shifts", str(topic_shifts), None, None),
     ]
 
-    listener: List[str] = [
-        _listener_opening(hook, intro),
-        _listener_questions(questions),
-        _listener_turns(turns),
-        _listener_topic_arc(topic_shifts, template_id),
-        _listener_balance(ratio),
-    ]
-    cta_line = _listener_cta(cta)
-    if cta_line:
-        listener.append(cta_line)
+    if template_id == "C":
+        listener = template_c_listener_experience(features)
+        if cta:
+            listener.append(
+                "A subscribe or follow-style call appears near the end — "
+                "standard for produced public-media episodes."
+            )
+    else:
+        listener = [
+            _listener_opening(hook, intro),
+            _listener_questions(questions),
+            _listener_turns(turns),
+            _listener_topic_arc(topic_shifts, template_id),
+            _listener_balance(ratio),
+        ]
+        cta_line = _listener_cta(cta)
+        if cta_line:
+            listener.append(cta_line)
+
+    editorial = (
+        playbook["trade_offs"]
+        if playbook
+        else _editorial_tradeoffs(features, template_id)
+    )
+    pattern_lines = (
+        [playbook["tagline"], playbook["feels_like"]]
+        if playbook
+        else [_pattern_synthesis(template_id, features)]
+    )
+    similar = (
+        playbook["similar_form"]
+        if playbook
+        else _similar_to(features, lib, template_id)
+    )
 
     compared = library_comparison_bullets(
         hook=hook,
@@ -413,10 +448,11 @@ def build_coaching_report(
         conversation_dynamics=dynamics,
         listener_experience=listener,
         compared_with_library=compared,
-        editorial_tradeoffs=_editorial_tradeoffs(features, template_id),
+        editorial_tradeoffs=editorial,
         structural_variance=variance,
-        what_this_means=[_pattern_synthesis(template_id, features)],
-        similar_to=_similar_to(features, lib, template_id),
+        template_playbook=playbook,
+        what_this_means=pattern_lines,
+        similar_to=similar,
         topic_shift_note=_topic_shift_detection_note(topic_shifts),
     )
     _assert_no_forbidden(report)
@@ -425,8 +461,16 @@ def build_coaching_report(
 
 def synthesis_insight_text(report: CoachingReport) -> str:
     """Short lead paragraph for API ``insight_text`` field."""
-    lead = report.listener_experience[:2]
-    body = " ".join(lead) if lead else "Structure measured for this episode."
+    if report.template_playbook:
+        lead = [
+            report.template_playbook.get("tagline", ""),
+            report.template_playbook.get("feels_like", ""),
+        ]
+        body = " ".join(x for x in lead if x)
+    else:
+        body = " ".join(report.listener_experience[:2]) if report.listener_experience else ""
+    if not body:
+        body = "Structure measured for this episode."
     return f"{body} {_DISCLAIMER}"
 
 
@@ -448,6 +492,13 @@ def _assert_no_forbidden(report: CoachingReport) -> None:
     chunks.extend(report.compared_with_library)
     chunks.extend(report.editorial_tradeoffs)
     chunks.extend(report.structural_variance)
+    if report.template_playbook:
+        for key in ("tagline", "feels_like", "similar_form"):
+            val = report.template_playbook.get(key)
+            if val:
+                chunks.append(val)
+        for key in ("review_these", "how_its_built", "trade_offs"):
+            chunks.extend(report.template_playbook.get(key) or [])
     chunks.extend(report.what_this_means)
     if report.similar_to:
         chunks.append(report.similar_to)
