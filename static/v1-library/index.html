@@ -665,6 +665,59 @@
       font-family: "JetBrains Mono", monospace;
     }
     .report-details[open] summary { margin-bottom: 8px; }
+    .episode-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .episode-toolbar label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted-foreground);
+      font-family: "JetBrains Mono", monospace;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .episode-toolbar select,
+    .episode-toolbar input[type="search"] {
+      min-width: 140px;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--background);
+      color: var(--foreground);
+      font-size: 13px;
+    }
+    .episode-toolbar input[type="search"] { min-width: 200px; }
+    .episode-pagination {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--muted-foreground);
+      font-family: "JetBrains Mono", monospace;
+    }
+    .tree .podcast {
+      cursor: pointer;
+    }
+    .tree .podcast.active {
+      outline: 1px solid var(--amber);
+      background: oklch(0.28 0.018 65 / 0.35);
+    }
+    .detail-nav {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    tr.ep-row.filtered-out { display: none; }
   </style>
 </head>
 <body>
@@ -689,6 +742,7 @@
         <h1 class="font-serif">Production library</h1>
         <div class="topbar-actions">
           <span id="healthBadge" class="pill">connecting</span>
+          <button type="button" class="btn btn-ghost" id="processBatchBtn">Process next 10</button>
           <button type="button" class="btn btn-ghost" id="refreshBtn">Refresh</button>
         </div>
       </header>
@@ -712,7 +766,26 @@
 
         <section class="card">
           <div class="card-title">Episodes</div>
-          <p class="card-hint">Click a row to open the episode report.</p>
+          <p class="card-hint">Browse the catalog — click a row for the full report. Use the catalog sidebar to filter by show.</p>
+          <div class="episode-toolbar">
+            <label>Show
+              <select id="episodeShowFilter">
+                <option value="">All shows</option>
+              </select>
+            </label>
+            <label>Status
+              <select id="episodeStatusFilter">
+                <option value="">All</option>
+                <option value="ready">Ready (insight)</option>
+                <option value="measured">Measured only</option>
+                <option value="queued">Queued</option>
+                <option value="transcribing">Transcribing</option>
+              </select>
+            </label>
+            <label>Search
+              <input type="search" id="episodeSearch" placeholder="Title filter (this page)" />
+            </label>
+          </div>
           <table>
             <thead>
               <tr>
@@ -725,14 +798,25 @@
               <tr><td colspan="3" class="empty">Loading…</td></tr>
             </tbody>
           </table>
+          <div class="episode-pagination">
+            <span id="episodePageInfo">—</span>
+            <div>
+              <button type="button" class="btn btn-ghost" id="episodePrevPage" disabled>← Prev</button>
+              <button type="button" class="btn btn-ghost" id="episodeNextPage" disabled>Next →</button>
+            </div>
+          </div>
         </section>
 
         <div id="episodeBackdrop" class="episode-backdrop" aria-hidden="true"></div>
         <section class="card" id="episodeDetail" aria-live="polite" role="dialog" aria-modal="true">
           <div class="detail-head">
-            <div>
+            <div style="flex:1;min-width:0">
               <div class="card-title">Episode report</div>
               <h2 class="font-serif" id="detailTitle">Select an episode</h2>
+              <div class="detail-nav">
+                <button type="button" class="btn btn-ghost" id="detailPrevBtn" disabled>← Previous</button>
+                <button type="button" class="btn btn-ghost" id="detailNextBtn" disabled>Next →</button>
+              </div>
             </div>
             <button type="button" class="btn btn-ghost" id="detailCloseBtn">Close</button>
           </div>
@@ -878,7 +962,18 @@
 
   <script>
     const API = "";
+    const EPISODE_PAGE_SIZE = 50;
     let selectedEpisodeId = null;
+    let episodePageIds = [];
+    const browse = {
+      podcastId: "",
+      status: "",
+      offset: 0,
+      total: 0,
+      search: "",
+      podcasts: [],
+      lastEpisodes: [],
+    };
 
     function esc(s) {
       if (s == null) return "";
@@ -957,7 +1052,12 @@
       function walkNode(n) {
         const kids = (n.children || []).map(walkNode).join("");
         const pods = (n.podcasts || [])
-          .map((p) => `<div class="podcast">${esc(p.name)}<span>${esc(p.episode_count)}</span></div>`)
+          .map((p) => {
+            const pid = Number(p.id) || 0;
+            const active =
+              browse.podcastId && String(browse.podcastId) === String(pid) ? " active" : "";
+            return `<div class="podcast${active}" data-podcast-id="${pid}" role="button" tabindex="0">${esc(p.name)}<span>${esc(p.episode_count)}</span></div>`;
+          })
           .join("");
         const label = `<span class="${n.node_type === "domain" ? "domain" : ""}">${esc(n.name)}</span>`;
         if (!kids && !pods) return `<div style="padding:2px 0 2px 12px">${label}</div>`;
@@ -999,11 +1099,25 @@
 
     function renderEpisodes(eps) {
       const body = document.getElementById("episodesBody");
+      episodePageIds = (eps || []).map((ep) => Number(ep.id) || 0).filter((id) => id > 0);
+      const q = (browse.search || "").trim().toLowerCase();
+      const filtered = q
+        ? (eps || []).filter((ep) => (ep.title || "").toLowerCase().includes(q))
+        : eps || [];
       if (!eps || !eps.length) {
-        body.innerHTML = '<tr><td colspan="3" class="empty">No episodes yet.</td></tr>';
+        body.innerHTML = '<tr><td colspan="3" class="empty">No episodes match this filter.</td></tr>';
+        updateEpisodePagination();
+        updateDetailNav();
         return;
       }
-      body.innerHTML = eps
+      if (!filtered.length) {
+        body.innerHTML =
+          '<tr><td colspan="3" class="empty">No titles on this page match search.</td></tr>';
+        updateEpisodePagination();
+        updateDetailNav();
+        return;
+      }
+      body.innerHTML = filtered
         .map((ep) => {
           const st = (ep.status || "unknown").toLowerCase().replace(/\s+/g, "-");
           const sel = selectedEpisodeId === ep.id ? " selected" : "";
@@ -1016,14 +1130,105 @@
           </tr>`;
         })
         .join("");
+      updateEpisodePagination();
+      updateDetailNav();
+    }
+
+    function updateEpisodePagination() {
+      const total = browse.total || 0;
+      const start = total ? browse.offset + 1 : 0;
+      const end = Math.min(browse.offset + EPISODE_PAGE_SIZE, total);
+      const pageNum = total ? Math.floor(browse.offset / EPISODE_PAGE_SIZE) + 1 : 0;
+      const pageCount = total ? Math.ceil(total / EPISODE_PAGE_SIZE) : 0;
+      document.getElementById("episodePageInfo").textContent = total
+        ? `Showing ${start}–${end} of ${total} · page ${pageNum} of ${pageCount}`
+        : "No episodes";
+      document.getElementById("episodePrevPage").disabled = browse.offset <= 0;
+      document.getElementById("episodeNextPage").disabled =
+        browse.offset + EPISODE_PAGE_SIZE >= total;
+    }
+
+    function updateDetailNav() {
+      const idx = episodePageIds.indexOf(selectedEpisodeId);
+      const prevBtn = document.getElementById("detailPrevBtn");
+      const nextBtn = document.getElementById("detailNextBtn");
+      if (!selectedEpisodeId) {
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
+        return;
+      }
+      prevBtn.disabled = idx <= 0;
+      nextBtn.disabled = idx < 0 || idx >= episodePageIds.length - 1;
+    }
+
+    function populateShowFilter() {
+      const sel = document.getElementById("episodeShowFilter");
+      const current = browse.podcastId;
+      const opts = ['<option value="">All shows</option>'].concat(
+        (browse.podcasts || []).map(
+          (p) =>
+            `<option value="${esc(p.id)}"${String(p.id) === String(current) ? " selected" : ""}>${esc(p.name)} (${esc(p.episode_count || 0)})</option>`
+        )
+      );
+      sel.innerHTML = opts.join("");
+    }
+
+    function episodesQueryParams() {
+      const params = new URLSearchParams();
+      params.set("limit", String(EPISODE_PAGE_SIZE));
+      params.set("offset", String(browse.offset));
+      if (browse.podcastId) params.set("podcast_id", browse.podcastId);
+      if (browse.status) params.set("status", browse.status);
+      return params.toString();
+    }
+
+    async function loadEpisodes() {
+      const page = await api(`/library/episodes?${episodesQueryParams()}`);
+      browse.total = page.total || 0;
+      browse.lastEpisodes = page.episodes || [];
+      renderEpisodes(browse.lastEpisodes);
+      return page;
+    }
+
+    async function loadPodcastsFromTree(tree) {
+      const found = [];
+      function walk(nodes) {
+        (nodes || []).forEach((n) => {
+          (n.podcasts || []).forEach((p) => found.push(p));
+          walk(n.children);
+        });
+      }
+      walk(tree);
+      const byId = new Map();
+      found.forEach((p) => {
+        if (p.id != null) byId.set(Number(p.id), p);
+      });
+      browse.podcasts = Array.from(byId.values()).sort((a, b) =>
+        (a.name || "").localeCompare(b.name || "")
+      );
+      populateShowFilter();
+    }
+
+    function setBrowsePodcast(podcastId) {
+      browse.podcastId = podcastId ? String(podcastId) : "";
+      browse.offset = 0;
+      loadEpisodes().catch((e) => {
+        document.getElementById("episodesBody").innerHTML =
+          `<tr><td colspan="3" class="empty" style="color:var(--destructive)">${esc(e.message)}</td></tr>`;
+      });
+      renderTree(window.__lastTree || []);
     }
 
     function closeEpisodeDetail() {
       selectedEpisodeId = null;
+      if (location.hash.startsWith("#episode/")) {
+        history.replaceState(null, "", location.pathname + location.search);
+      }
       document.getElementById("episodeDetail").classList.remove("open");
       document.getElementById("episodeBackdrop").classList.remove("open");
       document.body.style.overflow = "";
       document.querySelectorAll("tr.ep-row.selected").forEach((r) => r.classList.remove("selected"));
+      updateDetailNav();
     }
 
     function renderDetailSteps(steps) {
@@ -1374,6 +1579,7 @@
 
     async function openEpisode(episodeId) {
       selectedEpisodeId = episodeId;
+      location.hash = `episode/${episodeId}`;
       document.getElementById("episodeBackdrop").classList.add("open");
       document.getElementById("episodeDetail").classList.add("open");
       document.body.style.overflow = "hidden";
@@ -1416,11 +1622,26 @@
           if (!String(e.message).includes("404")) throw e;
         }
         showCoachingReport(translation, features);
+        const idx = episodePageIds.indexOf(episodeId);
+        const pos =
+          browse.total && idx >= 0
+            ? ` · ${browse.offset + idx + 1} of ${browse.total} in catalog`
+            : "";
+        document.getElementById("detailMeta").textContent =
+          `Episode #${episodeId} · ${state.podcast_name || ""} · status: ${state.status || "unknown"}${pos}`;
         msg.textContent = "";
+        updateDetailNav();
       } catch (e) {
         msg.textContent = e.message;
         msg.className = "detail-msg err";
       }
+    }
+
+    function openAdjacentEpisode(delta) {
+      const idx = episodePageIds.indexOf(selectedEpisodeId);
+      if (idx < 0) return;
+      const next = episodePageIds[idx + delta];
+      if (next) openEpisode(next);
     }
 
     async function runEpisodePipeline() {
@@ -1453,15 +1674,17 @@
       try {
         const [health, home] = await Promise.all([
           api("/health"),
-          api("/library/home?activity_limit=15&episodes_limit=25"),
+          api("/library/home?activity_limit=15&episodes_limit=5"),
         ]);
         setHealth(health);
         renderStats(home.stats);
         renderPipeline(home.pipeline);
         renderActivity(home.activity);
         renderPatterns(home.patterns);
+        window.__lastTree = home.tree;
+        await loadPodcastsFromTree(home.tree);
         renderTree(home.tree);
-        renderEpisodes(home.episodes);
+        await loadEpisodes();
       } catch (e) {
         setHealth({ status: "error" }, e.message);
         document.getElementById("stats").innerHTML =
@@ -1471,7 +1694,27 @@
       }
     }
 
+    async function processNextBatch() {
+      const btn = document.getElementById("processBatchBtn");
+      const msg = document.getElementById("ingestMsg");
+      btn.disabled = true;
+      msg.textContent = "Processing up to 10 queued episodes…";
+      msg.className = "ingest-msg";
+      try {
+        const result = await api("/pipeline/process?limit=10", { method: "POST" });
+        msg.textContent = `Pipeline: ${result.succeeded}/${result.attempted} succeeded`;
+        msg.className = "ingest-msg ok";
+        await refresh();
+      } catch (e) {
+        msg.textContent = e.message;
+        msg.className = "ingest-msg err";
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
     document.getElementById("refreshBtn").addEventListener("click", refresh);
+    document.getElementById("processBatchBtn").addEventListener("click", processNextBatch);
     document.getElementById("detailCloseBtn").addEventListener("click", closeEpisodeDetail);
     document.getElementById("episodeBackdrop").addEventListener("click", closeEpisodeDetail);
     document.getElementById("episodesBody").addEventListener("click", (e) => {
@@ -1488,6 +1731,39 @@
     });
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && selectedEpisodeId) closeEpisodeDetail();
+      if (selectedEpisodeId && e.key === "ArrowLeft") openAdjacentEpisode(-1);
+      if (selectedEpisodeId && e.key === "ArrowRight") openAdjacentEpisode(1);
+    });
+    document.getElementById("detailPrevBtn").addEventListener("click", () => openAdjacentEpisode(-1));
+    document.getElementById("detailNextBtn").addEventListener("click", () => openAdjacentEpisode(1));
+    document.getElementById("episodeShowFilter").addEventListener("change", (e) => {
+      setBrowsePodcast(e.target.value);
+    });
+    document.getElementById("episodeStatusFilter").addEventListener("change", (e) => {
+      browse.status = e.target.value;
+      browse.offset = 0;
+      loadEpisodes().catch(() => {});
+    });
+    document.getElementById("episodeSearch").addEventListener("input", (e) => {
+      browse.search = e.target.value;
+      renderEpisodes(browse.lastEpisodes || []);
+    });
+    document.getElementById("episodePrevPage").addEventListener("click", () => {
+      browse.offset = Math.max(0, browse.offset - EPISODE_PAGE_SIZE);
+      loadEpisodes().catch(() => {});
+    });
+    document.getElementById("episodeNextPage").addEventListener("click", () => {
+      if (browse.offset + EPISODE_PAGE_SIZE < browse.total) {
+        browse.offset += EPISODE_PAGE_SIZE;
+        loadEpisodes().catch(() => {});
+      }
+    });
+    document.getElementById("tree").addEventListener("click", (e) => {
+      const pod = e.target.closest(".podcast[data-podcast-id]");
+      if (!pod) return;
+      const id = pod.getAttribute("data-podcast-id");
+      document.getElementById("episodeShowFilter").value = id;
+      setBrowsePodcast(id);
     });
     document.getElementById("detailProcessBtn").addEventListener("click", runEpisodePipeline);
     document.getElementById("ingestBtn").addEventListener("click", async () => {

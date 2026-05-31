@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from backend.api.deps import get_db
-from backend.services.library_service import get_library_stats, list_episodes
+from backend.api.schemas import EpisodesPageRead
+from backend.services.library_service import count_episodes, get_library_stats, list_episodes
 from backend.services.patterns_service import get_weekly_patterns
 from backend.services.system_state_service import get_pipeline_status, get_system_activity
 from backend.services.taxonomy_service import get_library_tree
@@ -45,12 +46,32 @@ def library_tree(db: Session = Depends(get_db)) -> List[Any]:
     return get_library_tree(db)
 
 
-@router.get("/episodes")
+@router.get("/episodes", response_model=EpisodesPageRead)
 def library_episodes(
     db: Session = Depends(get_db),
     podcast_id: Optional[int] = Query(None),
+    status: Optional[str] = Query(
+        None,
+        description="Filter: ready | measured | queued | transcribing | failed",
+    ),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-) -> List[Any]:
-    """Recent episodes with pipeline status (queued | ready | measured)."""
-    return list_episodes(db, podcast_id=podcast_id, limit=limit, offset=offset)
+) -> EpisodesPageRead:
+    """Paginated episodes with pipeline status."""
+    cap = min(limit, 200)
+    items = list_episodes(
+        db,
+        podcast_id=podcast_id,
+        status=status,
+        limit=cap,
+        offset=offset,
+    )
+    total = count_episodes(db, podcast_id=podcast_id, status=status)
+    return EpisodesPageRead(
+        episodes=items,
+        total=total,
+        limit=cap,
+        offset=offset,
+        podcast_id=podcast_id,
+        status=status,
+    )

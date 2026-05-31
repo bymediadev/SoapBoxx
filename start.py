@@ -29,9 +29,21 @@ def _on_railway() -> bool:
     )
 
 
+def _redis_configured_for_worker() -> bool:
+    url = (os.environ.get("REDIS_URL") or "").strip()
+    if not url:
+        return False
+    return "127.0.0.1" not in url and "localhost" not in url
+
+
 def _apply_railway_pipeline_defaults() -> None:
-    if _on_railway() and "PIPELINE_BOOT_DISPATCH_LIMIT" not in os.environ:
-        os.environ["PIPELINE_BOOT_DISPATCH_LIMIT"] = "150"
+    """Only auto-dispatch backlog on boot when a real Redis URL exists (worker queue)."""
+    if not _on_railway() or "PIPELINE_BOOT_DISPATCH_LIMIT" in os.environ:
+        return
+    if _redis_configured_for_worker():
+        os.environ["PIPELINE_BOOT_DISPATCH_LIMIT"] = "50"
+    else:
+        os.environ["PIPELINE_BOOT_DISPATCH_LIMIT"] = "0"
 
 
 def _log_database_url() -> None:

@@ -51,13 +51,21 @@ def _kick_backlog_on_boot() -> None:
 
 def register_pipeline_startup() -> None:
     """Call from app factory — dispatches pending episodes when configured."""
-    on_railway = bool(
-        os.environ.get("RAILWAY_ENVIRONMENT")
-        or os.environ.get("RAILWAY_SERVICE_NAME")
-    )
     settings = get_settings()
-    if on_railway and settings.pipeline_boot_dispatch_limit > 0:
-        _kick_backlog_on_boot()
+    if settings.pipeline_boot_dispatch_limit <= 0:
+        return
+    try:
+        from backend.api.deps import check_redis
+
+        if check_redis().get("status") != "connected":
+            logger.info(
+                "Skipping boot backlog dispatch (Redis not connected — use POST /pipeline/process)"
+            )
+            return
+    except Exception:
+        logger.info("Skipping boot backlog dispatch (Redis check failed)")
+        return
+    _kick_backlog_on_boot()
 
 
 @router.get("/status")

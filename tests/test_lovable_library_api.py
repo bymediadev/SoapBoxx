@@ -39,9 +39,14 @@ def test_library_stats_and_episodes(v1_client, v1_db_clean):
 
     eps = v1_client.get("/library/episodes?limit=5")
     assert eps.status_code == 200
-    items = eps.json()
+    page = eps.json()
+    assert page["total"] == 2
+    items = page["episodes"]
     assert len(items) == 2
     assert all(i["status"] == "queued" for i in items)
+
+    ready_page = v1_client.get("/library/episodes?status=ready")
+    assert ready_page.json()["total"] == 0
 
     activity = v1_client.get("/system/activity?limit=10")
     assert activity.status_code == 200

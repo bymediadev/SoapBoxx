@@ -55,6 +55,23 @@ export type LibraryEpisode = {
   status: string;
 };
 
+export type EpisodesPage = {
+  episodes: LibraryEpisode[];
+  total: number;
+  limit: number;
+  offset: number;
+  podcast_id?: number | null;
+  status?: string | null;
+};
+
+export type ProcessBatchResult = {
+  requested: number;
+  attempted: number;
+  succeeded: number;
+  failed: number;
+  results: unknown[];
+};
+
 export type ActivityEvent = {
   id: number;
   event_type: string;
@@ -244,8 +261,19 @@ export const soapboxxApi = {
 
   libraryStats: () => api<LibraryStats>("/library/stats"),
   libraryTree: () => api<unknown[]>("/library/tree"),
-  libraryEpisodes: (limit = 20) =>
-    api<LibraryEpisode[]>(`/library/episodes?limit=${limit}`),
+  libraryEpisodes: (
+    opts?: { limit?: number; offset?: number; podcast_id?: number; status?: string }
+  ) => {
+    const params = new URLSearchParams();
+    params.set("limit", String(opts?.limit ?? 50));
+    params.set("offset", String(opts?.offset ?? 0));
+    if (opts?.podcast_id != null) params.set("podcast_id", String(opts.podcast_id));
+    if (opts?.status) params.set("status", opts.status);
+    return api<EpisodesPage>(`/library/episodes?${params.toString()}`);
+  },
+
+  processNextBatch: (limit = 10) =>
+    api<ProcessBatchResult>(`/pipeline/process?limit=${limit}`, { method: "POST" }),
 
   pipelineStatus: () =>
     api<{ processing_count: number; by_status: Record<string, number> }>(

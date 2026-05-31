@@ -48,6 +48,26 @@ class EpisodeRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class LibraryEpisodeSummary(BaseModel):
+    id: int
+    podcast_id: int
+    podcast_name: str = ""
+    title: str = ""
+    description: Optional[str] = None
+    audio_url: Optional[str] = None
+    published_at: Optional[str] = None
+    status: str = "new"
+
+
+class EpisodesPageRead(BaseModel):
+    episodes: List[LibraryEpisodeSummary]
+    total: int
+    limit: int
+    offset: int
+    podcast_id: Optional[int] = None
+    status: Optional[str] = None
+
+
 class RssIngestRequest(BaseModel):
     rss_url: str = Field(..., min_length=8, max_length=2048)
     podcast_id: Optional[int] = None

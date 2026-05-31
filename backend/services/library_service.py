@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session, joinedload
 
-from backend.models import Episode, EpisodeFeatures, Podcast, TaxonomyNode
+from backend.models import Episode, EpisodeFeatures, EpisodeTranslation, Podcast, TaxonomyNode
 from backend.services.pipeline_status import resolve_episode_status
 
 
@@ -58,15 +58,69 @@ def get_library_stats(db: Session) -> Dict[str, Any]:
     }
 
 
+def _episode_list_query(
+    db: Session,
+    *,
+    podcast_id: Optional[int] = None,
+    status: Optional[str] = None,
+):
+    q = db.query(Episode)
+    if podcast_id is not None:
+        q = q.filter(Episode.podcast_id == podcast_id)
+    key = (status or "").strip().lower()
+    if key == "ready":
+        q = q.filter(
+            exists(
+                select(1)
+                .select_from(EpisodeTranslation)
+                .where(EpisodeTranslation.episode_id == Episode.id)
+            )
+        )
+    elif key == "measured":
+        q = q.filter(
+            exists(
+                select(1)
+                .select_from(EpisodeFeatures)
+                .where(EpisodeFeatures.episode_id == Episode.id)
+            ),
+            ~exists(
+                select(1)
+                .select_from(EpisodeTranslation)
+                .where(EpisodeTranslation.episode_id == Episode.id)
+            ),
+        )
+    elif key == "queued":
+        q = q.filter(
+            ~exists(
+                select(1)
+                .select_from(EpisodeTranslation)
+                .where(EpisodeTranslation.episode_id == Episode.id)
+            )
+        )
+    elif key in ("transcribing", "ingesting", "failed", "new", "ingested"):
+        q = q.filter(Episode.pipeline_status == key)
+    return q
+
+
+def count_episodes(
+    db: Session,
+    *,
+    podcast_id: Optional[int] = None,
+    status: Optional[str] = None,
+) -> int:
+    return _episode_list_query(db, podcast_id=podcast_id, status=status).count()
+
+
 def list_episodes(
     db: Session,
     *,
     podcast_id: Optional[int] = None,
+    status: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
 ) -> List[Dict[str, Any]]:
     q = (
-        db.query(Episode)
+        _episode_list_query(db, podcast_id=podcast_id, status=status)
         .options(
             joinedload(Episode.features),
             joinedload(Episode.translation),
@@ -74,8 +128,6 @@ def list_episodes(
         )
         .order_by(Episode.published_at.desc().nullslast(), Episode.id.desc())
     )
-    if podcast_id is not None:
-        q = q.filter(Episode.podcast_id == podcast_id)
     rows = q.offset(offset).limit(min(limit, 200)).all()
 
     out: List[Dict[str, Any]] = []
