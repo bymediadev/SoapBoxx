@@ -48,10 +48,15 @@ from backend.services.library_benchmarks import (
 )
 
 _FORBIDDEN = re.compile(
-    r"\b(good|bad|best|worst|score|rank|rating|rated|should improve|you must|"
-    r"weak|strong|engaging|engagement|improve|fix this|audience will|listeners will|"
+    r"\b("
+    r"score|rank|rating|rated|should improve|you must|"
+    r"fix this|audience will|listeners will|"
     r"will become|will result|if you increase|if you change|if you turn|"
-    r"align with|aligns with|upper band|lower band|mid band)\b",
+    r"align with|aligns with|upper band|lower band|mid band|"
+    r"good episode|bad episode|best episode|worst episode|"
+    r"weak (?:episode|hook|opening)|strong (?:episode|hook|opening)|"
+    r"highly engaging|low engagement"
+    r")\b",
     re.I,
 )
 
@@ -699,8 +704,11 @@ def _assert_no_forbidden(report: CoachingReport) -> None:
         chunks.append(report.measurement_cohort_note)
     if report.narrative_engine:
         chunks.extend(report.narrative_engine.get("engine_notes") or [])
+        # Timeline labels only — detail/snippet are transcript evidence, not coaching copy.
         for ev in report.narrative_engine.get("timeline") or []:
-            chunks.append(ev.get("detail") or "")
+            label = ev.get("label")
+            if label:
+                chunks.append(label)
     if report.producer_notes:
         chunks.extend(report.producer_notes.get("bullets") or [])
         chunks.extend(report.producer_notes.get("edit_flags") or [])

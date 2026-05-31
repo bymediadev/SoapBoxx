@@ -9,8 +9,12 @@ from typing import List, Optional
 from backend.models import EpisodeFeatures
 
 _FORBIDDEN = re.compile(
-    r"\b(good|bad|best|worst|score|rank|rating|rated|should improve|you must|"
-    r"weak|strong|engaging|engagement|improve|fix this|audience will|listeners will)\b",
+    r"\b("
+    r"score|rank|rating|rated|should improve|you must|"
+    r"fix this|audience will|listeners will|"
+    r"good episode|bad episode|best episode|worst episode|"
+    r"highly engaging|low engagement"
+    r")\b",
     re.I,
 )
 
