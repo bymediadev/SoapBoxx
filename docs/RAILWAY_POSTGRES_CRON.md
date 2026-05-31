@@ -159,6 +159,25 @@ python scripts/run_celery_worker.py
 
 Without this worker, RSS ingest still creates episodes, but queued auto-processing will not be consumed.
 
+**Backlog (already ingested episodes):** the worker runs Celery Beat every 5 minutes (default) and processes 2 episodes per tick. Daily RSS sync also drains up to 5 pending episodes per run. Re-ingest alone does not re-queue skipped episodes — the backlog drain handles Planet Money episodes already in Postgres.
+
+| Variable | Default | Role |
+|----------|---------|------|
+| `AUTO_PROCESS_ON_INGEST` | `true` | Dispatch new + backlog on ingest |
+| `PIPELINE_DRAIN_MINUTES` | `5` | Beat interval (`0` = off) |
+| `PIPELINE_BATCH_SIZE` | `2` | Episodes per beat tick |
+| `PIPELINE_SYNC_BATCH_SIZE` | `5` | Backlog drain after RSS sync / ingest |
+| `AUTO_AUDIO_MOTION_ON_PROCESS` | `true` | Audio events in full pipeline |
+| `SOAPBOXX_ENABLE_BEAT` | on | Set `0` to disable embedded beat on worker |
+
+After deploy, load the backlog without Swagger:
+
+```http
+POST /pipeline/dispatch-backlog?limit=350
+```
+
+Or Railway shell: `python scripts/dispatch_backlog.py --limit 350`
+
 ### Manual / fallback paths
 
 If you need to run the pipeline manually, you still can:

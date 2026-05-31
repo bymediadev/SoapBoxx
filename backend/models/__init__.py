@@ -3,6 +3,7 @@
 from .base import Base
 from .tables import (
     Episode,
+    EpisodeAudioMotion,
     EpisodeFeatures,
     EpisodeTranslation,
     Podcast,
@@ -18,6 +19,7 @@ __all__ = [
     "Episode",
     "TranscriptSegment",
     "EpisodeFeatures",
+    "EpisodeAudioMotion",
     "EpisodeTranslation",
     "TaxonomyNode",
     "PodcastTaxonomyMap",

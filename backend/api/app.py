@@ -63,6 +63,7 @@ def create_app() -> FastAPI:
             logger.info("UI index ready at %s", ui_index)
         else:
             logger.error("UI index MISSING at %s (cwd=%s)", ui_index, Path.cwd())
+        pipeline.register_pipeline_startup()
 
     @app.get("/")
     def root() -> dict:

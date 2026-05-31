@@ -9,10 +9,27 @@ from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from backend.models import Episode, EpisodeFeatures
+from backend.models import Episode, EpisodeFeatures, TranscriptSegment
 from backend.services.show_variance_service import (
     load_show_benchmarks,
+    load_show_feature_rows,
     structural_variance_bullets,
+)
+from backend.services.feed_leverage_service import (
+    build_feed_leverage_points,
+    build_structural_identity,
+)
+from backend.services.measurement_versions import cohort_note, stamp_dict, stamp_for_row
+from backend.services.narrative_timeline_service import build_narrative_engine_map
+from backend.services.producer_view_service import build_producer_view
+from backend.services.audio_motion_service import load_audio_motion
+from backend.services.producer_notes_service import build_producer_notes
+from backend.services.template_classification import (
+    effective_form_label,
+    has_speaker_diarization,
+    is_rhetorical_question_heavy,
+    template_id_from_features,
+    transcript_limitation_notes,
 )
 from backend.services.template_c_playbook import (
     build_template_c_playbook,
@@ -26,12 +43,15 @@ from backend.services.library_benchmarks import (
     benchmark_questions,
     benchmark_turns,
     library_comparison_bullets,
+    library_from_rows,
     load_library_benchmarks,
 )
 
 _FORBIDDEN = re.compile(
     r"\b(good|bad|best|worst|score|rank|rating|rated|should improve|you must|"
-    r"weak|strong|engaging|engagement|improve|fix this|audience will|listeners will)\b",
+    r"weak|strong|engaging|engagement|improve|fix this|audience will|listeners will|"
+    r"will become|will result|if you increase|if you change|if you turn|"
+    r"align with|aligns with|upper band|lower band|mid band)\b",
     re.I,
 )
 
@@ -51,6 +71,8 @@ class MetricRow:
 
 @dataclass
 class CoachingReport:
+    structural_identity: List[str] = field(default_factory=list)
+    leverage_points: List[str] = field(default_factory=list)
     episode_structure: List[MetricRow] = field(default_factory=list)
     conversation_dynamics: List[MetricRow] = field(default_factory=list)
     listener_experience: List[str] = field(default_factory=list)
@@ -61,9 +83,17 @@ class CoachingReport:
     what_this_means: List[str] = field(default_factory=list)
     similar_to: Optional[str] = None
     topic_shift_note: Optional[str] = None
+    measurement_stamp: dict = field(default_factory=dict)
+    measurement_cohort_note: Optional[str] = None
+    transcript_limitations: List[str] = field(default_factory=list)
+    narrative_engine: Optional[dict] = None
+    producer_notes: Optional[dict] = None
+    producer_view: Optional[dict] = None
 
     def to_dict(self) -> dict:
         return {
+            "structural_identity": list(self.structural_identity),
+            "leverage_points": list(self.leverage_points),
             "episode_structure": [
                 {
                     "metric": r.metric,
@@ -90,6 +120,12 @@ class CoachingReport:
             "what_this_means": list(self.what_this_means),
             "similar_to": self.similar_to,
             "topic_shift_note": self.topic_shift_note,
+            "measurement_stamp": dict(self.measurement_stamp),
+            "measurement_cohort_note": self.measurement_cohort_note,
+            "transcript_limitations": list(self.transcript_limitations),
+            "narrative_engine": self.narrative_engine,
+            "producer_notes": self.producer_notes,
+            "producer_view": self.producer_view,
         }
 
 
@@ -109,14 +145,7 @@ def _fmt_ratio(ratio: float) -> str:
 
 
 def _template_id(f: EpisodeFeatures) -> str:
-    hook = float(f.hook_length_seconds or 0)
-    intro = float(f.intro_length_seconds or 0)
-    questions = int(f.question_count or 0)
-    if intro >= 120 or hook >= 90:
-        return "A"
-    if questions >= 12:
-        return "B"
-    return "C"
+    return template_id_from_features(f)
 
 
 def _listener_opening(hook: float, intro: float) -> str:
@@ -136,7 +165,13 @@ def _listener_opening(hook: float, intro: float) -> str:
     )
 
 
-def _listener_questions(count: int) -> str:
+def _listener_questions(count: int, *, rhetorical_heavy: bool = False) -> str:
+    if rhetorical_heavy:
+        return (
+            "Many question marks appear in the transcript — without speaker labels "
+            "these read as rhetorical narration (diary/explainer pacing), not "
+            "interviewer-led pivots."
+        )
     if count >= 18:
         return (
             "Questions arrive often — the listener experiences frequent "
@@ -194,17 +229,19 @@ def _listener_topic_arc(topic_shifts: int, template_id: str) -> str:
         )
     if template_id == "C":
         return (
-            "The episode stays focused on a single narrative thread with few "
-            "detected structural pivots — produced storytelling rather than "
-            "frequent scene changes (sub-stories may still sit inside one arc)."
+            "The episode holds one dominant narrative thread with few detected "
+            "transition markers — produced storytelling rather than frequent scene breaks "
+            "(sub-threads may still sit inside the arc)."
         )
     return (
         "Few pivot phrases or scene breaks were detected — "
-        "either one continuous thread or transitions that do not surface in the text."
+        "either one dominant narrative thread or transitions that do not surface in the text."
     )
 
 
-def _listener_balance(ratio: float) -> str:
+def _listener_balance(ratio: float, *, has_diarization: bool) -> Optional[str]:
+    if not has_diarization:
+        return None
     if 0.42 <= ratio <= 0.58:
         return (
             "Neither voice clearly dominates airtime — "
@@ -224,18 +261,37 @@ def _listener_cta(present: bool) -> Optional[str]:
     return None
 
 
+def _transition_markers_value(count: int) -> str:
+    if count == 0:
+        return "None detected"
+    return str(count)
+
+
+def _transition_markers_note(count: int) -> Optional[str]:
+    if count == 0:
+        return (
+            "No explicit transition markers in transcript — narrative continuity "
+            "likely inferred rather than segmented (measures phrasing in text, not full story beats)."
+        )
+    return f"{count} explicit transition marker(s) detected in transcript text."
+
+
 def _topic_shift_detection_note(count: int) -> Optional[str]:
     if count > 0:
         return None
     return (
-        "Topic shifts: 0 in measurement. Pivot detection uses explicit transition phrases "
-        "and paragraph breaks in the transcript — dense narrative without those cues "
-        "can read as one arc even when the story covers several sub-topics. "
+        "Transition markers: none detected in the transcript. This counts explicit pivot "
+        "phrases and breaks in text — not every sub-thread or scene change in the edit. "
         "Worth spot-checking against the audio."
     )
 
 
 def _pattern_synthesis(template_id: str, f: EpisodeFeatures) -> str:
+    if is_rhetorical_question_heavy(f):
+        return (
+            "Pattern: diary / explainer narration — question marks pace the story "
+            "but the transcript reads as one voice without labeled interview handoffs."
+        )
     if template_id == "A":
         return (
             "Pattern: extended opening before the core thread — "
@@ -257,6 +313,13 @@ def _pattern_synthesis(template_id: str, f: EpisodeFeatures) -> str:
 
 def _editorial_tradeoffs(f: EpisodeFeatures, template_id: str) -> List[str]:
     """Structural trade-offs (not quality judgments)."""
+    if is_rhetorical_question_heavy(f):
+        return [
+            "Trade-off: rhetorical questions pace the diary — momentum from narration, "
+            "not interview discovery.",
+            "Trade-off: one voice in the transcript — clarity depends on re-hooks and "
+            "orientation, not speaker handoffs.",
+        ][:2]
     hook = float(f.hook_length_seconds or 0)
     intro = float(f.intro_length_seconds or 0)
     questions = int(f.question_count or 0)
@@ -268,8 +331,9 @@ def _editorial_tradeoffs(f: EpisodeFeatures, template_id: str) -> List[str]:
     if hook < 50 and intro < 60:
         if topic <= 1:
             notes.append(
-                "Trade-off: the episode enters the story quickly and holds one arc — "
-                "clarity stays high, with few detected pivots for side-path exploration."
+                "Trade-off: the episode enters the story quickly and holds one dominant "
+                "narrative thread — clarity stays high, with few detected pivots for "
+                "side-path exploration."
             )
         else:
             notes.append(
@@ -287,7 +351,7 @@ def _editorial_tradeoffs(f: EpisodeFeatures, template_id: str) -> List[str]:
             "Trade-off: information rides on long explanation blocks rather than "
             "rapid conversational exchanges — narrative continuity over frequent handoffs."
         )
-    elif questions >= 12:
+    elif questions >= 12 and turns >= 4:
         notes.append(
             "Trade-off: frequent questions drive pacing — depth comes from follow-ups, "
             "not from long uninterrupted monologue."
@@ -313,16 +377,22 @@ def _similar_to(f: EpisodeFeatures, lib: LibraryBenchmarks, template_id: str) ->
         return (
             "Library comparison unlocks after more episodes are measured."
         )
+    if is_rhetorical_question_heavy(f):
+        return (
+            "Within your measured library, this episode has been observed in "
+            "diary/explainer narration patterns (rhetorical question pacing) "
+            "rather than labeled interview structure."
+        )
     if template_id == "C":
         return (
-            "Within your measured library, this episode aligns with narrative-led "
-            "story-first structure (explanation blocks, sparse Q&A) rather than "
-            "interview-heavy formats."
+            "Within your measured library, this episode has been observed in "
+            "narrative-led story-first patterns (explanation blocks, sparse Q&A) "
+            "rather than interview-heavy formats."
         )
     if template_id == "B":
         return (
-            "Within your measured library, this episode aligns with question-led "
-            "interview pacing rather than sparse narrative structure."
+            "Within your measured library, this episode has been observed in "
+            "question-led interview patterns rather than sparse narrative structure."
         )
     return (
         "Within your measured library, this episode is distinguished by opening "
@@ -336,7 +406,25 @@ def build_coaching_report(
     *,
     library: Optional[LibraryBenchmarks] = None,
 ) -> CoachingReport:
-    lib = library or load_library_benchmarks(db)
+    anchor_stamp = stamp_for_row(features)
+    lib_excluded = 0
+    show_excluded = 0
+
+    if library is not None:
+        lib = library
+    elif hasattr(db, "execute"):
+        lib, lib_excluded = load_library_benchmarks(db, anchor=features)
+    else:
+        lib = LibraryBenchmarks(
+            n_measured=0,
+            hook_seconds=[],
+            intro_seconds=[],
+            question_counts=[],
+            speaking_turns=[],
+            guest_ratios=[],
+            topic_shifts=[],
+        )
+
     hook = float(features.hook_length_seconds or 0)
     intro = float(features.intro_length_seconds or 0)
     questions = int(features.question_count or 0)
@@ -346,9 +434,12 @@ def build_coaching_report(
     cta = bool(features.cta_present)
 
     template_id = _template_id(features)
-    narrative_led = template_id == "C"
+    rhetorical = is_rhetorical_question_heavy(features)
+    diarized = has_speaker_diarization(features)
+    limits = transcript_limitation_notes(features)
+    narrative_led = template_id == "C" or rhetorical
     playbook = None
-    if template_id == "C":
+    if template_id == "C" and not rhetorical:
         playbook = build_template_c_playbook(
             features, library_measured=lib.n_measured
         ).to_dict()
@@ -363,25 +454,30 @@ def build_coaching_report(
         MetricRow(
             "Questions",
             str(questions),
-            benchmark_questions(questions, lib),
-            None,
+            benchmark_questions(questions, lib, rhetorical_heavy=rhetorical),
+            "Rhetorical ? in narration" if rhetorical else None,
         ),
         MetricRow(
             "Speaking turns",
-            str(turns),
-            benchmark_turns(turns, lib),
+            str(turns) if diarized else "Not detected",
+            benchmark_turns(turns, lib) if diarized else "No labeled speaker lines",
             None,
         ),
         MetricRow(
             "Guest talk ratio",
-            _fmt_ratio(ratio),
-            benchmark_guest_ratio(ratio, lib),
+            _fmt_ratio(ratio) if diarized else "Not available",
+            benchmark_guest_ratio(ratio, lib, turns=turns),
             None,
         ),
-        MetricRow("Topic shifts", str(topic_shifts), None, None),
+        MetricRow(
+            "Transition markers",
+            _transition_markers_value(topic_shifts),
+            _transition_markers_note(topic_shifts),
+            None,
+        ),
     ]
 
-    if template_id == "C":
+    if template_id == "C" and not rhetorical:
         listener = template_c_listener_experience(features)
         if cta:
             listener.append(
@@ -391,11 +487,13 @@ def build_coaching_report(
     else:
         listener = [
             _listener_opening(hook, intro),
-            _listener_questions(questions),
+            _listener_questions(questions, rhetorical_heavy=rhetorical),
             _listener_turns(turns),
             _listener_topic_arc(topic_shifts, template_id),
-            _listener_balance(ratio),
         ]
+        balance = _listener_balance(ratio, has_diarization=diarized)
+        if balance:
+            listener.append(balance)
         cta_line = _listener_cta(cta)
         if cta_line:
             listener.append(cta_line)
@@ -424,10 +522,24 @@ def build_coaching_report(
         ratio=ratio,
         lib=lib,
         narrative_led=narrative_led,
+        rhetorical_heavy=rhetorical,
+        has_diarization=diarized,
     )
 
     podcast_name = None
     variance: List[str] = []
+    leverage: List[str] = []
+    identity: List[str] = []
+    show_rows: List[EpisodeFeatures] = []
+    show_lib = LibraryBenchmarks(
+        n_measured=0,
+        hook_seconds=[],
+        intro_seconds=[],
+        question_counts=[],
+        speaking_turns=[],
+        guest_ratios=[],
+        topic_shifts=[],
+    )
     if hasattr(db, "execute"):
         episode = db.execute(
             select(Episode)
@@ -436,14 +548,85 @@ def build_coaching_report(
         ).scalar_one_or_none()
         if episode:
             podcast_name = episode.podcast.name if episode.podcast else None
-            show_lib = load_show_benchmarks(
-                db, int(episode.podcast_id), exclude_episode_id=int(features.episode_id)
+            show_rows, show_excluded = load_show_feature_rows(
+                db,
+                int(episode.podcast_id),
+                exclude_episode_id=int(features.episode_id),
+                anchor=features,
             )
+            show_lib = library_from_rows(show_rows)
             variance = structural_variance_bullets(
-                features, show_lib, podcast_name=podcast_name
+                features,
+                show_lib,
+                podcast_name=podcast_name,
+                rhetorical_heavy=rhetorical,
+                has_diarization=diarized,
+            )
+            leverage = build_feed_leverage_points(
+                features,
+                show_lib,
+                show_rows,
+                feed_name=podcast_name,
             )
 
+    if rhetorical:
+        identity = [
+            effective_form_label(template_id, features),
+            (
+                "Rhetorical question pacing in one voice — diary or explainer shape, "
+                "not labeled interview handoffs."
+            ),
+        ]
+    else:
+        identity = build_structural_identity(
+            features, template_id, playbook=playbook
+        )
+
+    cohort_excluded = lib_excluded + show_excluded
+    cohort_note_text = cohort_note(cohort_excluded)
+
+    producer = None
+    narrative_engine = None
+    if hasattr(db, "get"):
+        episode_row = db.get(Episode, features.episode_id)
+        if episode_row and (episode_row.full_transcript or "").strip():
+            seg_rows = (
+                db.query(TranscriptSegment)
+                .filter(TranscriptSegment.episode_id == features.episode_id)
+                .order_by(TranscriptSegment.start_time)
+                .all()
+            )
+            segments = [
+                {"start": r.start_time, "end": r.end_time, "text": r.text}
+                for r in seg_rows
+            ]
+            narrative_engine = build_narrative_engine_map(
+                episode_row.full_transcript,
+                segments or None,
+            ).to_dict()
+            producer = build_producer_notes(
+                episode_row.full_transcript,
+                segments or None,
+                intro_seconds=float(features.intro_length_seconds or 0),
+                topic_shift_count=int(features.topic_shift_count or 0),
+            ).to_dict()
+
+    audio_motion = None
+    if hasattr(db, "get"):
+        audio_motion = load_audio_motion(db, int(features.episode_id))
+
+    producer_view = build_producer_view(
+        structural_identity=identity,
+        leverage_points=leverage,
+        narrative_engine=narrative_engine,
+        producer_notes=producer,
+        audio_motion=audio_motion,
+        transcript_limitations=limits,
+    )
+
     report = CoachingReport(
+        structural_identity=identity,
+        leverage_points=leverage,
         episode_structure=structure,
         conversation_dynamics=dynamics,
         listener_experience=listener,
@@ -454,6 +637,12 @@ def build_coaching_report(
         what_this_means=pattern_lines,
         similar_to=similar,
         topic_shift_note=_topic_shift_detection_note(topic_shifts),
+        measurement_stamp=stamp_dict(anchor_stamp),
+        measurement_cohort_note=cohort_note_text,
+        transcript_limitations=limits,
+        narrative_engine=narrative_engine,
+        producer_notes=producer,
+        producer_view=producer_view,
     )
     _assert_no_forbidden(report)
     return report
@@ -492,18 +681,33 @@ def _assert_no_forbidden(report: CoachingReport) -> None:
     chunks.extend(report.compared_with_library)
     chunks.extend(report.editorial_tradeoffs)
     chunks.extend(report.structural_variance)
+    chunks.extend(report.structural_identity)
+    chunks.extend(report.leverage_points)
     if report.template_playbook:
         for key in ("tagline", "feels_like", "similar_form"):
             val = report.template_playbook.get(key)
             if val:
                 chunks.append(val)
-        for key in ("review_these", "how_its_built", "trade_offs"):
+        for key in ("review_these", "how_its_built", "trade_offs", "leverage_points"):
             chunks.extend(report.template_playbook.get(key) or [])
     chunks.extend(report.what_this_means)
     if report.similar_to:
         chunks.append(report.similar_to)
     if report.topic_shift_note:
         chunks.append(report.topic_shift_note)
+    if report.measurement_cohort_note:
+        chunks.append(report.measurement_cohort_note)
+    if report.narrative_engine:
+        chunks.extend(report.narrative_engine.get("engine_notes") or [])
+        for ev in report.narrative_engine.get("timeline") or []:
+            chunks.append(ev.get("detail") or "")
+    if report.producer_notes:
+        chunks.extend(report.producer_notes.get("bullets") or [])
+        chunks.extend(report.producer_notes.get("edit_flags") or [])
+        for row in report.producer_notes.get("metrics") or []:
+            for part in (row.get("note"),):
+                if part:
+                    chunks.append(part)
     for text in chunks:
         if _FORBIDDEN.search(text):
             raise RuntimeError(f"Coaching copy violated forbidden language: {text[:80]}")

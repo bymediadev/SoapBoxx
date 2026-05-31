@@ -122,10 +122,48 @@ class TemplatePlaybookRead(BaseModel):
     review_these: List[str] = []
     how_its_built: List[str] = []
     trade_offs: List[str] = []
+    leverage_points: List[str] = []
     similar_form: str
 
 
+class NarrativeEngineRead(BaseModel):
+    timeline: List[dict] = []
+    open_loops: List[dict] = []
+    engine_notes: List[str] = []
+
+
+class ProducerMetricRowRead(BaseModel):
+    metric: str
+    value: str
+    note: Optional[str] = None
+
+
+class ProducerNotesRead(BaseModel):
+    bullets: List[str] = []
+    metrics: List[ProducerMetricRowRead] = []
+    edit_flags: List[str] = []
+
+
+class MeasurementStampRead(BaseModel):
+    feature_schema_version: str
+    extraction_version: str
+    aggregation_version: str
+
+
+class ProducerViewRead(BaseModel):
+    layers: List[str] = []
+    structural_identity: List[str] = []
+    leverage_points: List[str] = []
+    motion_track: List[dict] = []
+    motion_notes: List[str] = []
+    fusion_notes: List[str] = []
+    transcript_limitations: List[str] = []
+    audio_available: bool = False
+
+
 class CoachingReportRead(BaseModel):
+    structural_identity: List[str] = []
+    leverage_points: List[str] = []
     episode_structure: List[CoachingMetricRow] = []
     conversation_dynamics: List[CoachingMetricRow] = []
     listener_experience: List[str] = []
@@ -136,6 +174,12 @@ class CoachingReportRead(BaseModel):
     what_this_means: List[str] = []
     similar_to: Optional[str] = None
     topic_shift_note: Optional[str] = None
+    measurement_stamp: Optional[MeasurementStampRead] = None
+    measurement_cohort_note: Optional[str] = None
+    transcript_limitations: List[str] = []
+    narrative_engine: Optional[NarrativeEngineRead] = None
+    producer_notes: Optional[ProducerNotesRead] = None
+    producer_view: Optional[ProducerViewRead] = None
 
 
 class TranslationRead(BaseModel):
@@ -188,3 +232,11 @@ class ProcessBatchResponse(BaseModel):
     succeeded: int
     failed: int
     results: list[dict]
+
+
+class BacklogDispatchResponse(BaseModel):
+    pending: int
+    dispatched: int
+    processed: int
+    mode: str
+    episode_ids: list[int] = []

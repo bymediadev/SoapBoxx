@@ -35,6 +35,26 @@ def process_episode_task(episode_id: int) -> dict:
         db.close()
 
 
+@celery_app.task(name="soapboxx.process_pending_queue")
+def process_pending_queue_task() -> dict:
+    """Drain backlog — episodes ingested but never translated (e.g. existing library)."""
+    from backend.api.config import get_settings
+    from backend.api.deps import get_session_factory
+    from backend.services.episode_pipeline_service import drain_pending_pipeline
+
+    settings = get_settings()
+    db = get_session_factory()()
+    try:
+        return drain_pending_pipeline(
+            db,
+            limit=settings.pipeline_batch_size,
+            trigger="celery_beat",
+            prefer_celery=False,
+        )
+    finally:
+        db.close()
+
+
 @celery_app.task(name="soapboxx.sync_rss_feeds")
 def sync_rss_feeds_task() -> dict:
     from backend.api.deps import get_session_factory

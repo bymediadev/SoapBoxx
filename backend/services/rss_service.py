@@ -484,4 +484,21 @@ def sync_saved_rss_feeds(
                 }
             )
 
+    if dispatch_processing:
+        from backend.api.config import get_settings
+        from backend.services.episode_pipeline_service import drain_pending_pipeline
+
+        settings = get_settings()
+        backlog = drain_pending_pipeline(
+            db,
+            limit=settings.pipeline_sync_batch_size,
+            trigger="rss_sync_backlog",
+            prefer_celery=True,
+        )
+        summary.episodes_dispatched += backlog.get("dispatched", 0) + backlog.get(
+            "processed", 0
+        )
+        if backlog.get("mode") != "none":
+            summary.results.append({"backlog_drain": backlog})
+
     return summary

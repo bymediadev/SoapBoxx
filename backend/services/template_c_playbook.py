@@ -14,7 +14,7 @@ _FORBIDDEN = re.compile(
     re.I,
 )
 
-FORM_NAME = "Narrative documentary"
+FORM_NAME = "Narrative documentary (structural pattern)"
 TEMPLATE_ID = "C"
 
 
@@ -27,6 +27,7 @@ class TemplateCPlaybook:
     review_these: List[str]
     how_its_built: List[str]
     trade_offs: List[str]
+    leverage_points: List[str]
     similar_form: str
 
     def to_dict(self) -> dict:
@@ -38,6 +39,7 @@ class TemplateCPlaybook:
             "review_these": list(self.review_these),
             "how_its_built": list(self.how_its_built),
             "trade_offs": list(self.trade_offs),
+            "leverage_points": list(self.leverage_points),
             "similar_form": self.similar_form,
         }
 
@@ -66,8 +68,8 @@ def build_template_c_playbook(
     cta = bool(f.cta_present)
 
     tagline = (
-        "One story, sparse Q&A, long explanation blocks — built for listeners "
-        "who stay for the through-line, not rapid back-and-forth."
+        "One dominant narrative thread, sparse Q&A, long explanation blocks — built "
+        "for listeners who stay for the through-line, not rapid back-and-forth."
     )
 
     feels_like = (
@@ -118,8 +120,8 @@ def build_template_c_playbook(
 
     if topic <= 1:
         how_built.append(
-            "One detected arc in the transcript — sub-stories may sit inside a single "
-            "thread rather than as explicit scene changes."
+            "No explicit transition markers in the transcript — one dominant narrative "
+            "thread on the text; sub-beats or scene changes may still exist in the edit."
         )
 
     if cta:
@@ -168,7 +170,8 @@ def build_template_c_playbook(
 
     if hook < 50 and intro < 60 and topic <= 1:
         trade_offs.append(
-            "Quick entry + single arc: clarity is high; side-path exploration stays minimal."
+            "Quick entry + dominant thread: clarity stays high; side-path exploration "
+            "stays minimal."
         )
 
     if questions <= 6 and turns <= 12:
@@ -179,18 +182,21 @@ def build_template_c_playbook(
 
     if not trade_offs:
         trade_offs.append(
-            "Story-first structure trades rapid pivots for a single through-line."
+            "Story-first structure trades rapid pivots for a dominant through-line."
         )
+
+    leverage: List[str] = []
 
     if library_measured >= 3:
         similar = (
-            "In your measured library, this shape matches narrative documentary episodes "
-            "(sparse Q&A, long segments) rather than interview-heavy formats."
+            "In your measured library, this shape has been observed among narrative "
+            "documentary episodes (sparse Q&A, long segments) rather than "
+            "interview-heavy formats."
         )
     else:
         similar = (
-            "This matches the narrative documentary form — measure more episodes to "
-            "compare against your own catalog."
+            "This shape has been observed in the narrative documentary band — measure "
+            "more episodes to compare against your own catalog."
         )
 
     playbook = TemplateCPlaybook(
@@ -201,6 +207,7 @@ def build_template_c_playbook(
         review_these=review[:4],
         how_its_built=how_built[:5],
         trade_offs=trade_offs[:3],
+        leverage_points=leverage,
         similar_form=similar,
     )
     _assert_no_forbidden(playbook)
@@ -242,13 +249,13 @@ def template_c_listener_experience(f: EpisodeFeatures) -> List[str]:
 
     if topic <= 1:
         lines.append(
-            "The episode reads as one continuous story on the transcript — "
-            "few hard scene breaks, even if sub-stories live inside the arc."
+            "The transcript reads as one dominant narrative thread — few explicit "
+            "transition markers, even if sub-stories or scene changes exist in the edit."
         )
 
     lines.append(
         "If you've listened to Planet Money or similar explainers, this is that shape: "
-        "one thread, reporter voice, sparse Q&A."
+        "a dominant thread, reporter voice, sparse Q&A."
     )
 
     return lines[:5]
@@ -260,6 +267,7 @@ def _assert_no_forbidden(playbook: TemplateCPlaybook) -> None:
         + playbook.review_these
         + playbook.how_its_built
         + playbook.trade_offs
+        + playbook.leverage_points
     )
     for text in chunks:
         if _FORBIDDEN.search(text):

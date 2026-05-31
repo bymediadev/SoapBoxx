@@ -38,6 +38,14 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173"
     )
     auto_process_on_ingest: bool = True
+    # Celery beat: drain episodes missing translation (0 = disabled)
+    pipeline_drain_minutes: int = 5
+    pipeline_batch_size: int = 2
+    # After RSS sync / cron — also drain backlog (sync if no worker)
+    pipeline_sync_batch_size: int = 5
+    auto_audio_motion_on_process: bool = True
+    # On API boot (Railway): dispatch N pending episodes to Celery (0 = off)
+    pipeline_boot_dispatch_limit: int = 0
     rss_sync_minutes: int = 180
 
     @field_validator("database_url", mode="before")

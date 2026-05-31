@@ -37,7 +37,11 @@ def test_features_created(v1_db_clean):
     try:
         eid = seed_episode_with_transcript(db)
         run_feature_extraction(db, eid)
-        assert db.get(EpisodeFeatures, eid) is not None
+        row = db.get(EpisodeFeatures, eid)
+        assert row is not None
+        assert row.feature_schema_version == "v1"
+        assert row.extraction_version == "1.0.0"
+        assert row.aggregation_version == "1.2.0"
     finally:
         db.close()
 

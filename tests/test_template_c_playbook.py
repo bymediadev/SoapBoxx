@@ -28,8 +28,7 @@ def _planet_money_factory_town() -> EpisodeFeatures:
 
 def test_playbook_has_actionable_review_prompts():
     pb = build_template_c_playbook(_planet_money_factory_town(), library_measured=4)
-    assert pb.form == "Narrative documentary"
-    assert pb.review_these
+    assert pb.form == "Narrative documentary (structural pattern)"
     assert any("replay" in r.lower() for r in pb.review_these)
     assert any("question" in r.lower() for r in pb.review_these)
     assert pb.how_its_built
@@ -48,7 +47,7 @@ def test_listener_experience_relatable_not_metric_dump():
     assert "questions: 3" not in blob
 
 
-def test_coaching_report_includes_template_playbook():
+def test_coaching_report_includes_measurement_stamp():
     lib = LibraryBenchmarks(
         n_measured=4,
         hook_seconds=[30.0, 50.0, 70.0, 90.0],
@@ -62,12 +61,21 @@ def test_coaching_report_includes_template_playbook():
     class _FakeSession:
         pass
 
+    f = _planet_money_factory_town()
+    f.feature_schema_version = "v1"
+    f.extraction_version = "1.0.0"
+    f.aggregation_version = "1.2.0"
+
     report = build_coaching_report(
-        _FakeSession(), _planet_money_factory_town(), library=lib
+        _FakeSession(), f, library=lib
     )
+    assert report.measurement_stamp["feature_schema_version"] == "v1"
+    assert report.measurement_stamp["aggregation_version"] == "1.2.0"
     assert report.template_playbook is not None
-    assert report.template_playbook["form"] == "Narrative documentary"
+    assert report.template_playbook["form"] == "Narrative documentary (structural pattern)"
     assert len(report.template_playbook["review_these"]) >= 3
+    assert report.structural_identity
+    assert len(report.structural_identity) <= 2
     blob = " ".join(
         report.template_playbook["review_these"]
         + report.template_playbook["how_its_built"]

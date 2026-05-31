@@ -12,6 +12,7 @@ from backend.models import Episode, EpisodeFeatures, EpisodeTranslation, Transcr
 from backend.services.feature_service import run_feature_extraction
 from backend.services.transcription_service import transcribe_episode
 from backend.services.translation_service import run_translation
+from backend.services.pipeline_status import STATUS_FAILED
 
 
 @dataclass
@@ -155,6 +156,10 @@ def run_episode_pipeline(
         }
     )
 
+    audio_step = _maybe_run_audio_motion(db, episode_id, episode)
+    if audio_step is not None:
+        steps.append({"step": "audio_motion", **audio_step})
+
     db.refresh(episode)
     final = "ready" if db.get(EpisodeTranslation, episode_id) else "measured"
 
@@ -168,6 +173,100 @@ def run_episode_pipeline(
         insight_preview=preview,
         transcript_source=transcript_source,
     )
+
+
+def _maybe_run_audio_motion(db: Session, episode_id: int, episode: Episode) -> Optional[dict]:
+    """Optional Layer 2 — parallel to transcript pipeline; failures do not abort."""
+    from backend.api.config import get_settings
+    from backend.models import EpisodeAudioMotion
+
+    settings = get_settings()
+    if not settings.auto_audio_motion_on_process:
+        return None
+    if not (episode.audio_url or "").strip():
+        return {"ok": True, "skipped": True, "reason": "no_audio_url"}
+    if db.get(EpisodeAudioMotion, episode_id):
+        return {"ok": True, "skipped": True, "reason": "existing"}
+
+    t0 = time.perf_counter()
+    try:
+        from backend.services.audio_motion_service import run_audio_motion_extraction
+
+        run_audio_motion_extraction(db, episode_id)
+        _log_pipeline_step(
+            episode_id, "audio_motion", duration_ms=(time.perf_counter() - t0) * 1000
+        )
+        return {"ok": True, "skipped": False}
+    except Exception as exc:
+        _log_pipeline_step(
+            episode_id, "audio_motion", duration_ms=(time.perf_counter() - t0) * 1000
+        )
+        return {"ok": False, "skipped": False, "error": str(exc)}
+
+
+def find_pending_episode_ids(db: Session, *, limit: int = 10) -> List[int]:
+    """Episodes ingested but not yet fully processed (no translation)."""
+    cap = max(1, min(limit, 25))
+    rows = (
+        db.query(Episode.id)
+        .outerjoin(EpisodeTranslation, EpisodeTranslation.episode_id == Episode.id)
+        .filter(EpisodeTranslation.episode_id.is_(None))
+        .filter(Episode.pipeline_status != STATUS_FAILED)
+        .order_by(Episode.id.asc())
+        .limit(cap)
+        .all()
+    )
+    return [int(row[0]) for row in rows]
+
+
+def drain_pending_pipeline(
+    db: Session,
+    *,
+    limit: int,
+    trigger: str,
+    prefer_celery: bool = True,
+    exclude_episode_ids: Optional[List[int]] = None,
+) -> Dict[str, Any]:
+    """
+    Queue or run pipeline for backlog episodes (e.g. Planet Money already in DB).
+
+    Uses Celery when Redis + worker are available; otherwise processes synchronously
+    (cron / local without worker).
+    """
+    exclude = set(exclude_episode_ids or [])
+    pending_ids = [eid for eid in find_pending_episode_ids(db, limit=limit) if eid not in exclude]
+    if not pending_ids:
+        return {"pending": 0, "dispatched": 0, "processed": 0, "mode": "none"}
+
+    if prefer_celery:
+        from backend.services.rss_service import dispatch_processing_for_episodes
+
+        dispatched = dispatch_processing_for_episodes(db, pending_ids, trigger=trigger)
+        if dispatched:
+            return {
+                "pending": len(pending_ids),
+                "dispatched": len(dispatched),
+                "processed": 0,
+                "mode": "celery",
+                "episode_ids": dispatched,
+            }
+
+    results: List[Dict[str, Any]] = []
+    for eid in pending_ids:
+        try:
+            out = run_episode_pipeline(db, eid)
+            results.append({"episode_id": eid, "ok": True, "status": out.status})
+        except Exception as exc:
+            results.append({"episode_id": eid, "ok": False, "error": str(exc)})
+
+    processed = sum(1 for r in results if r.get("ok"))
+    return {
+        "pending": len(pending_ids),
+        "dispatched": 0,
+        "processed": processed,
+        "mode": "sync",
+        "results": results,
+    }
 
 
 def process_queued_episodes(

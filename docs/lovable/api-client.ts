@@ -130,10 +130,73 @@ export type TemplatePlaybook = {
   review_these: string[];
   how_its_built: string[];
   trade_offs: string[];
+  leverage_points: string[];
   similar_form: string;
 };
 
+export type NarrativeEngineMap = {
+  timeline: {
+    time_seconds: number;
+    time_label: string;
+    event_type: string;
+    label: string;
+    detail: string;
+  }[];
+  open_loops: {
+    opened_at: number;
+    opened_label: string;
+    closed_at?: number | null;
+    closed_label?: string | null;
+    lifespan_seconds?: number | null;
+    lifespan_label: string;
+    snippet: string;
+    status: string;
+  }[];
+  engine_notes: string[];
+};
+
+export type ProducerNotes = {
+  bullets: string[];
+  metrics: { metric: string; value: string; note?: string | null }[];
+  edit_flags: string[];
+};
+
+export type AudioEventType =
+  | "energy_spike"
+  | "energy_drop"
+  | "silence_cluster"
+  | "pace_shift";
+
+export type AudioEvent = {
+  timestamp: number;
+  type: AudioEventType;
+  intensity: number;
+  window_start?: number;
+  window_end?: number;
+  time_label?: string;
+  label?: string;
+};
+
+export type ProducerView = {
+  layers: string[];
+  structural_identity: string[];
+  leverage_points: string[];
+  motion_track: AudioEvent[];
+  motion_notes: string[];
+  fusion_notes: string[];
+  transcript_limitations: string[];
+  audio_available: boolean;
+};
+
+export type MeasurementStamp = {
+  feature_schema_version: string;
+  extraction_version: string;
+  aggregation_version: string;
+};
+
 export type CoachingReport = {
+  structural_identity: string[];
+  leverage_points: string[];
   episode_structure: CoachingMetricRow[];
   conversation_dynamics: CoachingMetricRow[];
   listener_experience: string[];
@@ -144,6 +207,12 @@ export type CoachingReport = {
   what_this_means: string[];
   similar_to?: string | null;
   topic_shift_note?: string | null;
+  measurement_stamp?: MeasurementStamp | null;
+  measurement_cohort_note?: string | null;
+  transcript_limitations?: string[];
+  narrative_engine?: NarrativeEngineMap | null;
+  producer_notes?: ProducerNotes | null;
+  producer_view?: ProducerView | null;
 };
 
 export type TranslationDetail = {
@@ -219,6 +288,10 @@ export const soapboxxApi = {
       method: "POST",
       body: JSON.stringify(body ?? {}),
     }),
+
+  /** Layer 2 — optional audio motion extraction (parallel to transcript pipeline). */
+  extractAudioMotion: (id: number) =>
+    api<void>(`/episodes/${id}/audio-motion`, { method: "POST" }),
 
   /** Process up to `limit` episodes missing translation (max 10). */
   processQueued: (limit = 1) =>

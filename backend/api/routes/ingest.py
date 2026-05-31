@@ -42,10 +42,22 @@ def ingest_rss(body: RssIngestRequest, db: Session = Depends(get_db)) -> RssInge
         if settings.auto_process_on_ingest and result.created_episode_ids
         else []
     )
+    backlog_dispatched = 0
+    if settings.auto_process_on_ingest:
+        from backend.services.episode_pipeline_service import drain_pending_pipeline
+
+        backlog = drain_pending_pipeline(
+            db,
+            limit=settings.pipeline_sync_batch_size,
+            trigger="rss_ingest_backlog",
+            prefer_celery=True,
+            exclude_episode_ids=dispatched_ids,
+        )
+        backlog_dispatched = backlog.get("dispatched", 0) + backlog.get("processed", 0)
     return RssIngestResponse(
         podcast_id=result.podcast_id,
         episodes_created=result.created,
         episodes_skipped=result.skipped,
-        episodes_dispatched=len(dispatched_ids),
+        episodes_dispatched=len(dispatched_ids) + backlog_dispatched,
         episode_ids=result.episode_ids,
     )

@@ -29,6 +29,11 @@ def _on_railway() -> bool:
     )
 
 
+def _apply_railway_pipeline_defaults() -> None:
+    if _on_railway() and "PIPELINE_BOOT_DISPATCH_LIMIT" not in os.environ:
+        os.environ["PIPELINE_BOOT_DISPATCH_LIMIT"] = "150"
+
+
 def _log_database_url() -> None:
     url = os.environ.get("DATABASE_URL", "").strip()
     if not url:
@@ -135,6 +140,7 @@ def _verify_asgi_import() -> None:
 
 def main() -> None:
     print("=== SoapBoxx boot ===", flush=True)
+    _apply_railway_pipeline_defaults()
     _log_database_url()
     _guard_database_url()
     wait_rc = _wait_for_database()

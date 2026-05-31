@@ -151,6 +151,17 @@ def transcribe_episode_endpoint(
     )
 
 
+@router.post("/{episode_id}/audio-motion", status_code=status.HTTP_204_NO_CONTENT)
+def extract_audio_motion_endpoint(episode_id: int, db: Session = Depends(get_db)) -> None:
+    """Layer 2 — optional parallel audio motion extraction (does not alter Layer 1)."""
+    from backend.services.audio_motion_service import run_audio_motion_extraction
+
+    try:
+        run_audio_motion_extraction(db, episode_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
 @router.get("/{episode_id}/features", response_model=EpisodeFeaturesRead)
 def get_features_endpoint(
     episode_id: int, db: Session = Depends(get_db)

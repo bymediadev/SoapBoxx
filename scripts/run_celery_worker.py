@@ -32,6 +32,16 @@ def main() -> int:
     if concurrency:
         cmd.extend(["--concurrency", concurrency])
 
+    from backend.api.config import get_settings
+
+    settings = get_settings()
+    enable_beat = (os.environ.get("SOAPBOXX_ENABLE_BEAT") or "").strip().lower()
+    use_beat = enable_beat not in ("0", "false", "no")
+    if use_beat and (
+        settings.pipeline_drain_minutes > 0 or settings.rss_sync_minutes > 0
+    ):
+        cmd.append("-B")
+
     print(
         (
             "Starting SoapBoxx worker "

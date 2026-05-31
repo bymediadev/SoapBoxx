@@ -133,6 +133,10 @@ def test_ingest_rss_api(v1_client, v1_db_clean, monkeypatch):
         )
         or list(episode_ids),
     )
+    monkeypatch.setattr(
+        "backend.services.episode_pipeline_service.drain_pending_pipeline",
+        lambda db, **kwargs: {"mode": "none", "dispatched": 0, "processed": 0},
+    )
 
     r = v1_client.post("/ingest/rss", json={"rss_url": RSS_URL})
     assert r.status_code == 201

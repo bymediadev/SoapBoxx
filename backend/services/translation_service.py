@@ -25,15 +25,7 @@ class TranslationResult:
     insight_text: str
 
 
-def _template_id_from_features(f: EpisodeFeatures) -> str:
-    hook = float(f.hook_length_seconds or 0)
-    intro = float(f.intro_length_seconds or 0)
-    questions = int(f.question_count or 0)
-    if intro >= 120 or hook >= 90:
-        return "A"
-    if questions >= 12:
-        return "B"
-    return "C"
+from backend.services.template_classification import template_id_from_features
 
 
 def run_translation(db: Session, episode_id: int) -> TranslationResult:
@@ -45,7 +37,7 @@ def run_translation(db: Session, episode_id: int) -> TranslationResult:
         raise ValueError("Episode has no features; run feature extraction first")
 
     report = build_coaching_report(db, features)
-    template_id = _template_id_from_features(features)
+    template_id = template_id_from_features(features)
     text = synthesis_insight_text(report)
 
     row = db.get(EpisodeTranslation, episode_id)

@@ -9,15 +9,20 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.models import Episode, EpisodeFeatures
-from backend.services.library_benchmarks import LibraryBenchmarks
+from backend.services.library_benchmarks import LibraryBenchmarks, library_from_rows
+from backend.services.measurement_versions import filter_comparable_rows, stamp_for_row
 
 MIN_SHOW_EPISODES = 2
 
 
-def load_show_benchmarks(
-    db: Session, podcast_id: int, *, exclude_episode_id: int
-) -> LibraryBenchmarks:
-    rows = (
+def load_show_feature_rows(
+    db: Session,
+    podcast_id: int,
+    *,
+    exclude_episode_id: int,
+    anchor: Optional[EpisodeFeatures] = None,
+) -> tuple[List[EpisodeFeatures], int]:
+    rows = list(
         db.execute(
             select(EpisodeFeatures)
             .join(Episode, Episode.id == EpisodeFeatures.episode_id)
@@ -29,15 +34,26 @@ def load_show_benchmarks(
         .scalars()
         .all()
     )
-    return LibraryBenchmarks(
-        n_measured=len(rows),
-        hook_seconds=[float(r.hook_length_seconds or 0) for r in rows],
-        intro_seconds=[float(r.intro_length_seconds or 0) for r in rows],
-        question_counts=[int(r.question_count or 0) for r in rows],
-        speaking_turns=[int(r.speaking_turns or 0) for r in rows],
-        guest_ratios=[float(r.host_guest_ratio or 0.5) for r in rows],
-        topic_shifts=[int(r.topic_shift_count or 0) for r in rows],
+    stamp = stamp_for_row(anchor)
+    kept, excluded = filter_comparable_rows(rows, stamp)
+    return kept, excluded
+
+
+def load_show_benchmarks(
+    db: Session,
+    podcast_id: int,
+    *,
+    exclude_episode_id: int,
+    anchor: Optional[EpisodeFeatures] = None,
+) -> tuple[LibraryBenchmarks, int]:
+    rows, excluded = load_show_feature_rows(
+        db,
+        podcast_id,
+        exclude_episode_id=exclude_episode_id,
+        anchor=anchor,
     )
+    lib = library_from_rows(rows)
+    return lib, excluded
 
 
 def structural_variance_bullets(
@@ -45,6 +61,8 @@ def structural_variance_bullets(
     show: LibraryBenchmarks,
     *,
     podcast_name: Optional[str] = None,
+    rhetorical_heavy: bool = False,
+    has_diarization: bool = True,
 ) -> List[str]:
     """
     Observable differences vs the same show's measured catalog (not audience outcomes).
@@ -73,7 +91,7 @@ def structural_variance_bullets(
             bullets.append(f"Longest opening hook {ctx}.")
 
     avg_q = show.avg_questions
-    if avg_q > 0:
+    if avg_q > 0 and not rhetorical_heavy:
         if questions >= avg_q * 1.35:
             bullets.append(
                 f"More question-led than your typical measured episode from {label}."
@@ -83,6 +101,11 @@ def structural_variance_bullets(
                 f"More narrative-led (fewer questions) than your typical measured "
                 f"episode from {label}."
             )
+    elif rhetorical_heavy:
+        bullets.append(
+            f"More rhetorical question marks in narration than typical interview-led "
+            f"episodes from {label} — diary/explainer read."
+        )
 
     avg_t = show.avg_turns
     if avg_t > 0:
@@ -94,9 +117,9 @@ def structural_variance_bullets(
             bullets.append(f"More frequent handoffs than usual {ctx}.")
 
     if show.topic_shifts is not None and topic <= min(show.topic_shifts):
-        bullets.append(f"Most focused single-topic measurement {ctx} (fewest pivot markers).")
+        bullets.append(f"Most focused dominant-thread measurement {ctx} (fewest transition markers in text).")
 
-    if show.guest_ratios:
+    if show.guest_ratios and has_diarization:
         if 0.42 <= ratio <= 0.58 and (
             ratio < min(show.guest_ratios) + 0.05 or ratio > max(show.guest_ratios) - 0.05
         ):

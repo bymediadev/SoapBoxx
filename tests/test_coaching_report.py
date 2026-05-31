@@ -59,8 +59,11 @@ def test_narrative_episode_coaching_bullets():
     listener = " ".join(report.listener_experience).lower()
     assert "reporter" in listener or "documentary" in listener or "planet money" in listener
     assert report.template_playbook
+    assert report.structural_identity
     assert report.similar_to
     assert report.episode_structure[0].benchmark
+    assert report.producer_view is not None
+    assert report.producer_view["audio_available"] is False
 
 
 def test_small_library_avoids_hard_percentiles():

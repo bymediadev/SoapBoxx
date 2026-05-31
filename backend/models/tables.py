@@ -80,6 +80,31 @@ class Episode(Base):
     translation: Mapped[Optional["EpisodeTranslation"]] = relationship(
         back_populates="episode", uselist=False, cascade="all, delete-orphan"
     )
+    audio_motion: Mapped[Optional["EpisodeAudioMotion"]] = relationship(
+        back_populates="episode", uselist=False, cascade="all, delete-orphan"
+    )
+
+
+class EpisodeAudioMotion(Base):
+    """Layer 2 — delivery motion events (optional, parallel to episode_features)."""
+
+    __tablename__ = "episode_audio_motion"
+
+    episode_id: Mapped[int] = mapped_column(
+        ForeignKey("episodes.id", ondelete="CASCADE"), primary_key=True
+    )
+    extractor_version: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="1.0.0"
+    )
+    events_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    episode: Mapped["Episode"] = relationship(back_populates="audio_motion")
 
 
 class SystemEvent(Base):
@@ -131,6 +156,15 @@ class EpisodeFeatures(Base):
     host_guest_ratio: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     topic_shift_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     cta_present: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    feature_schema_version: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="v1"
+    )
+    extraction_version: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="1.0.0"
+    )
+    aggregation_version: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="1.0.0"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

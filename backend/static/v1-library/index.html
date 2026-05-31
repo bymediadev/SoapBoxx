@@ -742,22 +742,57 @@
             We show how the episode is built — not a quality verdict.
             Structure signals only; not audience prediction.
           </p>
+          <p id="detailCohortNote" class="topic-note" style="display:none"></p>
+          <p id="detailMeasurementStamp" class="card-hint" style="display:none;margin-top:0"></p>
+          <p id="detailTranscriptLimits" class="topic-note" style="display:none"></p>
           <div id="detailCoaching" style="display:none">
             <p class="report-version">Coaching report · v2</p>
-            <p id="detailLead" class="listener-lead" style="display:none"></p>
-            <div id="detailStructure" class="report-section">
-              <h3 class="font-serif">Episode structure</h3>
-              <table class="coaching-table" id="detailStructureTable"></table>
+            <div id="detailIdentity" class="report-section">
+              <h3 class="font-serif">Structural identity</h3>
+              <div id="detailIdentityLines" class="identity-lines"></div>
             </div>
-            <div id="detailDynamics" class="report-section">
-              <h3 class="font-serif">Conversation dynamics</h3>
-              <table class="coaching-table" id="detailDynamicsTable"></table>
+            <div id="detailLeverage" class="report-section" style="display:none">
+              <h3 class="font-serif">Leverage points</h3>
+              <p class="card-hint" style="margin-top:0">Named structural bands on your feed — observed partitions, not rankings or advice.</p>
+              <ul id="detailLeverageList" class="coaching-list"></ul>
             </div>
-            <div id="detailListener" class="report-section">
-              <h3 class="font-serif">Listener experience</h3>
-              <ul id="detailListenerList" class="coaching-list"></ul>
-              <p id="detailTopicNote" class="topic-note" style="display:none"></p>
+            <div id="detailNarrativeEngine" class="report-section" style="display:none">
+              <h3 class="font-serif">Narrative engine</h3>
+              <p class="card-hint" style="margin-top:0">Within-episode tension map — what the listener is still waiting for, minute by minute. Not a category trend.</p>
+              <ul id="detailEngineNotes" class="coaching-list"></ul>
+              <h4 class="font-serif" style="font-size:0.9rem;margin:16px 0 6px">Timeline</h4>
+              <ul id="detailEngineTimeline" class="coaching-list engine-timeline"></ul>
+              <h4 class="font-serif" style="font-size:0.9rem;margin:16px 0 6px">Open loops</h4>
+              <ul id="detailEngineLoops" class="coaching-list"></ul>
             </div>
+            <div id="detailProducer" class="report-section" style="display:none">
+              <h3 class="font-serif">Pacing pressure</h3>
+              <p class="card-hint" style="margin-top:0">Segment length and re-hook spacing — editing rhythm, not narrative completion.</p>
+              <ul id="detailProducerBullets" class="coaching-list"></ul>
+              <table class="coaching-table" id="detailProducerTable"></table>
+              <h4 class="font-serif" style="font-size:0.9rem;margin:16px 0 6px">Edit flags</h4>
+              <ul id="detailProducerFlags" class="coaching-list"></ul>
+            </div>
+            <div id="detailMotionTrack" class="report-section" style="display:none">
+              <h3 class="font-serif">Producer motion track</h3>
+              <p class="card-hint" style="margin-top:0">Discrete delivery moments — energy, pauses, pace shifts. Event stream overlay; transcript structure unchanged.</p>
+              <ul id="detailMotionNotes" class="coaching-list"></ul>
+              <ul id="detailMotionTimeline" class="coaching-list engine-timeline"></ul>
+              <ul id="detailMotionFusion" class="coaching-list"></ul>
+              <p id="detailMotionUnavailable" class="card-hint" style="display:none;margin-top:8px">No audio motion yet — run POST /episodes/{id}/audio-motion when audio is available.</p>
+            </div>
+            <details class="report-details" id="detailFingerprintsWrap">
+              <summary>Structural fingerprints (detail)</summary>
+              <div id="detailStructure" class="report-section">
+                <h3 class="font-serif">Episode structure</h3>
+                <table class="coaching-table" id="detailStructureTable"></table>
+              </div>
+              <div id="detailDynamics" class="report-section">
+                <h3 class="font-serif">Conversation dynamics</h3>
+                <p class="card-hint" style="margin-top:0">Skeleton metrics — questions and turns are one signal among many.</p>
+                <table class="coaching-table" id="detailDynamicsTable"></table>
+              </div>
+            </details>
             <div id="detailCompared" class="report-section">
               <h3 class="font-serif">Compared with your library</h3>
               <ul id="detailComparedList" class="coaching-list"></ul>
@@ -767,12 +802,19 @@
               <p class="card-hint" style="margin-top:0">How this episode differs from other measured episodes on the same feed.</p>
               <ul id="detailVarianceList" class="coaching-list"></ul>
             </div>
+            <div id="detailListener" class="report-section">
+              <h3 class="font-serif">Listener experience</h3>
+              <ul id="detailListenerList" class="coaching-list"></ul>
+              <p id="detailTopicNote" class="topic-note" style="display:none"></p>
+            </div>
             <div id="detailEditorial" class="report-section">
               <h3 class="font-serif">Editorial trade-offs</h3>
               <ul id="detailEditorialList" class="coaching-list"></ul>
             </div>
+            <p id="detailLead" class="listener-lead" style="display:none" aria-hidden="true"></p>
             <div id="detailPlaybook" class="report-section" style="display:none">
-              <h3 class="font-serif"><span id="detailFormName">Narrative documentary</span> <span id="detailTemplate" class="pill"></span></h3>
+              <h3 class="font-serif"><span id="detailFormName">Narrative documentary</span></h3>
+              <span id="detailTemplate" class="pill" style="display:none" aria-hidden="true"></span>
               <p id="detailPlaybookTagline" class="listener-lead" style="margin-top:8px"></p>
               <p id="detailPlaybookFeels" class="card-hint" style="margin-bottom:12px"></p>
               <h4 class="font-serif" style="font-size:0.9rem;margin:12px 0 6px">How it's built</h4>
@@ -1042,7 +1084,7 @@
         .join("");
 
       const shapeRows = [
-        ["Topic shifts", features.topic_shift_count],
+        ["Transition markers", features.topic_shift_count == null ? "—" : (features.topic_shift_count === 0 ? "None detected" : features.topic_shift_count)],
         ["CTA present", features.cta_present == null ? "—" : features.cta_present ? "yes" : "no"],
         ["Speaking turns", features.speaking_turns],
       ];
@@ -1059,7 +1101,7 @@
         ["Questions", features.question_count],
         ["Turns", features.speaking_turns],
         ["Guest talk ratio", features.host_guest_ratio],
-        ["Topic shifts", features.topic_shift_count],
+        ["Transition markers", features.topic_shift_count == null ? "—" : (features.topic_shift_count === 0 ? "None detected" : features.topic_shift_count)],
         ["CTA", features.cta_present == null ? "—" : features.cta_present ? "yes" : "no"],
       ];
       allEl.innerHTML = allRows
@@ -1125,6 +1167,125 @@
         opening.style.display = "none";
         shape.style.display = "none";
 
+        const limits = report.transcript_limitations || [];
+        const limitsEl = document.getElementById("detailTranscriptLimits");
+        if (limits.length) {
+          limitsEl.textContent = limits.join(" ");
+          limitsEl.style.display = "block";
+        } else {
+          limitsEl.style.display = "none";
+        }
+
+        const identity = report.structural_identity || [];
+        const identityEl = document.getElementById("detailIdentity");
+        if (identity.length) {
+          identityEl.style.display = "block";
+          document.getElementById("detailIdentityLines").innerHTML = identity
+            .map((line) => `<p class="identity-line">${esc(line)}</p>`)
+            .join("");
+        } else {
+          identityEl.style.display = "none";
+        }
+
+        const cohortNote = document.getElementById("detailCohortNote");
+        if (report.measurement_cohort_note) {
+          cohortNote.textContent = report.measurement_cohort_note;
+          cohortNote.style.display = "block";
+        } else {
+          cohortNote.style.display = "none";
+        }
+        const stampEl = document.getElementById("detailMeasurementStamp");
+        const stamp = report.measurement_stamp;
+        if (stamp && stamp.feature_schema_version) {
+          stampEl.textContent =
+            `Measurement schema ${stamp.feature_schema_version} · extraction ${stamp.extraction_version} · aggregation ${stamp.aggregation_version}`;
+          stampEl.style.display = "block";
+        } else {
+          stampEl.style.display = "none";
+        }
+
+        const leverage = report.leverage_points || [];
+        const leverageEl = document.getElementById("detailLeverage");
+        if (leverage.length) {
+          leverageEl.style.display = "block";
+          document.getElementById("detailLeverageList").innerHTML = leverage
+            .map((b) => `<li>${esc(b)}</li>`)
+            .join("");
+        } else {
+          leverageEl.style.display = "none";
+        }
+
+        const engine = report.narrative_engine;
+        const engineEl = document.getElementById("detailNarrativeEngine");
+        if (engine && (engine.timeline?.length || engine.engine_notes?.length)) {
+          engineEl.style.display = "block";
+          document.getElementById("detailEngineNotes").innerHTML = (engine.engine_notes || [])
+            .map((b) => `<li>${esc(b)}</li>`)
+            .join("");
+          document.getElementById("detailEngineTimeline").innerHTML = (engine.timeline || [])
+            .map(
+              (e) =>
+                `<li><span class="engine-time">${esc(e.time_label)}</span> — ${esc(e.label)}<span class="engine-detail">${esc(e.detail ? ": " + e.detail : "")}</span></li>`
+            )
+            .join("");
+          document.getElementById("detailEngineLoops").innerHTML = (engine.open_loops || [])
+            .map(
+              (l) =>
+                `<li>${esc(l.opened_label)} → ${esc(l.lifespan_label)} · ${esc(l.status)} · ${esc(l.snippet)}</li>`
+            )
+            .join("");
+        } else {
+          engineEl.style.display = "none";
+        }
+
+        const producer = report.producer_notes;
+        const producerEl = document.getElementById("detailProducer");
+        if (producer && (producer.bullets?.length || producer.metrics?.length)) {
+          producerEl.style.display = "block";
+          document.getElementById("detailProducerBullets").innerHTML = (producer.bullets || [])
+            .map((b) => `<li>${esc(b)}</li>`)
+            .join("");
+          const pbody = (producer.metrics || [])
+            .map(
+              (r) =>
+                `<tr><td>${esc(r.metric)}</td><td>${esc(r.value)}</td><td>${esc(r.note || "—")}</td></tr>`
+            )
+            .join("");
+          document.getElementById("detailProducerTable").innerHTML =
+            `<thead><tr><th>Metric</th><th>Value</th><th>Note</th></tr></thead><tbody>${pbody}</tbody>`;
+          const flags = producer.edit_flags || [];
+          document.getElementById("detailProducerFlags").innerHTML = flags.length
+            ? flags.map((b) => `<li>${esc(b)}</li>`).join("")
+            : "<li class=\"empty\">None flagged from text structure</li>";
+        } else {
+          producerEl.style.display = "none";
+        }
+
+        const pview = report.producer_view;
+        const motionEl = document.getElementById("detailMotionTrack");
+        const motionUnavail = document.getElementById("detailMotionUnavailable");
+        if (pview) {
+          motionEl.style.display = "block";
+          const hasMotion = pview.audio_available && (pview.motion_track || []).length;
+          document.getElementById("detailMotionNotes").innerHTML = (pview.motion_notes || [])
+            .map((b) => `<li>${esc(b)}</li>`)
+            .join("");
+          document.getElementById("detailMotionTimeline").innerHTML = hasMotion
+            ? (pview.motion_track || [])
+                .map(
+                  (e) =>
+                    `<li><span class="engine-time">${esc(e.time_label || "")}</span> — ${esc(e.label || e.type || "")}<span class="engine-detail">${e.intensity != null ? " · intensity " + esc(String(e.intensity)) : ""}</span></li>`
+                )
+                .join("")
+            : "";
+          document.getElementById("detailMotionFusion").innerHTML = (pview.fusion_notes || [])
+            .map((b) => `<li>${esc(b)}</li>`)
+            .join("");
+          motionUnavail.style.display = hasMotion ? "none" : "block";
+        } else {
+          motionEl.style.display = "none";
+        }
+
         const playbook = report.template_playbook;
         if (playbook && playbook.form) {
           document.getElementById("detailTemplate").textContent =
@@ -1140,8 +1301,7 @@
             .map((b) => `<li>${esc(b)}</li>`)
             .join("");
           document.getElementById("detailMeans").style.display = "none";
-          document.getElementById("detailLead").textContent = playbook.tagline || "";
-          document.getElementById("detailLead").style.display = playbook.tagline ? "block" : "none";
+          document.getElementById("detailLead").style.display = "none";
         } else {
           document.getElementById("detailPlaybook").style.display = "none";
           document.getElementById("detailTemplate").textContent =
@@ -1151,14 +1311,7 @@
           document.getElementById("detailMeansList").innerHTML = means
             .map((b) => `<li>${esc(b)}</li>`)
             .join("");
-          const leadEl = document.getElementById("detailLead");
-          const lead = (report.listener_experience && report.listener_experience[0]) || "";
-          if (lead) {
-            leadEl.textContent = lead;
-            leadEl.style.display = "block";
-          } else {
-            leadEl.style.display = "none";
-          }
+          document.getElementById("detailLead").style.display = "none";
         }
 
         renderCoachingTable(

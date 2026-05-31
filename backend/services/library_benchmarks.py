@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.models import EpisodeFeatures
+from backend.services.measurement_versions import filter_comparable_rows, stamp_for_row
 
 MIN_SAMPLES = 3
 # Below this count, use "most / few" language — not hard percentiles.
@@ -38,8 +39,7 @@ class LibraryBenchmarks:
         return sum(self.speaking_turns) / len(self.speaking_turns)
 
 
-def load_library_benchmarks(db: Session) -> LibraryBenchmarks:
-    rows = db.execute(select(EpisodeFeatures)).scalars().all()
+def library_from_rows(rows: Sequence[EpisodeFeatures]) -> LibraryBenchmarks:
     return LibraryBenchmarks(
         n_measured=len(rows),
         hook_seconds=[float(r.hook_length_seconds or 0) for r in rows],
@@ -49,6 +49,15 @@ def load_library_benchmarks(db: Session) -> LibraryBenchmarks:
         guest_ratios=[float(r.host_guest_ratio or 0.5) for r in rows],
         topic_shifts=[int(r.topic_shift_count or 0) for r in rows],
     )
+
+
+def load_library_benchmarks(
+    db: Session, *, anchor: Optional[EpisodeFeatures] = None
+) -> tuple[LibraryBenchmarks, int]:
+    rows = list(db.execute(select(EpisodeFeatures)).scalars().all())
+    stamp = stamp_for_row(anchor)
+    kept, excluded = filter_comparable_rows(rows, stamp)
+    return library_from_rows(kept), excluded
 
 
 def _pct_higher_than(values: Sequence[float], current: float) -> Optional[int]:
@@ -141,17 +150,22 @@ def benchmark_intro(seconds: float, lib: LibraryBenchmarks) -> Optional[str]:
     )
 
 
-def benchmark_questions(count: int, lib: LibraryBenchmarks) -> Optional[str]:
+def benchmark_questions(
+    count: int, lib: LibraryBenchmarks, *, rhetorical_heavy: bool = False
+) -> Optional[str]:
     pct = _pct_higher_than([float(x) for x in lib.question_counts], float(count))
     if pct is None:
         return None
-    return _compare_higher_means_more(
+    label = _compare_higher_means_more(
         pct,
         lib.n_measured,
         more_label="Higher question density",
         fewer_label="Fewer questions",
         mid_label="Question count near the middle of your library",
     )
+    if rhetorical_heavy and label:
+        return f"{label} (may include rhetorical narration, not interview Q&A)"
+    return label
 
 
 def benchmark_turns(count: int, lib: LibraryBenchmarks) -> Optional[str]:
@@ -175,16 +189,20 @@ def benchmark_turns(count: int, lib: LibraryBenchmarks) -> Optional[str]:
             return f"Longer uninterrupted segments than {pct_more}% of measured episodes {ctx}"
         if pct_less is not None and pct_less >= 55:
             return f"More frequent handoffs than {pct_less}% of measured episodes {ctx}"
-        return f"Turn count near the middle of your library {ctx}"
+        return f"Turn count near the middle {ctx}"
 
     if pct_more >= 50:
         return f"Longer uninterrupted segments than most episodes {ctx}"
     if pct_less is not None and pct_less >= 50:
         return f"More frequent handoffs than most episodes {ctx}"
-    return f"Turn count near the middle of your library {ctx}"
+    return f"Turn count near the middle {ctx}"
 
 
-def benchmark_guest_ratio(ratio: float, lib: LibraryBenchmarks) -> Optional[str]:
+def benchmark_guest_ratio(
+    ratio: float, lib: LibraryBenchmarks, *, turns: int = 0
+) -> Optional[str]:
+    if turns == 0:
+        return "Speaker labels not detected — talk share unavailable"
     if len(lib.guest_ratios) < MIN_SAMPLES:
         return None
     ctx = _library_ctx(lib.n_measured)
@@ -204,6 +222,8 @@ def library_comparison_bullets(
     ratio: float,
     lib: LibraryBenchmarks,
     narrative_led: bool,
+    rhetorical_heavy: bool = False,
+    has_diarization: bool = True,
 ) -> List[str]:
     """Game-film lines: this episode vs measured library (no quality judgment)."""
     if lib.n_measured < MIN_SAMPLES:
@@ -216,14 +236,14 @@ def library_comparison_bullets(
     hook_b = benchmark_hook(hook, lib)
     if hook_b and "faster" in hook_b.lower():
         bullets.append(f"Opening: {hook_b}")
-    q_b = benchmark_questions(questions, lib)
-    if q_b and "fewer" in q_b.lower():
+    q_b = benchmark_questions(questions, lib, rhetorical_heavy=rhetorical_heavy)
+    if q_b and "fewer" in q_b.lower() and not rhetorical_heavy:
         bullets.append(f"Questions: {q_b}")
     t_b = benchmark_turns(turns, lib)
     if t_b and ("longer" in t_b.lower() or "high end" in t_b.lower()):
         bullets.append(f"Speaking turns: {t_b}")
-    g_b = benchmark_guest_ratio(ratio, lib)
-    if g_b and "balanced" in g_b.lower():
+    g_b = benchmark_guest_ratio(ratio, lib, turns=turns if has_diarization else 0)
+    if g_b and "balanced" in g_b.lower() and has_diarization:
         bullets.append(f"Talk share: {g_b}")
 
     if narrative_led and bullets:

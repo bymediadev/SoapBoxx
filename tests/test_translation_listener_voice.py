@@ -85,7 +85,7 @@ def test_narrative_uses_template_c():
     assert _template_id(f) == "C"
     report = build_coaching_report(_FakeSession(), f, library=_library())
     assert report.template_playbook is not None
-    assert report.template_playbook["form"] == "Narrative documentary"
+    assert report.template_playbook["form"] == "Narrative documentary (structural pattern)"
     assert report.template_playbook["review_these"]
     blob = " ".join(
         report.listener_experience

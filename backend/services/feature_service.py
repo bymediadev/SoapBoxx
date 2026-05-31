@@ -19,6 +19,7 @@ from backend.features.rule_based import (
     topic_changes,
 )
 from backend.models import Episode, EpisodeFeatures, TranscriptSegment
+from backend.services.measurement_versions import CURRENT_STAMP, stamp_dict
 from backend.services.pipeline_status import (
     STATUS_FAILED,
     STATUS_MEASURED,
@@ -159,6 +160,9 @@ def _run_feature_extraction(db: Session, episode: Episode, episode_id: int) -> F
     row.host_guest_ratio = metrics["host_guest_ratio"]
     row.topic_shift_count = metrics["topic_shift_count"]
     row.cta_present = metrics["cta_present"]
+    row.feature_schema_version = CURRENT_STAMP.feature_schema_version
+    row.extraction_version = CURRENT_STAMP.extraction_version
+    row.aggregation_version = CURRENT_STAMP.aggregation_version
     set_episode_status(db, episode, STATUS_MEASURED, commit=False)
     record_event(
         db,
@@ -166,7 +170,7 @@ def _run_feature_extraction(db: Session, episode: Episode, episode_id: int) -> F
         f"Structure measured: {episode.title}",
         podcast_id=int(episode.podcast_id),
         episode_id=int(episode.id),
-        meta=metrics,
+        meta={**metrics, **stamp_dict(CURRENT_STAMP)},
         commit=False,
     )
     db.commit()

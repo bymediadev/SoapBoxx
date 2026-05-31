@@ -25,10 +25,19 @@ celery_app.conf.update(
     imports=("backend.workers.tasks",),
 )
 
+_beat_schedule: dict = {}
+
 if settings.rss_sync_minutes > 0:
-    celery_app.conf.beat_schedule = {
-        "soapboxx-sync-rss-feeds": {
-            "task": "soapboxx.sync_rss_feeds",
-            "schedule": timedelta(minutes=max(5, settings.rss_sync_minutes)),
-        }
+    _beat_schedule["soapboxx-sync-rss-feeds"] = {
+        "task": "soapboxx.sync_rss_feeds",
+        "schedule": timedelta(minutes=max(5, settings.rss_sync_minutes)),
     }
+
+if settings.pipeline_drain_minutes > 0:
+    _beat_schedule["soapboxx-process-pending-queue"] = {
+        "task": "soapboxx.process_pending_queue",
+        "schedule": timedelta(minutes=max(1, settings.pipeline_drain_minutes)),
+    }
+
+if _beat_schedule:
+    celery_app.conf.beat_schedule = _beat_schedule
