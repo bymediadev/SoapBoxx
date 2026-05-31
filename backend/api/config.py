@@ -43,7 +43,8 @@ class Settings(BaseSettings):
     pipeline_batch_size: int = 2
     # After RSS sync / cron — also drain backlog (sync if no worker)
     pipeline_sync_batch_size: int = 5
-    auto_audio_motion_on_process: bool = True
+    # Layer 2 downloads full audio — keep off on Railway HTTP unless a worker runs it
+    auto_audio_motion_on_process: bool = False
     # On API boot (Railway): dispatch N pending episodes to Celery (0 = off)
     pipeline_boot_dispatch_limit: int = 0
     rss_sync_minutes: int = 180

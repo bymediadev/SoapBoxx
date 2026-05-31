@@ -1644,18 +1644,41 @@
       if (next) openEpisode(next);
     }
 
+    async function pollEpisodeUntilReady(episodeId, maxAttempts = 40) {
+      for (let i = 0; i < maxAttempts; i++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const state = await api(`/episodes/${episodeId}/state`);
+        if (state.status === "ready" || state.steps?.insight_ready) {
+          return true;
+        }
+        if (state.status === "failed") {
+          throw new Error(state.pipeline_error || "Pipeline failed");
+        }
+      }
+      return false;
+    }
+
     async function runEpisodePipeline() {
       if (!selectedEpisodeId) return;
       const btn = document.getElementById("detailProcessBtn");
       const msg = document.getElementById("detailMsg");
       btn.disabled = true;
-      msg.textContent = "Running pipeline… (may take a while on long audio)";
+      msg.textContent = "Running pipeline… (long STT runs in the worker queue)";
       msg.className = "detail-msg";
       try {
         const result = await api(`/episodes/${selectedEpisodeId}/process`, {
           method: "POST",
           body: JSON.stringify({}),
         });
+        if (result.status === "queued") {
+          msg.textContent = "Queued on worker — waiting for insight…";
+          const done = await pollEpisodeUntilReady(selectedEpisodeId);
+          if (!done) {
+            msg.textContent = "Still processing — refresh in a minute.";
+            msg.className = "detail-msg";
+            return;
+          }
+        }
         msg.textContent = `Pipeline finished: ${result.status || "ok"}`;
         msg.className = "detail-msg ok";
         await openEpisode(selectedEpisodeId);

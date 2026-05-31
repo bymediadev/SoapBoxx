@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -45,6 +46,33 @@ def _transcript_segment_count(db: Session, episode_id: int) -> int:
         .filter(TranscriptSegment.episode_id == episode_id)
         .count()
     )
+
+
+def episode_needs_stt(
+    episode: Episode,
+    *,
+    transcript: Optional[str] = None,
+    force_retranscribe: bool = False,
+) -> bool:
+    """True when pipeline would call STT (slow on long audio / Railway proxy timeout)."""
+    if transcript is not None:
+        return False
+    if force_retranscribe:
+        return True
+    return not bool((episode.full_transcript or "").strip())
+
+
+def try_dispatch_episode_to_celery(
+    db: Session,
+    episode_id: int,
+    *,
+    trigger: str,
+) -> bool:
+    """Queue one episode on Celery when Redis + worker are available."""
+    from backend.services.rss_service import dispatch_processing_for_episodes
+
+    dispatched = dispatch_processing_for_episodes(db, [episode_id], trigger=trigger)
+    return episode_id in dispatched
 
 
 def _log_pipeline_step(
@@ -156,7 +184,7 @@ def run_episode_pipeline(
         }
     )
 
-    audio_step = _maybe_run_audio_motion(db, episode_id, episode)
+    audio_step = _schedule_audio_motion_if_enabled(episode_id)
     if audio_step is not None:
         steps.append({"step": "audio_motion", **audio_step})
 
@@ -175,14 +203,36 @@ def run_episode_pipeline(
     )
 
 
+def _schedule_audio_motion_if_enabled(episode_id: int) -> Optional[dict]:
+    """Optional Layer 2 — runs in a background thread so HTTP /process returns quickly."""
+    from backend.api.config import get_settings
+
+    if not get_settings().auto_audio_motion_on_process:
+        return None
+
+    def _run() -> None:
+        from backend.api.deps import get_session_factory
+
+        db = get_session_factory()()
+        try:
+            episode = db.get(Episode, episode_id)
+            if episode:
+                _maybe_run_audio_motion(db, episode_id, episode)
+        finally:
+            db.close()
+
+    threading.Thread(
+        target=_run,
+        name=f"audio-motion-{episode_id}",
+        daemon=True,
+    ).start()
+    return {"ok": True, "skipped": False, "scheduled": True, "reason": "background"}
+
+
 def _maybe_run_audio_motion(db: Session, episode_id: int, episode: Episode) -> Optional[dict]:
     """Optional Layer 2 — parallel to transcript pipeline; failures do not abort."""
-    from backend.api.config import get_settings
     from backend.models import EpisodeAudioMotion
 
-    settings = get_settings()
-    if not settings.auto_audio_motion_on_process:
-        return None
     if not (episode.audio_url or "").strip():
         return {"ok": True, "skipped": True, "reason": "no_audio_url"}
     if db.get(EpisodeAudioMotion, episode_id):

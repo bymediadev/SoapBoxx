@@ -99,12 +99,26 @@ Redeploy once.
 - If **this works** → issue is in `start.py` / DB wait / alembic (set `BOOT_SKIP_DB_WAIT=1` on API service to test).
 - If **still 502** → build/import/deps or wrong service root.
 
+## 502 on `POST /episodes/{id}/process` (app was up, health OK)
+
+Railway’s proxy times out if the API holds the connection too long (common on **full STT** or **downloading 20+ MB audio** for Layer 2 motion).
+
+| Cause | Fix |
+|-------|-----|
+| Re-run pipeline on a **ready** episode with `AUTO_AUDIO_MOTION_ON_PROCESS=1` | Default is **off**; motion runs in a **background thread** when enabled |
+| **STT** on a long episode via sync HTTP | API returns **`status: queued`** when Redis + worker exist; ensure a **Celery worker** service is running |
+| Container restart mid-request | Check deploy logs for `=== SoapBoxx boot ===` during the request; reduce `PIPELINE_BOOT_DISPATCH_LIMIT` if needed |
+
+Use **`POST /pipeline/process?limit=10`** for backlog (queued episodes only). Do not use per-episode **Process** on already-ready episodes unless you need a full recompute.
+
 ## Emergency env vars (API service)
 
 | Variable | Effect |
 |----------|--------|
 | `BOOT_SKIP_DB_WAIT=1` | Skip DB wait (faster boot; debug only) |
 | `DB_WAIT_ATTEMPTS=5` | Shorter wait |
+| `AUTO_AUDIO_MOTION_ON_PROCESS=1` | Enable Layer 2 audio download (background; still needs CPU/RAM) |
+| `PIPELINE_BOOT_DISPATCH_LIMIT=0` | No backlog dispatch on container start |
 
 ## Logs show 200 but browser still 502?
 
