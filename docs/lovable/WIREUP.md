@@ -4,8 +4,8 @@
 
 1. **No Lovable edits:** open **`https://soapboxx-production.up.railway.app/ui/`** — bundled `/library/home` loads the dashboard in **2 HTTP calls** (health + home).  
    If you see **Application failed to respond**, the API is down — test `/health/live` first ([`RAILWAY_502_FIX.md`](../RAILWAY_502_FIX.md)), not a UI-only bug.
-2. **Lovable:** paste the block in **[`LOVABLE_FREE_CHAT_PROMPT.md`](LOVABLE_FREE_CHAT_PROMPT.md)** into project chat → publish.
-3. Copy [`api-client.ts`](api-client.ts) → `src/lib/soapboxx-api.ts`; use **`soapboxxApi.libraryHome()`** on the library screen (one fetch, not five).
+2. **Lovable:** paste **[`LOVABLE_FREE_CHAT_PROMPT.md`](LOVABLE_FREE_CHAT_PROMPT.md)** + full [`api-client.ts`](api-client.ts) into project chat → publish. Target **parity with `/ui/`** (coaching report v2, paginated episodes table, same theme).
+3. Copy [`api-client.ts`](api-client.ts) → `src/lib/soapboxx-api.ts`; home uses **`libraryHome(15, 5)`** for rails; episode table uses **`libraryEpisodes()`**.
 
 **No Lovable paid plan?** See [`FREE_FRONTEND_OPTIONS.md`](../FREE_FRONTEND_OPTIONS.md).
 

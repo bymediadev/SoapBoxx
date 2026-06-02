@@ -3,7 +3,7 @@
 **Frontend:** [https://soapboxx.lovable.app](https://soapboxx.lovable.app) (hosted on Lovable, independent deploy)  
 **Backend:** [https://soapboxx-production.up.railway.app](https://soapboxx-production.up.railway.app) (FastAPI + Postgres + Redis)
 
-**Status:** Lovable is wired to the live API via `soapboxxApi` only — **no mock data**. Copy [`lovable/api-client.ts`](lovable/api-client.ts) into the Lovable repo as `src/lib/soapboxx-api.ts`.
+**Status:** [soapboxx.lovable.app](https://soapboxx.lovable.app) matches bundled `/ui/` (3-column home, paginated episodes, coaching report v2). API via `soapboxxApi` only — **no mock data**. Canonical client: [`lovable/api-client.ts`](lovable/api-client.ts).
 
 The Lovable app is the **UI shell**. The API is the **system of record**. They deploy separately; every screen fetches over HTTPS.
 
@@ -109,31 +109,33 @@ After RSS ingest, episodes start as **`queued`**. Ingest emits `ingest.started` 
 | **Episodes index** | `libraryEpisodes(limit)` or rows from `libraryHome()` | Filter by `podcast_id` when needed |
 | **Shows** | `listPodcasts()` and/or `libraryTree()` | Tree embeds shows per taxonomy branch |
 | **Insights / patterns** | `weeklyPatterns()` or `libraryHome().patterns` | Weekly structural snapshot |
-| **Episode detail** | `getEpisode(id)`, `episodeState(id)`, `getTranslation(id)` | Report view |
-| **Run pipeline** | `processEpisode(id, {})` | Empty body; reuses stored transcript when possible |
-| **Metrics on detail** | `processEpisode(id, {})` → `steps.find(s => s.step === "features")?.metrics` | Not on `getTranslation`; call once when needed |
-| Health check | `health()` | Optional dev banner |
+| **Episode detail** | `getEpisode`, `episodeState`, `getEpisodeFeatures`, `getTranslation` | Match `/ui/` coaching report v2 |
+| **Run pipeline** | `processEpisode(id, {})` | Empty body; poll state if `queued` |
+| **Metrics on detail** | `getEpisodeFeatures(id)` | 404 until measured; do not run pipeline on open for metrics |
+| **Batch** | `processNextBatch(10)` | Topbar “Process next 10” |
+| **Episode table** | `libraryEpisodes({ limit, offset, podcast_id, status })` | Paginated; filters — not only `home.episodes` |
+| Health check | `health()` | Poll ~30s; live/offline pill |
 
-**Episode detail rules**
+**Episode detail rules** (same as bundled `/ui/`)
 
+- Parallel load: episode, state, features (404 OK), translation (404 OK).
+- Render full `translation.report` when present (coaching report v2); legacy `insight_text` only if report empty.
 - `getTranslation` → 404 means “not processed yet”; show **Run pipeline**.
 - Default pipeline: `processEpisode(id, {})` — never `force_retranscribe` in the main UI.
-- Seven metrics only from the **features** step of `processEpisode` (or session cache after one call).
+- Visual reference: `static/v1-library/index.html` → `showCoachingReport()`.
 
 ---
 
 ## 4. Auto-update (RSS)
 
-The UI does not need to “download a database.”
+The UI does not need to “download a database.” **Scheduled re-ingest is backend-only** — implement in this SoapBoxx API repo, not in Lovable.
 
-1. **On demand:** Ingestion page calls `POST /ingest/rss` when the user adds a feed. New episodes are auto-dispatched into the processing queue.
-2. **Scheduled (recommended):** On the API host, cron or Celery beat every N hours:
-   - For each `podcasts.rss_url`, call `ingest_rss_feed(db, url)` and auto-dispatch only newly created episode IDs.
-3. Lovable **refetches** `GET /library/stats` and `GET /library/episodes` on interval or on focus.
+1. **On demand:** Lovable `POST /ingest/rss` when the user adds a feed (new episodes auto-dispatch when `AUTO_PROCESS_ON_INGEST=true`).
+2. **Scheduled (already in API repo):** Celery beat task `soapboxx.sync_rss_feeds` → `sync_saved_rss_feeds()` re-ingests every stored `rss_url` and dispatches **new** episodes only. Default every **3h** (`RSS_SYNC_MINUTES=180`) on `soapboxx-worker` with embedded beat.
+3. **Alternatives:** daily `soapboxx-sync` cron (`scripts/sync_all_feeds.py`) or `POST /pipeline/sync-feeds` with `X-Cron-Secret` — see [`RSS_AUTO_SYNC.md`](RSS_AUTO_SYNC.md).
+4. Lovable may **refetch** library endpoints on focus/refresh; that is not a substitute for server-side RSS sync.
 
-Auto-dispatch only finishes end to end if a queue worker is running (`python scripts/run_celery_worker.py` locally, or the `soapboxx-worker` Railway service).
-
-That gives you an independently updating system without redeploying the frontend.
+Processing requires **Redis + `soapboxx-worker`** (or manual `POST /pipeline/dispatch-backlog` / `POST /episodes/{id}/process`).
 
 ---
 
@@ -150,7 +152,7 @@ If the browser blocks requests, add your exact Lovable preview URL to `SOAPBOXX_
 
 ## 6. Re-wire or fix Lovable
 
-If a preview regresses to mock data, use the one-shot prompt: [`lovable/LOVABLE_FREE_CHAT_PROMPT.md`](lovable/LOVABLE_FREE_CHAT_PROMPT.md) (paste prompt + full `api-client.ts` in one message).
+If the UI drifts from `/ui/` or mock data returns, use [`lovable/LOVABLE_FREE_CHAT_PROMPT.md`](lovable/LOVABLE_FREE_CHAT_PROMPT.md) (paste prompt + full `api-client.ts` in one message). Audit pass: [`lovable/FRONTEND_AUDIT_PROMPT.md`](lovable/FRONTEND_AUDIT_PROMPT.md).
 
 ---
 

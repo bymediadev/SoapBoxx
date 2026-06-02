@@ -7,12 +7,17 @@ import os
 import threading
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from backend.api.config import get_settings
 from backend.api.deps import get_db, get_session_factory
-from backend.api.schemas import BacklogDispatchResponse, ProcessBatchResponse
+from backend.api.schemas import (
+    BacklogDispatchResponse,
+    ProcessBatchResponse,
+    RssSyncResponse,
+)
+from backend.services.rss_service import sync_saved_rss_feeds
 from backend.services.episode_pipeline_service import (
     drain_pending_pipeline,
     process_queued_episodes,
@@ -130,6 +135,39 @@ def dispatch_backlog(
         mode=str(out.get("mode", "none")),
         episode_ids=list(out.get("episode_ids") or []),
     )
+
+
+@router.post("/sync-feeds", response_model=RssSyncResponse)
+def sync_feeds(
+    x_cron_secret: str | None = Header(default=None, alias="X-Cron-Secret"),
+    db: Session = Depends(get_db),
+) -> RssSyncResponse:
+    """
+    Re-ingest every stored RSS feed and dispatch processing for new episodes.
+
+    Requires ``SOAPBOXX_CRON_SECRET`` on the API and matching ``X-Cron-Secret`` header.
+    Prefer Celery beat on ``soapboxx-worker`` (``soapboxx.sync_rss_feeds``) when running.
+    """
+    settings = get_settings()
+    secret = (settings.cron_secret or os.environ.get("SOAPBOXX_CRON_SECRET") or "").strip()
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="SOAPBOXX_CRON_SECRET not configured on API",
+        )
+    if (x_cron_secret or "").strip() != secret:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid or missing X-Cron-Secret",
+        )
+    try:
+        summary = sync_saved_rss_feeds(db, dispatch_processing=True)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
+    return RssSyncResponse(**summary.to_dict())
 
 
 @router.post("/process", response_model=ProcessBatchResponse)

@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     # On API boot (Railway): dispatch N pending episodes to Celery (0 = off)
     pipeline_boot_dispatch_limit: int = 0
     rss_sync_minutes: int = 180
+    # Optional: protect POST /pipeline/sync-feeds (Railway HTTP cron). Empty = endpoint disabled.
+    cron_secret: str = ""
 
     @field_validator("database_url", mode="before")
     @classmethod

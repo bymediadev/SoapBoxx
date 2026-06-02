@@ -132,6 +132,23 @@ export type EpisodeDetail = {
   pipeline_status: string;
 };
 
+/** Seven Layer-1 metrics — same shape as GET /episodes/{id}/features */
+export type EpisodeFeatures = {
+  episode_id: number;
+  hook_length_seconds?: number | null;
+  intro_length_seconds?: number | null;
+  question_count?: number | null;
+  speaking_turns?: number | null;
+  host_guest_ratio?: number | null;
+  topic_shift_count?: number | null;
+  cta_present?: boolean | null;
+};
+
+/** True when `api()` threw for HTTP 404 (optional GETs). */
+export function isNotFoundError(err: unknown): boolean {
+  return err instanceof Error && /\b404\b/.test(err.message);
+}
+
 export type CoachingMetricRow = {
   metric: string;
   value: string;
@@ -301,6 +318,9 @@ export const soapboxxApi = {
   listPodcasts: () => api<Podcast[]>("/podcasts"),
 
   getEpisode: (id: number) => api<EpisodeDetail>(`/episodes/${id}`),
+
+  /** 404 if features not extracted yet — do not call processEpisode just to read metrics. */
+  getEpisodeFeatures: (id: number) => api<EpisodeFeatures>(`/episodes/${id}/features`),
 
   episodeState: (id: number) => api<EpisodeState>(`/episodes/${id}/state`),
 

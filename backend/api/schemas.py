@@ -260,3 +260,12 @@ class BacklogDispatchResponse(BaseModel):
     processed: int
     mode: str
     episode_ids: list[int] = []
+
+
+class RssSyncResponse(BaseModel):
+    podcasts_checked: int
+    episodes_created: int
+    episodes_skipped: int
+    episodes_dispatched: int
+    failed_podcasts: int
+    results: list[dict] = []
