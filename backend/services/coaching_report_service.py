@@ -19,7 +19,7 @@ from backend.services.feed_leverage_service import (
     build_feed_leverage_points,
     build_structural_identity,
 )
-from backend.services.measurement_versions import cohort_note, stamp_dict, stamp_for_row
+from backend.services.measurement_versions import stamp_for_row
 from backend.services.narrative_timeline_service import build_narrative_engine_map
 from backend.services.producer_view_service import build_producer_view
 from backend.services.audio_motion_service import load_audio_motion
@@ -42,7 +42,6 @@ from backend.services.library_benchmarks import (
     benchmark_intro,
     benchmark_questions,
     benchmark_turns,
-    library_comparison_bullets,
     library_from_rows,
     load_library_benchmarks,
 )
@@ -519,17 +518,8 @@ def build_coaching_report(
         else _similar_to(features, lib, template_id)
     )
 
-    compared = library_comparison_bullets(
-        hook=hook,
-        intro=intro,
-        questions=questions,
-        turns=turns,
-        ratio=ratio,
-        lib=lib,
-        narrative_led=narrative_led,
-        rhetorical_heavy=rhetorical,
-        has_diarization=diarized,
-    )
+    # Library percentile bullets are internal-only; Layer 4 uses band language via producer view.
+    compared: List[str] = []
 
     podcast_name = None
     variance: List[str] = []
@@ -588,7 +578,7 @@ def build_coaching_report(
         )
 
     cohort_excluded = lib_excluded + show_excluded
-    cohort_note_text = cohort_note(cohort_excluded)
+    _ = cohort_excluded  # used for comparable-row filtering only, not user copy
 
     producer = None
     narrative_engine = None
@@ -642,8 +632,8 @@ def build_coaching_report(
         what_this_means=pattern_lines,
         similar_to=similar,
         topic_shift_note=_topic_shift_detection_note(topic_shifts),
-        measurement_stamp=stamp_dict(anchor_stamp),
-        measurement_cohort_note=cohort_note_text,
+        measurement_stamp={},
+        measurement_cohort_note=None,
         transcript_limitations=limits,
         narrative_engine=narrative_engine,
         producer_notes=producer,

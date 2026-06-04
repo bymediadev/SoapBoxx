@@ -76,7 +76,9 @@ class OpenLoopState:
             "closed_at": round(self.closed_at, 1) if self.closed_at else None,
             "closed_label": _fmt_time(self.closed_at) if self.closed_at else None,
             "lifespan_seconds": round(lifespan, 1) if lifespan and self.closed_at else None,
-            "lifespan_label": _fmt_time(lifespan) if lifespan and self.closed_at else "still open",
+            "lifespan_label": _fmt_time(lifespan)
+            if lifespan and self.closed_at
+            else "appears open (no closure detected in transcript)",
             "snippet": self.snippet[:120],
             "status": self.status,
         }
@@ -185,7 +187,7 @@ def build_narrative_engine_map(
                     TimelineEvent(
                         t,
                         "primary_question",
-                        "Primary question introduced",
+                        "Possible primary question (transcript)",
                         q[:100],
                     )
                 )
@@ -194,7 +196,7 @@ def build_narrative_engine_map(
                     TimelineEvent(
                         t,
                         "sub_question",
-                        "Sub-question introduced",
+                        "Possible follow-up question (transcript)",
                         q[:100],
                     )
                 )
@@ -257,10 +259,16 @@ def build_narrative_engine_map(
     notes: List[str] = []
     if loops:
         primary = loops[primary_idx or 0]
-        notes.append(
-            f"Primary question at {_fmt_time(primary.opened_at)} — "
-            f"{'closed at ' + _fmt_time(primary.closed_at) if primary.closed_at else 'still open at episode end'}"
-        )
+        if primary.closed_at:
+            notes.append(
+                f"Possible primary thread at {_fmt_time(primary.opened_at)} — "
+                f"closure language detected near {_fmt_time(primary.closed_at)}"
+            )
+        else:
+            notes.append(
+                f"Possible primary thread at {_fmt_time(primary.opened_at)} — "
+                "appears unresolved at episode end (no clear closure in transcript)"
+            )
         if primary.closed_at and total_runtime > 0:
             pct = round(100 * primary.closed_at / total_runtime)
             notes.append(
@@ -269,13 +277,15 @@ def build_narrative_engine_map(
             )
         elif not primary.closed_at:
             notes.append(
-                f"Listener may still be waiting for main-thread payoff at {_fmt_time(total_runtime)}"
+                f"Main-thread payoff may still be open near {_fmt_time(total_runtime)} — "
+                "based on transcript cues only"
             )
 
     open_at_end = [l for l in loops if l.status in ("open", "partial")]
     if len(open_at_end) > 1:
         notes.append(
-            f"{len(open_at_end)} threads still unresolved at episode end — stacked open loops"
+            f"{len(open_at_end)} thread(s) appear unresolved at episode end — "
+            "stacked open loops in transcript"
         )
 
     false_events = [e for e in events if e.event_type == "false_resolution"]

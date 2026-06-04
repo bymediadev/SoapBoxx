@@ -33,12 +33,12 @@ def test_build_actions_from_playbook():
     )
     out = build_actions_report(ep, report)
     assert len(out["actions"]) >= 2
-    assert out["actions"][0]["category"] == "replay"
+    assert out["actions"][0]["category"] == "next_episode"
     assert any("Check first 60s" in a["text"] for a in out["actions"])
     assert out["keep_patterns"]
 
 
-def test_producer_report_omits_cohort_fields():
+def test_producer_report_editorial_readout_only():
     ep = Episode(id=1, podcast_id=1, title="Show")
     ep.full_transcript = "x " * 100
     features = EpisodeFeatures(
@@ -54,12 +54,12 @@ def test_producer_report_omits_cohort_fields():
     report = CoachingReport(
         structural_identity=["Narrative thread"],
         listener_experience=["Sparse Q&A pacing"],
-        measurement_cohort_note="16 episodes excluded",
-        leverage_points=["Band A", "Band B", "Band C", "Band D"],
+        editorial_tradeoffs=["Long blocks over frequent exchange"],
+        template_playbook={"review_these": ["Check first-minute hook"]},
     )
     out = build_producer_report(ep, features, report, "C")
-    assert "measurement_cohort_note" not in out
-    assert "measurement_stamp" not in out
-    assert "compared_with_library" not in out
-    assert len(out["leverage_points"]) == 3
+    assert "editorial_readout" in out
+    assert out["editorial_readout"]["what_happening"]
+    assert out["editorial_readout"]["what_to_try_next"]
+    assert "patterns" not in out
     assert out["measurements"]["question_count"] == 3

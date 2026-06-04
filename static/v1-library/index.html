@@ -901,8 +901,8 @@
           <div id="detailTranscriptWarning" class="transcript-warning" style="display:none" role="alert"></div>
           <div id="detailLayer4" style="display:none">
             <div class="layer4-tabs">
-              <button type="button" class="btn btn-ghost active" data-layer4="measurements">Measurements</button>
-              <button type="button" class="btn btn-ghost" data-layer4="structure">Structure</button>
+              <button type="button" class="btn btn-ghost active" data-layer4="measurements">Signals</button>
+              <button type="button" class="btn btn-ghost" data-layer4="structure">Editorial readout</button>
               <button type="button" class="btn btn-ghost" data-layer4="actions">Next episode</button>
             </div>
             <div id="layer4Measurements" class="layer4-panel active"></div>
@@ -1456,26 +1456,18 @@
     }
 
     function renderLayer4Structure(producer) {
-      const idLines = (producer.structural_identity || [])
-        .map((line) => `<p class="identity-line">${esc(line)}</p>`)
-        .join("");
-      const patterns = (producer.patterns || [])
-        .map((b) => `<li>${esc(b)}</li>`)
-        .join("");
-      const leverage = (producer.leverage_points || [])
-        .map((b) => `<li>${esc(b)}</li>`)
-        .join("");
+      const r = producer.editorial_readout || {};
+      const list = (items) =>
+        (items || []).map((b) => `<li>${esc(b)}</li>`).join("") || "<li class=\"empty\">—</li>";
       document.getElementById("layer4Structure").innerHTML = `
         <p class="card-hint" style="margin-top:0">${esc(producer.disclaimer || "")}</p>
         <h3 class="font-serif">${esc(producer.structure_label || "")}</h3>
-        <div class="identity-lines">${idLines || "<p class=\"empty\">—</p>"}</div>
-        <h4 class="font-serif" style="font-size:0.9rem;margin:16px 0 6px">How it feels</h4>
-        <ul class="coaching-list">${patterns || "<li class=\"empty\">—</li>"}</ul>
-        ${
-          leverage
-            ? `<h4 class="font-serif" style="font-size:0.9rem;margin:12px 0 6px">Structural bands</h4><ul class="coaching-list">${leverage}</ul>`
-            : ""
-        }`;
+        <p class="card-hint">Classification only — not a quality score.</p>
+        <h4 class="font-serif" style="font-size:0.9rem;margin:16px 0 6px">What is happening</h4>
+        <ul class="coaching-list">${list(r.what_happening)}</ul>
+        <h4 class="font-serif" style="font-size:0.9rem;margin:16px 0 6px">Why it matters</h4>
+        <ul class="coaching-list">${list(r.why_it_matters)}</ul>
+        <p class="card-hint" style="margin-top:12px">Based on current transcript and library sample — not audience prediction.</p>`;
     }
 
     function renderLayer4Actions(actionsReport) {
@@ -1573,6 +1565,23 @@
         legacy.style.display = "none";
         opening.style.display = "none";
         shape.style.display = "none";
+        const rv = document.querySelector("#detailCoaching .report-version");
+        if (rv) {
+          rv.textContent =
+            "Advanced — timeline & metric tables only (summary is in Editorial readout tab)";
+        }
+        [
+          "detailListener",
+          "detailEditorial",
+          "detailPlaybook",
+          "detailMeans",
+          "detailLeverage",
+          "detailCompared",
+          "detailVariance",
+        ].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.style.display = "none";
+        });
 
         const limits = report.transcript_limitations || [];
         const limitsEl = document.getElementById("detailTranscriptLimits");

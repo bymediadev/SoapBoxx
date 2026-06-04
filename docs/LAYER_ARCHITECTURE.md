@@ -157,6 +157,30 @@ Analytics without coaching is commodity; coaching without trustworthy Layer 2 is
 
 ---
 
+## Trust architecture (user-facing copy)
+
+| Rule | Implementation |
+|------|----------------|
+| No fake percentiles | `library_benchmarks` uses band language only (“most episodes in your library”) — never “98% of measured episodes” |
+| No system telemetry in UI | `measurement_stamp`, `measurement_cohort_note`, `compared_with_library` omitted from coaching report payload |
+| One interpretation block | `editorial_readout`: what_happening, why_it_matters, what_to_try_next |
+| Uncertain narrative cues | `narrative_timeline_service` uses “appears”, “possible”, “no clear closure detected” |
+| Demo transcript | `transcript_warning` on producer + actions views |
+
+---
+
+## Default episode UI (3 tabs)
+
+| Tab | Layer | API field |
+|-----|-------|-----------|
+| **Signals** | 2 | `measurements` |
+| **Editorial readout** | 3 | `editorial_readout` + `structure_label` |
+| **Next episode** | 3C | `actions` + `keep_patterns` |
+
+**Advanced (collapsed):** full legacy `translation.report` for debugging only.
+
+---
+
 ## Implementation map
 
 | File | Role |

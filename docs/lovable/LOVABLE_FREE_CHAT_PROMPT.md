@@ -91,11 +91,11 @@ Loading and error states on every data surface. No mock numbers. No fake podcast
 
 Parse id as number. Page or full-screen modal.
 
-**Primary UI (tabs):** Measurements | Structure | Next episode
+**Primary UI (tabs):** Signals | Editorial readout | Next episode
 
 On load (parallel):
-- getProducerReport(id) — transcript_warning banner if present; tab Measurements uses .measurements; tab Structure uses structure_label, structural_identity, patterns, leverage_points (max 3)
-- getActionsReport(id) — tab Next episode: actions[] + keep_patterns[]
+- getProducerReport(id) — transcript_warning if present; tab Signals = .measurements only; tab Editorial readout = structure_label + editorial_readout (what_happening, why_it_matters — no duplicate listener/playbook sections)
+- getActionsReport(id) — tab Next episode: actions[] + keep_patterns[] (from editorial_readout.what_to_try_next)
 - getEpisode(id) — title in header
 - episodeState(id) — meta line (episode #, podcast_name, status); pipeline steps row: Ingested | Transcript | Measured | Insight (booleans from state.steps)
 - getEpisodeFeatures(id) — catch with isNotFoundError: 404 → hide measurement grids; 200 → render metrics (see below). Do NOT call processEpisode on open just to load metrics.

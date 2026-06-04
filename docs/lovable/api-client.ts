@@ -357,11 +357,12 @@ export const soapboxxApi = {
       transcript_warning?: { code: string; message: string } | null;
       structure_label: string;
       template_id: string;
-      structural_identity: string[];
       measurements: EpisodeFeatures;
-      patterns: string[];
-      leverage_points: string[];
-      editorial_tradeoffs: string[];
+      editorial_readout: {
+        what_happening: string[];
+        why_it_matters: string[];
+        what_to_try_next: string[];
+      };
       transcript_limitations: string[];
     }>(`/episodes/${id}/report/producer`),
 

@@ -241,6 +241,12 @@ class EpisodeMeasurementsViewRead(BaseModel):
     cta_present: Optional[bool] = None
 
 
+class EditorialReadoutRead(BaseModel):
+    what_happening: List[str] = []
+    why_it_matters: List[str] = []
+    what_to_try_next: List[str] = []
+
+
 class EpisodeProducerReportRead(BaseModel):
     episode_id: int
     title: str
@@ -248,11 +254,8 @@ class EpisodeProducerReportRead(BaseModel):
     transcript_warning: Optional[TranscriptWarningRead] = None
     structure_label: str
     template_id: str
-    structural_identity: List[str] = []
     measurements: EpisodeMeasurementsViewRead
-    patterns: List[str] = []
-    leverage_points: List[str] = []
-    editorial_tradeoffs: List[str] = []
+    editorial_readout: EditorialReadoutRead
     transcript_limitations: List[str] = []
 
 

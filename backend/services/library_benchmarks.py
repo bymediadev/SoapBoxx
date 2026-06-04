@@ -12,8 +12,8 @@ from backend.models import EpisodeFeatures
 from backend.services.measurement_versions import filter_comparable_rows, stamp_for_row
 
 MIN_SAMPLES = 3
-# Below this count, use "most / few" language — not hard percentiles.
-PCT_PRECISION_MIN = 10
+# User-facing copy never uses explicit percentiles (trust architecture).
+# Internal _pct_* helpers remain for band thresholds only.
 
 
 @dataclass(frozen=True)
@@ -88,12 +88,6 @@ def _compare_higher_is_faster(
 ) -> str:
     """``pct_more`` = share of library with a higher (slower) value than current."""
     ctx = _library_ctx(n)
-    if n >= PCT_PRECISION_MIN:
-        if pct_more >= 55:
-            return f"{fast_label} than {pct_more}% of measured episodes {ctx}"
-        if pct_more <= 35:
-            return f"{slow_label} than most measured episodes {ctx}"
-        return f"{mid_label} {ctx}"
     if pct_more >= 50:
         return f"{fast_label} than most episodes {ctx}"
     if pct_more <= 25:
@@ -111,12 +105,6 @@ def _compare_higher_means_more(
 ) -> str:
     """``pct_more`` = share of library strictly above current (current is lower)."""
     ctx = _library_ctx(n)
-    if n >= PCT_PRECISION_MIN:
-        if pct_more >= 55:
-            return f"{fewer_label} than {pct_more}% of measured episodes {ctx}"
-        if pct_more <= 35:
-            return f"{more_label} than most measured episodes {ctx}"
-        return f"{mid_label} {ctx}"
     if pct_more >= 50:
         return f"{fewer_label} than most episodes {ctx}"
     if pct_more <= 25:
@@ -184,13 +172,6 @@ def benchmark_turns(count: int, lib: LibraryBenchmarks) -> Optional[str]:
             f"handoffs can still read as long narrative blocks {ctx}"
         )
 
-    if n >= PCT_PRECISION_MIN:
-        if pct_more >= 55:
-            return f"Longer uninterrupted segments than {pct_more}% of measured episodes {ctx}"
-        if pct_less is not None and pct_less >= 55:
-            return f"More frequent handoffs than {pct_less}% of measured episodes {ctx}"
-        return f"Turn count near the middle {ctx}"
-
     if pct_more >= 50:
         return f"Longer uninterrupted segments than most episodes {ctx}"
     if pct_less is not None and pct_less >= 50:
@@ -256,4 +237,4 @@ def library_comparison_bullets(
             f"Compared with {lib.n_measured} measured episodes in your library, "
             "this episode sits near the middle on opening length, questions, and turns."
         )
-    return bullets[:5]
+    return bullets[:2]
