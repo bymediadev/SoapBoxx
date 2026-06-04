@@ -81,6 +81,21 @@ class RssIngestResponse(BaseModel):
     episode_ids: list[int] = Field(default_factory=list)
 
 
+class PodcastSearchHitRead(BaseModel):
+    collection_id: int
+    name: str
+    artist: str
+    rss_url: str
+    artwork_url: Optional[str] = None
+    genre: Optional[str] = None
+    episode_count: Optional[int] = None
+
+
+class PodcastSearchResponse(BaseModel):
+    query: str
+    results: List[PodcastSearchHitRead] = []
+
+
 class TranscribeRequest(BaseModel):
     transcript: Optional[str] = Field(
         None,
@@ -209,6 +224,51 @@ class TranslationRead(BaseModel):
     report: Optional[CoachingReportRead] = None
 
     model_config = {"from_attributes": True}
+
+
+class TranscriptWarningRead(BaseModel):
+    code: str
+    message: str
+
+
+class EpisodeMeasurementsViewRead(BaseModel):
+    hook_length_seconds: Optional[float] = None
+    intro_length_seconds: Optional[float] = None
+    question_count: Optional[int] = None
+    speaking_turns: Optional[int] = None
+    host_guest_ratio: Optional[float] = None
+    topic_shift_count: Optional[int] = None
+    cta_present: Optional[bool] = None
+
+
+class EpisodeProducerReportRead(BaseModel):
+    episode_id: int
+    title: str
+    disclaimer: str
+    transcript_warning: Optional[TranscriptWarningRead] = None
+    structure_label: str
+    template_id: str
+    structural_identity: List[str] = []
+    measurements: EpisodeMeasurementsViewRead
+    patterns: List[str] = []
+    leverage_points: List[str] = []
+    editorial_tradeoffs: List[str] = []
+    transcript_limitations: List[str] = []
+
+
+class EpisodeActionItemRead(BaseModel):
+    id: str
+    category: str
+    priority: str
+    text: str
+
+
+class EpisodeActionsReportRead(BaseModel):
+    episode_id: int
+    title: str
+    transcript_warning: Optional[TranscriptWarningRead] = None
+    actions: List[EpisodeActionItemRead] = []
+    keep_patterns: List[str] = []
 
 
 class ProcessEpisodeRequest(BaseModel):

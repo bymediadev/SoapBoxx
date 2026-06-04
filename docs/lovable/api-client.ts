@@ -64,6 +64,21 @@ export type EpisodesPage = {
   status?: string | null;
 };
 
+export type PodcastSearchHit = {
+  collection_id: number;
+  name: string;
+  artist: string;
+  rss_url: string;
+  artwork_url?: string | null;
+  genre?: string | null;
+  episode_count?: number | null;
+};
+
+export type PodcastSearchResponse = {
+  query: string;
+  results: PodcastSearchHit[];
+};
+
 export type ProcessBatchResult = {
   requested: number;
   attempted: number;
@@ -302,6 +317,12 @@ export const soapboxxApi = {
 
   weeklyPatterns: () => api<WeeklyPatterns>("/insights/patterns/weekly"),
 
+  /** Search podcasts by name; each hit includes rss_url for ingestRss(). */
+  searchPodcasts: (q: string, limit = 15) =>
+    api<PodcastSearchResponse>(
+      `/ingest/podcasts/search?q=${encodeURIComponent(q)}&limit=${limit}`
+    ),
+
   ingestRss: (rss_url: string) =>
     api<{
       podcast_id: number;
@@ -326,6 +347,33 @@ export const soapboxxApi = {
 
   /** 404 if episode has not been translated yet. */
   getTranslation: (id: number) => api<TranslationDetail>(`/episodes/${id}/translation`),
+
+  /** Layer 4A — curated producer view (no schema/cohort/percentile noise). */
+  getProducerReport: (id: number) =>
+    api<{
+      episode_id: number;
+      title: string;
+      disclaimer: string;
+      transcript_warning?: { code: string; message: string } | null;
+      structure_label: string;
+      template_id: string;
+      structural_identity: string[];
+      measurements: EpisodeFeatures;
+      patterns: string[];
+      leverage_points: string[];
+      editorial_tradeoffs: string[];
+      transcript_limitations: string[];
+    }>(`/episodes/${id}/report/producer`),
+
+  /** Layer 4B — next-episode actions (editorial coach). */
+  getActionsReport: (id: number) =>
+    api<{
+      episode_id: number;
+      title: string;
+      transcript_warning?: { code: string; message: string } | null;
+      actions: { id: string; category: string; priority: string; text: string }[];
+      keep_patterns: string[];
+    }>(`/episodes/${id}/report/actions`),
 
   /**
    * Run pipeline: skip STT if transcript exists unless force_retranscribe.

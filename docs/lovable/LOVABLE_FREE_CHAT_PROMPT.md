@@ -80,22 +80,33 @@ Episodes table (main content) — NOT only home.episodes (that is 5 preview rows
 - Columns: Title, Show, Status; row click → /episode/:id (numeric id)
 - Status pills styled by status string (ready, queued, etc.)
 
-RSS ingest: soapboxxApi.ingestRss(url) → show episodes_created / episodes_skipped → refresh home + episodes table.
+Add podcast — search by name then ingest:
+- soapboxxApi.searchPodcasts(query, 15) → results[].name, artist, rss_url, artwork_url, genre
+- Show results list; "Add feed" → soapboxxApi.ingestRss(hit.rss_url) → episodes_created / episodes_skipped → refresh
+- Or manual RSS URL field → ingestRss(url) (same as /ui/)
 
 Loading and error states on every data surface. No mock numbers. No fake podcast names.
 
-=== STEP 5 — Episode detail (/episode/:id) — coaching report v2 ===
+=== STEP 5 — Episode detail (/episode/:id) — Layer 4 views first ===
 
-Parse id as number. Page or full-screen modal — same sections as /ui/.
+Parse id as number. Page or full-screen modal.
+
+**Primary UI (tabs):** Measurements | Structure | Next episode
 
 On load (parallel):
+- getProducerReport(id) — transcript_warning banner if present; tab Measurements uses .measurements; tab Structure uses structure_label, structural_identity, patterns, leverage_points (max 3)
+- getActionsReport(id) — tab Next episode: actions[] + keep_patterns[]
 - getEpisode(id) — title in header
 - episodeState(id) — meta line (episode #, podcast_name, status); pipeline steps row: Ingested | Transcript | Measured | Insight (booleans from state.steps)
 - getEpisodeFeatures(id) — catch with isNotFoundError: 404 → hide measurement grids; 200 → render metrics (see below). Do NOT call processEpisode on open just to load metrics.
 - getTranslation(id) — catch isNotFoundError: 404 → show empty state + Run pipeline; 200 → render report
 
-Report rendering — if translation.report has episode_structure OR listener_experience (coaching report v2):
-Show “Coaching report · v2” and these sections when data present (hide empty sections):
+Do NOT show measurement_stamp, measurement_cohort_note, or compared_with_library percentile lines in the default view.
+
+**Advanced (collapsed):** optional getTranslation(id).report — full coaching v2 for power users only.
+
+Legacy report rendering — if translation.report has episode_structure OR listener_experience (inside Advanced only):
+Show these sections when data present (hide empty sections):
 - measurement_cohort_note, measurement_stamp (schema / extraction / aggregation versions)
 - transcript_limitations (paragraph)
 - structural_identity (lines)

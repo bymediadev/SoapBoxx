@@ -105,11 +105,12 @@ After RSS ingest, episodes start as **`queued`**. Ingest emits `ingest.started` 
 | Lovable screen | `soapboxxApi` method | Notes |
 |----------------|----------------------|--------|
 | **Library home** | `libraryHome()` | One bundle: stats, pipeline, tree, episodes, activity, patterns |
-| **Ingestion** | `ingestRss(url)` then `libraryHome()` | RSS form |
+| **Ingestion** | `searchPodcasts(q)` → `ingestRss(rss_url)` or paste URL | Name search resolves RSS via iTunes directory |
 | **Episodes index** | `libraryEpisodes(limit)` or rows from `libraryHome()` | Filter by `podcast_id` when needed |
 | **Shows** | `listPodcasts()` and/or `libraryTree()` | Tree embeds shows per taxonomy branch |
 | **Insights / patterns** | `weeklyPatterns()` or `libraryHome().patterns` | Weekly structural snapshot |
-| **Episode detail** | `getEpisode`, `episodeState`, `getEpisodeFeatures`, `getTranslation` | Match `/ui/` coaching report v2 |
+| **Episode detail (default)** | `getProducerReport`, `getActionsReport`, `getEpisodeFeatures` | Tabs: Measurements / Structure / Next episode |
+| **Episode detail (advanced)** | `getTranslation` → `report` | Collapsed “full coaching report” only |
 | **Run pipeline** | `processEpisode(id, {})` | Empty body; poll state if `queued` |
 | **Metrics on detail** | `getEpisodeFeatures(id)` | 404 until measured; do not run pipeline on open for metrics |
 | **Batch** | `processNextBatch(10)` | Topbar “Process next 10” |
@@ -122,7 +123,8 @@ After RSS ingest, episodes start as **`queued`**. Ingest emits `ingest.started` 
 - Render full `translation.report` when present (coaching report v2); legacy `insight_text` only if report empty.
 - `getTranslation` → 404 means “not processed yet”; show **Run pipeline**.
 - Default pipeline: `processEpisode(id, {})` — never `force_retranscribe` in the main UI.
-- Visual reference: `static/v1-library/index.html` → `showCoachingReport()`.
+- Layer contracts: [`LAYER_ARCHITECTURE.md`](LAYER_ARCHITECTURE.md)
+- Visual reference: `static/v1-library/index.html` — Layer 4 tabs + Advanced details
 
 ---
 

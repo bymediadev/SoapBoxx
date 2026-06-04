@@ -2,18 +2,49 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from backend.api.config import get_settings
 from backend.api.deps import get_db
-from backend.api.schemas import RssIngestRequest, RssIngestResponse
+from backend.api.schemas import (
+    PodcastSearchHitRead,
+    PodcastSearchResponse,
+    RssIngestRequest,
+    RssIngestResponse,
+)
+from backend.services.podcast_discovery_service import search_podcasts_by_name
 from backend.services.rss_service import (
     dispatch_processing_for_episodes,
     ingest_rss_feed,
 )
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
+
+
+@router.get("/podcasts/search", response_model=PodcastSearchResponse)
+def search_podcasts(
+    q: str = Query(..., min_length=2, max_length=200, description="Podcast name"),
+    limit: int = Query(15, ge=1, le=50),
+) -> PodcastSearchResponse:
+    """Find podcasts by name; each result includes an RSS feed URL for ingest."""
+    try:
+        hits = search_podcasts_by_name(q, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Podcast search unavailable: {exc}",
+        ) from exc
+    return PodcastSearchResponse(
+        query=q.strip(),
+        results=[PodcastSearchHitRead(**h.to_dict()) for h in hits],
+    )
 
 
 @router.post("/rss", response_model=RssIngestResponse, status_code=status.HTTP_201_CREATED)

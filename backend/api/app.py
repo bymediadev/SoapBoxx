@@ -18,6 +18,7 @@ from backend.api.routes import (
     library,
     pipeline,
     podcasts,
+    report,
     system,
     taxonomy,
     ui,
@@ -48,6 +49,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(podcasts.router)
     app.include_router(episodes.router)
+    app.include_router(report.router)
     app.include_router(ingest.router)
     app.include_router(taxonomy.router)
     app.include_router(library.router)

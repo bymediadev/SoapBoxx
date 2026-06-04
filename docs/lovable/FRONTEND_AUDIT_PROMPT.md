@@ -89,25 +89,25 @@ VITE_API_URL=https://soapboxx-production.up.railway.app
 - [ ] Each episode row links to `/episode/:id` (numeric id)
 - [ ] Loading + error states (no mock fallback)
 
-### 3. RSS ingest
+### 3. RSS ingest / podcast search
 
-- [ ] Submit calls `soapboxxApi.ingestRss(url)`
+- [ ] Search: `soapboxxApi.searchPodcasts(q, 15)` — results with `rss_url`
+- [ ] "Add feed" on a result calls `ingestRss(hit.rss_url)` (or fills URL then ingest)
+- [ ] Manual RSS URL still works via `ingestRss(url)`
 - [ ] Success shows `episodes_created`, `episodes_skipped`, `episodes_dispatched`
 - [ ] Refetch library after ingest
 - [ ] Errors shown inline, not silent
 
-### 4. Episode detail `/episode/:id` (coaching report v2 — match `/ui/`)
+### 4. Episode detail `/episode/:id` (Layer 4 first — match `/ui/`)
 
 - [ ] Parse `id` as number
-- [ ] Parallel load: `getEpisode`, `episodeState`, `getEpisodeFeatures` (404 OK), `getTranslation` (404 OK via `isNotFoundError`)
-- [ ] Pipeline steps row: ingested, transcribed, measured, insight_ready
-- [ ] If `translation.report` has structure: full coaching report sections (identity, leverage, narrative engine, producer notes, motion track, fingerprints tables, compared, variance, listener, editorial, playbook or pattern, similar)
-- [ ] Legacy fallback: `insight_text` only when report empty
-- [ ] **Measurements**: `getEpisodeFeatures(id)` on load — do **not** call `processEpisode` just to display metrics
-- [ ] Seven metrics + Opening / Conversation shape / collapsible “All measurements”
-- [ ] **Run pipeline** → `processEpisode(id, {})`; poll `episodeState` if status `queued`
-- [ ] Report disclaimer present; no mock metrics
-- [ ] Ready episodes show report without re-running pipeline on open
+- [ ] Tabs: `getProducerReport` (measurements + structure), `getActionsReport` (next episode)
+- [ ] `transcript_warning` banner when demo/missing transcript
+- [ ] Default view: no schema versions, cohort notes, or library percentile lines
+- [ ] Advanced (collapsed): `getTranslation().report` full coaching v2 only
+- [ ] Pipeline steps: ingested, transcribed, measured, insight_ready
+- [ ] **Run pipeline** → `processEpisode(id, {})`; poll if `queued`
+- [ ] Do not call `processEpisode` on open just to show metrics
 
 ### 5. Shows / catalog (if present)
 
@@ -203,10 +203,13 @@ Publish the app after fixes.
 |--------|--------|------|
 | Health | GET | `/health` |
 | Library home | GET | `/library/home` |
+| Search podcasts | GET | `/ingest/podcasts/search?q=` |
 | Ingest RSS | POST | `/ingest/rss` |
 | Episode | GET | `/episodes/{id}` |
 | Episode features | GET | `/episodes/{id}/features` |
 | Episode state | GET | `/episodes/{id}/state` |
+| Producer report | GET | `/episodes/{id}/report/producer` |
+| Actions report | GET | `/episodes/{id}/report/actions` |
 | Translation | GET | `/episodes/{id}/translation` |
 | Run pipeline | POST | `/episodes/{id}/process` body `{}` |
 | Process batch | POST | `/pipeline/process?limit=10` |

@@ -271,6 +271,73 @@
     .ingest-msg { font-size: 12px; margin-top: 8px; color: var(--muted-foreground); font-family: "JetBrains Mono", monospace; }
     .ingest-msg.ok { color: var(--amber); }
     .ingest-msg.err { color: var(--destructive); }
+    .podcast-search-block { margin-bottom: 14px; }
+    .podcast-search-results {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .podcast-hit {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--background);
+    }
+    .podcast-hit img {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-sm);
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .podcast-hit .meta { flex: 1; min-width: 0; }
+    .podcast-hit .title { font-weight: 600; font-size: 14px; }
+    .podcast-hit .sub {
+      font-size: 12px;
+      color: var(--muted-foreground);
+      margin-top: 2px;
+    }
+    .transcript-warning {
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--destructive);
+      background: oklch(0.6 0.2 25 / 0.12);
+      color: var(--destructive-foreground);
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+    .layer4-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .layer4-tabs .btn.active {
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+    .layer4-panel { display: none; }
+    .layer4-panel.active { display: block; }
+    .action-item {
+      padding: 10px 12px;
+      border-left: 3px solid var(--amber);
+      margin-bottom: 8px;
+      background: var(--background);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    }
+    .action-item .priority {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted-foreground);
+      font-family: "JetBrains Mono", monospace;
+    }
 
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th {
@@ -756,7 +823,16 @@
         </div>
 
         <section class="card" style="margin-bottom: 16px">
-          <div class="card-title">Ingest RSS</div>
+          <div class="card-title">Add podcast</div>
+          <p class="card-hint" style="margin-bottom:10px">Search by show name (Apple Podcasts directory) or paste an RSS URL.</p>
+          <div class="podcast-search-block">
+            <div class="ingest-row">
+              <input id="podcastSearchQuery" type="search" placeholder="e.g. Planet Money, Acquired, Lenny's Podcast" autocomplete="off" />
+              <button type="button" class="btn btn-ghost" id="podcastSearchBtn">Search</button>
+            </div>
+            <div id="podcastSearchResults" class="podcast-search-results" hidden></div>
+          </div>
+          <div class="card-title" style="margin-top:12px">RSS URL</div>
           <div class="ingest-row">
             <input id="rssUrl" type="url" placeholder="https://feeds.example.com/podcast.xml" autocomplete="url" />
             <button type="button" class="btn btn-primary" id="ingestBtn">Ingest</button>
@@ -822,13 +898,19 @@
           </div>
           <p class="detail-meta" id="detailMeta"></p>
           <div class="detail-steps" id="detailSteps"></div>
-          <p class="report-disclaimer">
-            We show how the episode is built — not a quality verdict.
-            Structure signals only; not audience prediction.
-          </p>
-          <p id="detailCohortNote" class="topic-note" style="display:none"></p>
-          <p id="detailMeasurementStamp" class="card-hint" style="display:none;margin-top:0"></p>
-          <p id="detailTranscriptLimits" class="topic-note" style="display:none"></p>
+          <div id="detailTranscriptWarning" class="transcript-warning" style="display:none" role="alert"></div>
+          <div id="detailLayer4" style="display:none">
+            <div class="layer4-tabs">
+              <button type="button" class="btn btn-ghost active" data-layer4="measurements">Measurements</button>
+              <button type="button" class="btn btn-ghost" data-layer4="structure">Structure</button>
+              <button type="button" class="btn btn-ghost" data-layer4="actions">Next episode</button>
+            </div>
+            <div id="layer4Measurements" class="layer4-panel active"></div>
+            <div id="layer4Structure" class="layer4-panel"></div>
+            <div id="layer4Actions" class="layer4-panel"></div>
+          </div>
+          <details class="report-details" id="detailAdvancedWrap" style="display:none;margin-top:16px">
+            <summary>Advanced — full coaching report</summary>
           <div id="detailCoaching" style="display:none">
             <p class="report-version">Coaching report · v2</p>
             <div id="detailIdentity" class="report-section">
@@ -915,6 +997,7 @@
               <p id="detailSimilarText"></p>
             </div>
           </div>
+          </details>
           <div class="insight-box" id="detailInsightLegacy" style="display:none">
             <h3 class="font-serif">Insight</h3>
             <p id="detailInsightText"></p>
@@ -1321,6 +1404,125 @@
       renderEpisodeReport(features);
     }
 
+    function showTranscriptWarning(warning) {
+      const el = document.getElementById("detailTranscriptWarning");
+      if (!warning || !warning.message) {
+        el.style.display = "none";
+        el.textContent = "";
+        return;
+      }
+      el.textContent = warning.message;
+      el.style.display = "block";
+    }
+
+    function setLayer4Tab(name) {
+      document.querySelectorAll("[data-layer4]").forEach((btn) => {
+        btn.classList.toggle("active", btn.getAttribute("data-layer4") === name);
+      });
+      document.querySelectorAll(".layer4-panel").forEach((p) => p.classList.remove("active"));
+      const panel = document.getElementById(
+        "layer4" + name.charAt(0).toUpperCase() + name.slice(1)
+      );
+      if (panel) panel.classList.add("active");
+    }
+
+    function renderLayer4Measurements(m) {
+      const rows = [
+        ["Hook", m.hook_length_seconds != null ? fmtSeconds(m.hook_length_seconds) : "—"],
+        ["Intro", m.intro_length_seconds != null ? fmtSeconds(m.intro_length_seconds) : "—"],
+        ["Questions", m.question_count ?? "—"],
+        ["Speaking turns", m.speaking_turns ?? "—"],
+        ["Guest talk ratio", m.host_guest_ratio != null ? fmtRatio(m.host_guest_ratio) : "—"],
+        [
+          "Transition markers",
+          m.topic_shift_count == null
+            ? "—"
+            : m.topic_shift_count === 0
+              ? "None detected"
+              : m.topic_shift_count,
+        ],
+        ["CTA", m.cta_present == null ? "—" : m.cta_present ? "yes" : "no"],
+      ];
+      document.getElementById("layer4Measurements").innerHTML =
+        `<p class="card-hint" style="margin-top:0">Layer 2 — what happened in the transcript. No scores.</p>` +
+        `<div class="metrics-grid">` +
+        rows
+          .map(
+            ([k, v]) =>
+              `<div class="metric"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`
+          )
+          .join("") +
+        `</div>`;
+    }
+
+    function renderLayer4Structure(producer) {
+      const idLines = (producer.structural_identity || [])
+        .map((line) => `<p class="identity-line">${esc(line)}</p>`)
+        .join("");
+      const patterns = (producer.patterns || [])
+        .map((b) => `<li>${esc(b)}</li>`)
+        .join("");
+      const leverage = (producer.leverage_points || [])
+        .map((b) => `<li>${esc(b)}</li>`)
+        .join("");
+      document.getElementById("layer4Structure").innerHTML = `
+        <p class="card-hint" style="margin-top:0">${esc(producer.disclaimer || "")}</p>
+        <h3 class="font-serif">${esc(producer.structure_label || "")}</h3>
+        <div class="identity-lines">${idLines || "<p class=\"empty\">—</p>"}</div>
+        <h4 class="font-serif" style="font-size:0.9rem;margin:16px 0 6px">How it feels</h4>
+        <ul class="coaching-list">${patterns || "<li class=\"empty\">—</li>"}</ul>
+        ${
+          leverage
+            ? `<h4 class="font-serif" style="font-size:0.9rem;margin:12px 0 6px">Structural bands</h4><ul class="coaching-list">${leverage}</ul>`
+            : ""
+        }`;
+    }
+
+    function renderLayer4Actions(actionsReport) {
+      const actions = actionsReport.actions || [];
+      const keep = actionsReport.keep_patterns || [];
+      const actionsHtml = actions.length
+        ? actions
+            .map(
+              (a) =>
+                `<div class="action-item"><div class="priority">${esc(a.category)} · ${esc(a.priority)}</div><div>${esc(a.text)}</div></div>`
+            )
+            .join("")
+        : '<p class="empty">Run the pipeline on a measured episode to generate replay checks.</p>';
+      const keepHtml = keep.length
+        ? `<h4 class="font-serif" style="font-size:0.9rem;margin:16px 0 6px">Keep doing</h4><ul class="coaching-list">${keep.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>`
+        : "";
+      document.getElementById("layer4Actions").innerHTML =
+        `<p class="card-hint" style="margin-top:0">Editorial coach — what to test on the next episode.</p>` +
+        actionsHtml +
+        keepHtml;
+    }
+
+    async function loadLayer4Views(episodeId) {
+      const layer4 = document.getElementById("detailLayer4");
+      layer4.style.display = "none";
+      try {
+        const [producer, actions] = await Promise.all([
+          api(`/episodes/${episodeId}/report/producer`),
+          api(`/episodes/${episodeId}/report/actions`),
+        ]);
+        showTranscriptWarning(producer.transcript_warning || actions.transcript_warning);
+        renderLayer4Measurements(producer.measurements || {});
+        renderLayer4Structure(producer);
+        renderLayer4Actions(actions);
+        layer4.style.display = "block";
+        document.getElementById("detailAdvancedWrap").style.display = "block";
+        document.getElementById("detailOpening").style.display = "none";
+        document.getElementById("detailShape").style.display = "none";
+        document.getElementById("detailAllMetricsWrap").style.display = "none";
+        setLayer4Tab("measurements");
+      } catch (e) {
+        if (!String(e.message).includes("404")) {
+          console.warn("Layer4 views:", e.message);
+        }
+      }
+    }
+
     function renderCoachingTable(tableEl, rows) {
       if (!rows || !rows.length) {
         tableEl.innerHTML = "";
@@ -1390,23 +1592,6 @@
             .join("");
         } else {
           identityEl.style.display = "none";
-        }
-
-        const cohortNote = document.getElementById("detailCohortNote");
-        if (report.measurement_cohort_note) {
-          cohortNote.textContent = report.measurement_cohort_note;
-          cohortNote.style.display = "block";
-        } else {
-          cohortNote.style.display = "none";
-        }
-        const stampEl = document.getElementById("detailMeasurementStamp");
-        const stamp = report.measurement_stamp;
-        if (stamp && stamp.feature_schema_version) {
-          stampEl.textContent =
-            `Measurement schema ${stamp.feature_schema_version} · extraction ${stamp.extraction_version} · aggregation ${stamp.aggregation_version}`;
-          stampEl.style.display = "block";
-        } else {
-          stampEl.style.display = "none";
         }
 
         const leverage = report.leverage_points || [];
@@ -1538,10 +1723,7 @@
         } else {
           topicNote.style.display = "none";
         }
-        const compared = report.compared_with_library || [];
-        document.getElementById("detailComparedList").innerHTML = compared
-          .map((b) => `<li>${esc(b)}</li>`)
-          .join("");
+        document.getElementById("detailCompared").style.display = "none";
         const variance = report.structural_variance || [];
         document.getElementById("detailVarianceList").innerHTML = variance
           .map((b) => `<li>${esc(b)}</li>`)
@@ -1595,6 +1777,9 @@
       renderDetailSteps(null);
       renderDetailMetrics(null);
       showCoachingReport(null, null);
+      showTranscriptWarning(null);
+      document.getElementById("detailLayer4").style.display = "none";
+      document.getElementById("detailAdvancedWrap").style.display = "none";
 
       try {
         const [episode, state] = await Promise.all([
@@ -1622,6 +1807,7 @@
           if (!String(e.message).includes("404")) throw e;
         }
         showCoachingReport(translation, features);
+        await loadLayer4Views(episodeId);
         const idx = episodePageIds.indexOf(episodeId);
         const pos =
           browse.total && idx >= 0
@@ -1789,14 +1975,11 @@
       setBrowsePodcast(id);
     });
     document.getElementById("detailProcessBtn").addEventListener("click", runEpisodePipeline);
-    document.getElementById("ingestBtn").addEventListener("click", async () => {
-      const url = document.getElementById("rssUrl").value.trim();
+    document.querySelectorAll("[data-layer4]").forEach((btn) => {
+      btn.addEventListener("click", () => setLayer4Tab(btn.getAttribute("data-layer4")));
+    });
+    async function ingestRssUrl(url) {
       const msg = document.getElementById("ingestMsg");
-      if (!url) {
-        msg.textContent = "Enter an RSS URL.";
-        msg.className = "ingest-msg err";
-        return;
-      }
       const btn = document.getElementById("ingestBtn");
       btn.disabled = true;
       msg.textContent = "Ingesting…";
@@ -1806,6 +1989,7 @@
         msg.textContent = `+${r.episodes_created} created, ${r.episodes_skipped} skipped`;
         msg.className = "ingest-msg ok";
         document.getElementById("rssUrl").value = "";
+        document.getElementById("podcastSearchResults").hidden = true;
         await refresh();
       } catch (e) {
         msg.textContent = e.message;
@@ -1813,6 +1997,90 @@
       } finally {
         btn.disabled = false;
       }
+    }
+
+    function renderPodcastSearchResults(hits) {
+      const el = document.getElementById("podcastSearchResults");
+      if (!hits || !hits.length) {
+        el.innerHTML = '<p class="card-hint">No podcasts with RSS feeds found. Try another name or paste a feed URL.</p>';
+        el.hidden = false;
+        return;
+      }
+      el.innerHTML = hits
+        .map((h) => {
+          const art = h.artwork_url
+            ? `<img src="${esc(h.artwork_url)}" alt="" loading="lazy" />`
+            : "";
+          const genre = h.genre ? esc(h.genre) : "";
+          const eps =
+            h.episode_count != null ? ` · ~${esc(h.episode_count)} episodes` : "";
+          return `<div class="podcast-hit">
+            ${art}
+            <div class="meta">
+              <div class="title">${esc(h.name)}</div>
+              <div class="sub">${esc(h.artist)}${genre ? " · " + genre : ""}${eps}</div>
+            </div>
+            <button type="button" class="btn btn-primary btn-add-feed" data-rss-url="${esc(h.rss_url)}">Add feed</button>
+          </div>`;
+        })
+        .join("");
+      el.hidden = false;
+      el.querySelectorAll(".btn-add-feed").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const feed = btn.getAttribute("data-rss-url");
+          if (!feed) return;
+          document.getElementById("rssUrl").value = feed;
+          await ingestRssUrl(feed);
+        });
+      });
+    }
+
+    async function runPodcastSearch() {
+      const q = document.getElementById("podcastSearchQuery").value.trim();
+      const msg = document.getElementById("ingestMsg");
+      const btn = document.getElementById("podcastSearchBtn");
+      if (q.length < 2) {
+        msg.textContent = "Enter at least 2 characters to search.";
+        msg.className = "ingest-msg err";
+        return;
+      }
+      btn.disabled = true;
+      msg.textContent = "Searching…";
+      msg.className = "ingest-msg";
+      try {
+        const data = await api(
+          "/ingest/podcasts/search?q=" + encodeURIComponent(q) + "&limit=15"
+        );
+        renderPodcastSearchResults(data.results || []);
+        msg.textContent = (data.results || []).length
+          ? `Found ${data.results.length} show(s) with RSS feeds`
+          : "No matches";
+        msg.className = "ingest-msg ok";
+      } catch (e) {
+        msg.textContent = e.message;
+        msg.className = "ingest-msg err";
+        document.getElementById("podcastSearchResults").hidden = true;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById("podcastSearchBtn").addEventListener("click", runPodcastSearch);
+    document.getElementById("podcastSearchQuery").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        runPodcastSearch();
+      }
+    });
+    document.getElementById("ingestBtn").addEventListener("click", async () => {
+      const url = document.getElementById("rssUrl").value.trim();
+      const msg = document.getElementById("ingestMsg");
+      if (!url) {
+        msg.textContent = "Enter an RSS URL or search for a show above.";
+        msg.className = "ingest-msg err";
+        return;
+      }
+      await ingestRssUrl(url);
     });
 
     function openEpisodeFromHash() {
