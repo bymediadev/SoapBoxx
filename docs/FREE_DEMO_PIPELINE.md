@@ -25,6 +25,47 @@ Limits (free tier): ~25MB per file, rate limits (~20 req/min). Long Planet Money
 
 Then: `POST /episodes/{id}/process` with empty body (downloads RSS audio → Groq → features → translate).
 
+## Accuracy mode (context over speed)
+
+When transcript fidelity matters more than queue throughput, enable on the **worker**:
+
+```env
+SOAPBOXX_STT_ACCURACY_MODE=true
+GROQ_API_KEY=gsk_...
+SOAPBOXX_TRANSCRIPTION_SERVICE=groq
+```
+
+Defaults with accuracy mode on:
+
+| Setting | Fast (default) | Accuracy mode |
+|---------|----------------|---------------|
+| Groq model | `whisper-large-v3-turbo` | `whisper-large-v3` |
+| HTTP timeout | 300s | 600s |
+| Local Whisper | `base` | `medium` |
+| Cloud compression | starts ~92% of 25MB cap | starts ~98% of cap |
+
+Re-process trusted episodes:
+
+```http
+POST /episodes/{id}/process
+{ "force_retranscribe": true }
+```
+
+**Interview shows (speaker labels):** opt into AssemblyAI diarization (paid):
+
+```env
+SOAPBOXX_TRANSCRIPTION_SERVICE=assemblyai
+ASSEMBLYAI_API_KEY=...
+ASSEMBLYAI_SPEECH_MODELS=universal-3-pro,universal-2
+SOAPBOXX_STT_ACCURACY_MODE=true
+```
+
+Uses the official `assemblyai` Python SDK when installed (`requirements-v1-api.txt`). Auth is the **raw API key** in the `Authorization` header — no `Bearer` prefix. Optional: `ASSEMBLYAI_API_BASE=https://api.eu.assemblyai.com` (EU), `SOAPBOXX_ASSEMBLYAI_KEYTERMS=Show Name,Guest Name` for vocabulary.
+
+AssemblyAI returns `Host:` / `Guest:` lines so `speaking_turns` and host/guest ratio metrics work. No Wispr-style filler stripping — Layer 1 stays faithful to speech.
+
+Agent/docs reference: [assemblyai.com/docs/llms.txt](https://www.assemblyai.com/docs/llms.txt)
+
 ## Recommended demo flow (zero API spend)
 
 ### 1. Ingest + UI (already working)

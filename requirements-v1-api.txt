@@ -15,5 +15,6 @@ celery>=5.4.0
 
 # Cloud STT (Groq/OpenAI) — mp3 decode; Railpack installs ffmpeg when pydub is present
 openai>=1.0.0
+assemblyai>=0.64.0
 pydub>=0.25.1
 numpy>=1.21.0

@@ -7,6 +7,7 @@ generate insights.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, List, Optional
@@ -43,6 +44,7 @@ class RssIngestResult:
     podcast_id: int
     created: int
     skipped: int
+    updated: int
     episode_ids: List[int]
     created_episode_ids: List[int]
 
@@ -52,6 +54,7 @@ class RssSyncResult:
     podcasts_checked: int = 0
     episodes_created: int = 0
     episodes_skipped: int = 0
+    episodes_updated: int = 0
     episodes_dispatched: int = 0
     failed_podcasts: int = 0
     results: List[dict[str, Any]] = field(default_factory=list)
@@ -61,6 +64,7 @@ class RssSyncResult:
             "podcasts_checked": self.podcasts_checked,
             "episodes_created": self.episodes_created,
             "episodes_skipped": self.episodes_skipped,
+            "episodes_updated": self.episodes_updated,
             "episodes_dispatched": self.episodes_dispatched,
             "failed_podcasts": self.failed_podcasts,
             "results": self.results,
@@ -199,6 +203,51 @@ def fetch_rss(url: str, *, timeout: int = 30) -> str:
         return resp.read().decode("utf-8", errors="replace")
 
 
+_PLACEHOLDER_TITLE_VALUES = frozenset(
+    {"", "untitled", "untitled episode", "untitled podcast", "episode"}
+)
+_EPISODE_NUMBER_TITLE = re.compile(r"^episode\s*#?\s*\d+\s*$", re.IGNORECASE)
+
+
+def _is_placeholder_title(title: Optional[str]) -> bool:
+    t = (title or "").strip()
+    if not t:
+        return True
+    if t.lower() in _PLACEHOLDER_TITLE_VALUES:
+        return True
+    return bool(_EPISODE_NUMBER_TITLE.match(t))
+
+
+def _refresh_episode_from_rss(episode: Episode, item: RssEpisodeItem) -> bool:
+    """Fill missing or placeholder episode fields from a fresh RSS item."""
+    changed = False
+
+    if _is_placeholder_title(episode.title) and not _is_placeholder_title(item.title):
+        episode.title = item.title
+        changed = True
+
+    if not (episode.description or "").strip() and item.description:
+        episode.description = item.description
+        changed = True
+
+    if not (episode.audio_url or "").strip() and item.audio_url:
+        episode.audio_url = item.audio_url
+        changed = True
+
+    if not (episode.guid or "").strip() and item.guid:
+        episode.guid = item.guid
+        changed = True
+
+    if episode.published_at is None and item.published_at is not None:
+        episode.published_at = item.published_at
+        changed = True
+
+    if changed:
+        episode.raw_rss_json = json.dumps(item.raw_rss, ensure_ascii=False)
+
+    return changed
+
+
 def _find_existing_episode(
     db: Session,
     podcast_id: int,
@@ -287,19 +336,25 @@ def _ingest_parsed(
             db.add(podcast)
             db.flush()
         else:
-            if meta.title and podcast.name != meta.title:
-                podcast.name = meta.title
+            if meta.title and (
+                _is_placeholder_title(podcast.name) or podcast.name != meta.title
+            ):
+                if not _is_placeholder_title(meta.title):
+                    podcast.name = meta.title
             if meta.description:
                 podcast.description = meta.description
 
     created = 0
     skipped = 0
+    updated = 0
     episode_ids: List[int] = []
     created_episode_ids: List[int] = []
 
     for item in items:
         existing = _find_existing_episode(db, int(podcast.id), item)
         if existing:
+            if _refresh_episode_from_rss(existing, item):
+                updated += 1
             skipped += 1
             episode_ids.append(int(existing.id))
             continue
@@ -332,9 +387,14 @@ def _ingest_parsed(
     record_event(
         db,
         "ingest.completed",
-        f"RSS ingest finished: {created} created, {skipped} skipped",
+        f"RSS ingest finished: {created} created, {skipped} skipped, {updated} updated",
         podcast_id=int(podcast.id),
-        meta={"created": created, "skipped": skipped, "rss_url": rss_url},
+        meta={
+            "created": created,
+            "skipped": skipped,
+            "updated": updated,
+            "rss_url": rss_url,
+        },
         commit=False,
     )
     db.commit()
@@ -343,6 +403,7 @@ def _ingest_parsed(
         podcast_id=int(podcast.id),
         created=created,
         skipped=skipped,
+        updated=updated,
         episode_ids=episode_ids,
         created_episode_ids=created_episode_ids,
     )
@@ -456,6 +517,7 @@ def sync_saved_rss_feeds(
             )
             summary.episodes_created += ingest_result.created
             summary.episodes_skipped += ingest_result.skipped
+            summary.episodes_updated += ingest_result.updated
             summary.episodes_dispatched += len(dispatched_ids)
             summary.results.append(
                 {
@@ -463,6 +525,7 @@ def sync_saved_rss_feeds(
                     "podcast_name": pod.name,
                     "created": ingest_result.created,
                     "skipped": ingest_result.skipped,
+                    "updated": ingest_result.updated,
                     "dispatched": len(dispatched_ids),
                 }
             )

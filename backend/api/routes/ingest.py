@@ -15,6 +15,7 @@ from backend.api.schemas import (
     RssIngestResponse,
 )
 from backend.services.podcast_discovery_service import search_podcasts_by_name
+from backend.models import Podcast
 from backend.services.rss_service import (
     dispatch_processing_for_episodes,
     ingest_rss_feed,
@@ -85,10 +86,13 @@ def ingest_rss(body: RssIngestRequest, db: Session = Depends(get_db)) -> RssInge
             exclude_episode_ids=dispatched_ids,
         )
         backlog_dispatched = backlog.get("dispatched", 0) + backlog.get("processed", 0)
+    pod = db.get(Podcast, result.podcast_id)
     return RssIngestResponse(
         podcast_id=result.podcast_id,
+        podcast_name=(pod.name if pod else "") or "",
         episodes_created=result.created,
         episodes_skipped=result.skipped,
+        episodes_updated=result.updated,
         episodes_dispatched=len(dispatched_ids) + backlog_dispatched,
         episode_ids=result.episode_ids,
     )

@@ -79,6 +79,43 @@ export type PodcastSearchResponse = {
   results: PodcastSearchHit[];
 };
 
+export type RssIngestResult = {
+  podcast_id: number;
+  podcast_name: string;
+  episodes_created: number;
+  episodes_skipped: number;
+  episodes_updated: number;
+  episodes_dispatched: number;
+  episode_ids: number[];
+};
+
+/** True when input should go straight to ingestRss (not iTunes search). */
+export function isRssUrlInput(value: string): boolean {
+  const s = (value || "").trim();
+  return /^https?:\/\//i.test(s) || /\.xml(\?|$)/i.test(s);
+}
+
+/** Success line after ingest — matches bundled /ui/ (use r.podcast_name from API). */
+export function formatIngestMessage(
+  r: RssIngestResult,
+  matchedName?: string
+): string {
+  const name = r.podcast_name || matchedName || "Podcast";
+  const parts = [name];
+  if (r.episodes_created > 0) {
+    parts.push(`${r.episodes_created} new episode(s)`);
+  } else if (r.episodes_skipped > 0) {
+    parts.push(`already in library (${r.episodes_skipped} episodes)`);
+  }
+  if (r.episodes_updated > 0) {
+    parts.push(`${r.episodes_updated} title(s) refreshed from RSS`);
+  }
+  if (r.episodes_dispatched > 0) {
+    parts.push(`${r.episodes_dispatched} queued for pipeline`);
+  }
+  return parts.join(" · ");
+}
+
 export type ProcessBatchResult = {
   requested: number;
   attempted: number;
@@ -324,13 +361,7 @@ export const soapboxxApi = {
     ),
 
   ingestRss: (rss_url: string) =>
-    api<{
-      podcast_id: number;
-      episodes_created: number;
-      episodes_skipped: number;
-      episodes_dispatched: number;
-      episode_ids: number[];
-    }>("/ingest/rss", {
+    api<RssIngestResult>("/ingest/rss", {
       method: "POST",
       body: JSON.stringify({ rss_url }),
     }),

@@ -46,8 +46,9 @@ After wiring, the library home must match production approximately:
 | `ready` in pipeline | ~4 |
 | Episode show name | **Planet Money** |
 | Fake data to REMOVE | 1492 episodes, 128 shows, Lenny's Podcast, Acquired, 87% measured, Business/Tech domain tree unless API returns them |
+| Placeholder titles to REMOVE | `Episode 1`, `Untitled episode`, `Sample episode`, any static episode list not from `GET /library/episodes` |
 
-If the UI shows Lenny's Podcast, Acquired, or ~1492 episodes, it is still on **mock data** — delete mocks and wire `soapboxxApi.libraryHome()`.
+If the UI shows Lenny's Podcast, Acquired, ~1492 episodes, or generic placeholder episode titles, it is still on **mock data** — delete mocks and wire `soapboxxApi.libraryHome()` + `libraryEpisodes()`. Titles must be RSS metadata from the API (`title`, `podcast_name` on each row).
 
 ---
 

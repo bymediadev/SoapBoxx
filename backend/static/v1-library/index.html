@@ -778,6 +778,24 @@
       outline: 1px solid var(--amber);
       background: oklch(0.28 0.018 65 / 0.35);
     }
+    .catalog-search {
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 8px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--sidebar-border);
+      background: oklch(0.14 0.01 60);
+      color: var(--sidebar-foreground);
+      font-size: 13px;
+    }
+    .catalog-search:focus {
+      outline: none;
+      border-color: var(--amber);
+    }
+    .tree .podcast.hidden-by-search,
+    .tree details.hidden-by-search {
+      display: none;
+    }
     .detail-nav {
       display: flex;
       gap: 8px;
@@ -800,6 +818,7 @@
       </div>
       <div class="sidebar-block" style="flex:1; min-height:0">
         <h2>Catalog</h2>
+        <input id="catalogSearch" type="search" class="catalog-search" placeholder="Search shows by name…" autocomplete="off" />
         <div id="tree" class="tree empty">Loading…</div>
       </div>
     </aside>
@@ -823,20 +842,13 @@
         </div>
 
         <section class="card" style="margin-bottom: 16px">
-          <div class="card-title">Add podcast</div>
-          <p class="card-hint" style="margin-bottom:10px">Search by show name (Apple Podcasts directory) or paste an RSS URL.</p>
-          <div class="podcast-search-block">
-            <div class="ingest-row">
-              <input id="podcastSearchQuery" type="search" placeholder="e.g. Planet Money, Acquired, Lenny's Podcast" autocomplete="off" />
-              <button type="button" class="btn btn-ghost" id="podcastSearchBtn">Search</button>
-            </div>
-            <div id="podcastSearchResults" class="podcast-search-results" hidden></div>
-          </div>
-          <div class="card-title" style="margin-top:12px">RSS URL</div>
+          <div class="card-title">Ingest by name or RSS URL</div>
+          <p class="card-hint" style="margin-bottom:10px">Show name searches Apple Podcasts. Multiple matches — pick one below. URLs ingest directly.</p>
           <div class="ingest-row">
-            <input id="rssUrl" type="url" placeholder="https://feeds.example.com/podcast.xml" autocomplete="url" />
+            <input id="ingestQuery" type="search" placeholder="e.g. Lex Fridman, or https://feeds.example.com/show.xml" autocomplete="off" />
             <button type="button" class="btn btn-primary" id="ingestBtn">Ingest</button>
           </div>
+          <div id="podcastSearchResults" class="podcast-search-results" hidden></div>
           <p id="ingestMsg" class="ingest-msg"></p>
         </section>
 
@@ -844,6 +856,11 @@
           <div class="card-title">Episodes</div>
           <p class="card-hint">Browse the catalog — click a row for the full report. Use the catalog sidebar to filter by show.</p>
           <div class="episode-toolbar">
+            <label>Category
+              <select id="episodeCategoryFilter">
+                <option value="">All categories</option>
+              </select>
+            </label>
             <label>Show
               <select id="episodeShowFilter">
                 <option value="">All shows</option>
@@ -859,7 +876,7 @@
               </select>
             </label>
             <label>Search
-              <input type="search" id="episodeSearch" placeholder="Title filter (this page)" />
+              <input type="search" id="episodeSearch" placeholder="Episode or show name (this page)" />
             </label>
           </div>
           <table>
@@ -1050,11 +1067,14 @@
     let episodePageIds = [];
     const browse = {
       podcastId: "",
+      categoryKey: "",
       status: "",
       offset: 0,
       total: 0,
       search: "",
+      catalogSearch: "",
       podcasts: [],
+      categories: [],
       lastEpisodes: [],
     };
 
@@ -1126,9 +1146,28 @@
         .join("") + (p.processing_count ? `<span class="chip">active<strong>${esc(p.processing_count)}</strong></span>` : "");
     }
 
+    function filterTreeNodes(nodes, categoryKey) {
+      if (!categoryKey) return nodes || [];
+      return (nodes || []).filter((n) => String(n.id) === String(categoryKey) || String(n.name) === String(categoryKey));
+    }
+
+    function applyCatalogSearchFilter() {
+      const q = (browse.catalogSearch || "").trim().toLowerCase();
+      const treeEl = document.getElementById("tree");
+      treeEl.querySelectorAll(".podcast").forEach((row) => {
+        const name = (row.textContent || "").toLowerCase();
+        row.classList.toggle("hidden-by-search", Boolean(q) && !name.includes(q));
+      });
+      treeEl.querySelectorAll("details").forEach((block) => {
+        const visiblePods = block.querySelectorAll(".podcast:not(.hidden-by-search)");
+        block.classList.toggle("hidden-by-search", visiblePods.length === 0);
+      });
+    }
+
     function renderTree(nodes) {
       const el = document.getElementById("tree");
-      if (!nodes || !nodes.length) {
+      const scoped = filterTreeNodes(nodes, browse.categoryKey);
+      if (!scoped || !scoped.length) {
         el.innerHTML = '<p class="empty">Ingest a feed to build the catalog.</p>';
         return;
       }
@@ -1146,8 +1185,9 @@
         if (!kids && !pods) return `<div style="padding:2px 0 2px 12px">${label}</div>`;
         return `<details open><summary>${label}</summary>${kids}${pods}</details>`;
       }
-      el.innerHTML = nodes.map(walkNode).join("");
+      el.innerHTML = scoped.map(walkNode).join("");
       el.className = "tree";
+      applyCatalogSearchFilter();
     }
 
     function renderActivity(events) {
@@ -1185,7 +1225,11 @@
       episodePageIds = (eps || []).map((ep) => Number(ep.id) || 0).filter((id) => id > 0);
       const q = (browse.search || "").trim().toLowerCase();
       const filtered = q
-        ? (eps || []).filter((ep) => (ep.title || "").toLowerCase().includes(q))
+        ? (eps || []).filter((ep) => {
+            const title = (ep.title || "").toLowerCase();
+            const show = (ep.podcast_name || "").toLowerCase();
+            return title.includes(q) || show.includes(q);
+          })
         : eps || [];
       if (!eps || !eps.length) {
         body.innerHTML = '<tr><td colspan="3" class="empty">No episodes match this filter.</td></tr>';
@@ -1273,23 +1317,48 @@
       return page;
     }
 
-    async function loadPodcastsFromTree(tree) {
+    function collectPodcastsFromTree(tree, categoryKey) {
       const found = [];
+      const scoped = filterTreeNodes(tree, categoryKey);
       function walk(nodes) {
         (nodes || []).forEach((n) => {
           (n.podcasts || []).forEach((p) => found.push(p));
           walk(n.children);
         });
       }
-      walk(tree);
+      walk(scoped);
       const byId = new Map();
       found.forEach((p) => {
         if (p.id != null) byId.set(Number(p.id), p);
       });
-      browse.podcasts = Array.from(byId.values()).sort((a, b) =>
+      return Array.from(byId.values()).sort((a, b) =>
         (a.name || "").localeCompare(b.name || "")
       );
+    }
+
+    function populateCategoryFilter() {
+      const sel = document.getElementById("episodeCategoryFilter");
+      const current = browse.categoryKey;
+      const opts = ['<option value="">All categories</option>'].concat(
+        (browse.categories || []).map(
+          (c) =>
+            `<option value="${esc(c.id)}"${String(c.id) === String(current) ? " selected" : ""}>${esc(c.name)}</option>`
+        )
+      );
+      sel.innerHTML = opts.join("");
+    }
+
+    async function loadPodcastsFromTree(tree) {
+      browse.categories = (tree || [])
+        .filter((n) => n.node_type === "domain")
+        .map((n) => ({ id: n.id, name: n.name }));
+      populateCategoryFilter();
+      browse.podcasts = collectPodcastsFromTree(tree, browse.categoryKey);
       populateShowFilter();
+      if (browse.podcastId && !browse.podcasts.some((p) => String(p.id) === String(browse.podcastId))) {
+        browse.podcastId = "";
+        document.getElementById("episodeShowFilter").value = "";
+      }
     }
 
     function setBrowsePodcast(podcastId) {
@@ -1954,8 +2023,19 @@
     });
     document.getElementById("detailPrevBtn").addEventListener("click", () => openAdjacentEpisode(-1));
     document.getElementById("detailNextBtn").addEventListener("click", () => openAdjacentEpisode(1));
+    document.getElementById("episodeCategoryFilter").addEventListener("change", (e) => {
+      browse.categoryKey = e.target.value;
+      browse.offset = 0;
+      loadPodcastsFromTree(window.__lastTree || []);
+      renderTree(window.__lastTree || []);
+      loadEpisodes().catch(() => {});
+    });
     document.getElementById("episodeShowFilter").addEventListener("change", (e) => {
       setBrowsePodcast(e.target.value);
+    });
+    document.getElementById("catalogSearch").addEventListener("input", (e) => {
+      browse.catalogSearch = e.target.value;
+      applyCatalogSearchFilter();
     });
     document.getElementById("episodeStatusFilter").addEventListener("change", (e) => {
       browse.status = e.target.value;
@@ -1987,7 +2067,29 @@
     document.querySelectorAll("[data-layer4]").forEach((btn) => {
       btn.addEventListener("click", () => setLayer4Tab(btn.getAttribute("data-layer4")));
     });
-    async function ingestRssUrl(url) {
+    function isRssUrlInput(value) {
+      const s = (value || "").trim();
+      return /^https?:\/\//i.test(s) || /\.xml(\?|$)/i.test(s);
+    }
+
+    function formatIngestMessage(r, matchedName) {
+      const name = r.podcast_name || matchedName || "Podcast";
+      const parts = [name];
+      if (r.episodes_created > 0) {
+        parts.push(`${r.episodes_created} new episode(s)`);
+      } else if (r.episodes_skipped > 0) {
+        parts.push(`already in library (${r.episodes_skipped} episodes)`);
+      }
+      if (r.episodes_updated > 0) {
+        parts.push(`${r.episodes_updated} title(s) refreshed from RSS`);
+      }
+      if (r.episodes_dispatched > 0) {
+        parts.push(`${r.episodes_dispatched} queued for pipeline`);
+      }
+      return parts.join(" · ");
+    }
+
+    async function ingestRssUrl(url, matchedName) {
       const msg = document.getElementById("ingestMsg");
       const btn = document.getElementById("ingestBtn");
       btn.disabled = true;
@@ -1995,9 +2097,9 @@
       msg.className = "ingest-msg";
       try {
         const r = await api("/ingest/rss", { method: "POST", body: JSON.stringify({ rss_url: url }) });
-        msg.textContent = `+${r.episodes_created} created, ${r.episodes_skipped} skipped`;
+        msg.textContent = formatIngestMessage(r, matchedName);
         msg.className = "ingest-msg ok";
-        document.getElementById("rssUrl").value = "";
+        document.getElementById("ingestQuery").value = "";
         document.getElementById("podcastSearchResults").hidden = true;
         await refresh();
       } catch (e) {
@@ -2038,32 +2140,50 @@
         btn.addEventListener("click", async () => {
           const feed = btn.getAttribute("data-rss-url");
           if (!feed) return;
-          document.getElementById("rssUrl").value = feed;
-          await ingestRssUrl(feed);
+          const showName = btn.closest(".podcast-hit")?.querySelector(".title")?.textContent || "";
+          await ingestRssUrl(feed, showName);
         });
       });
     }
 
-    async function runPodcastSearch() {
-      const q = document.getElementById("podcastSearchQuery").value.trim();
+    async function ingestByQuery() {
+      const q = document.getElementById("ingestQuery").value.trim();
       const msg = document.getElementById("ingestMsg");
-      const btn = document.getElementById("podcastSearchBtn");
+      const btn = document.getElementById("ingestBtn");
+      if (!q) {
+        msg.textContent = "Enter a show name or RSS feed URL.";
+        msg.className = "ingest-msg err";
+        return;
+      }
+      if (isRssUrlInput(q)) {
+        await ingestRssUrl(q);
+        return;
+      }
       if (q.length < 2) {
-        msg.textContent = "Enter at least 2 characters to search.";
+        msg.textContent = "Enter at least 2 characters to search by name.";
         msg.className = "ingest-msg err";
         return;
       }
       btn.disabled = true;
-      msg.textContent = "Searching…";
+      msg.textContent = "Searching Apple Podcasts…";
       msg.className = "ingest-msg";
       try {
         const data = await api(
           "/ingest/podcasts/search?q=" + encodeURIComponent(q) + "&limit=15"
         );
-        renderPodcastSearchResults(data.results || []);
-        msg.textContent = (data.results || []).length
-          ? `Found ${data.results.length} show(s) with RSS feeds`
-          : "No matches";
+        const hits = data.results || [];
+        if (!hits.length) {
+          msg.textContent = "No podcasts with RSS feeds found. Try another name or paste a feed URL.";
+          msg.className = "ingest-msg err";
+          document.getElementById("podcastSearchResults").hidden = true;
+          return;
+        }
+        if (hits.length === 1) {
+          await ingestRssUrl(hits[0].rss_url, hits[0].name);
+          return;
+        }
+        renderPodcastSearchResults(hits);
+        msg.textContent = `${hits.length} matches for “${q}” — pick a show below`;
         msg.className = "ingest-msg ok";
       } catch (e) {
         msg.textContent = e.message;
@@ -2074,22 +2194,12 @@
       }
     }
 
-    document.getElementById("podcastSearchBtn").addEventListener("click", runPodcastSearch);
-    document.getElementById("podcastSearchQuery").addEventListener("keydown", (e) => {
+    document.getElementById("ingestBtn").addEventListener("click", ingestByQuery);
+    document.getElementById("ingestQuery").addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        runPodcastSearch();
+        ingestByQuery();
       }
-    });
-    document.getElementById("ingestBtn").addEventListener("click", async () => {
-      const url = document.getElementById("rssUrl").value.trim();
-      const msg = document.getElementById("ingestMsg");
-      if (!url) {
-        msg.textContent = "Enter an RSS URL or search for a show above.";
-        msg.className = "ingest-msg err";
-        return;
-      }
-      await ingestRssUrl(url);
     });
 
     function openEpisodeFromHash() {

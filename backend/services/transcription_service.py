@@ -39,10 +39,15 @@ def _max_cloud_stt_bytes() -> int:
 
 
 def _cloud_stt_soft_bytes() -> int:
-    raw = os.getenv("SOAPBOXX_STT_SOFT_BYTES", "").strip()
-    if raw:
-        return int(raw)
-    return int(_max_cloud_stt_bytes() * 0.92)
+    try:
+        from backend.stt_config import cloud_stt_soft_bytes
+
+        return cloud_stt_soft_bytes(_max_cloud_stt_bytes())
+    except ImportError:
+        raw = os.getenv("SOAPBOXX_STT_SOFT_BYTES", "").strip()
+        if raw:
+            return int(raw)
+        return int(_max_cloud_stt_bytes() * 0.92)
 
 
 @dataclass

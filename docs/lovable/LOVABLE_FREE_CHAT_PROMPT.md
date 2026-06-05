@@ -53,7 +53,7 @@ Dark “library terminal” theme — same feel as /ui/:
 - Disclaimer on episode report: “We show how the episode is built — not a quality verdict.”
 
 Layout (desktop): 3 columns
-- Left sidebar (~260px): logo “SoapBoxx”, tagline “Insights library”, Pipeline chips (from home.pipeline), Catalog tree (from home.tree — recursive details/summary, podcast rows clickable to filter episodes)
+- Left sidebar (~260px): logo “SoapBoxx”, tagline “Insights library”, Pipeline chips (from home.pipeline), Catalog tree (from home.tree — domain/category nesting; **search input** filters show names in tree; podcast rows clickable to filter episodes)
 - Center workspace: topbar “Production library” + health pill + “Process next 10” + “Refresh”; stats row; Ingest RSS card; Episodes table with toolbar
 - Right rail (~300px): Activity list, Weekly patterns cards
 
@@ -75,17 +75,22 @@ On load and Refresh:
 
 Episodes table (main content) — NOT only home.episodes (that is 5 preview rows). Use paginated API:
 - soapboxxApi.libraryEpisodes({ limit: 50, offset, podcast_id?, status? })
-- Toolbar: Show filter (options from podcasts extracted by walking home.tree), Status filter (ready | measured | queued | transcribing | All), Search (client-side title filter on current page)
+- Toolbar: **Category** filter (top-level domains from home.tree), Show filter (podcasts in selected category), Status filter (ready | measured | queued | transcribing | All), Search (client-side **episode title or show name** on current page)
 - Pagination: Prev/Next, label “Showing X–Y of total · page N of M”
 - Columns: Title, Show, Status; row click → /episode/:id (numeric id)
 - Status pills styled by status string (ready, queued, etc.)
 
-Add podcast — search by name then ingest:
-- soapboxxApi.searchPodcasts(query, 15) → results[].name, artist, rss_url, artwork_url, genre
-- Show results list; "Add feed" → soapboxxApi.ingestRss(hit.rss_url) → episodes_created / episodes_skipped → refresh
-- Or manual RSS URL field → ingestRss(url) (same as /ui/)
+Ingest by name or RSS URL (single field + Ingest button — same as /ui/):
+- Import `isRssUrlInput`, `formatIngestMessage` from soapboxx-api.ts
+- On Ingest: if `isRssUrlInput(q)` → `ingestRss(q)`; else `searchPodcasts(q, 15)`
+  - 0 hits → error
+  - 1 hit → `ingestRss(hit.rss_url)` (no silent wrong-show risk)
+  - 2+ hits → show picker list; user taps "Add feed" on one row → `ingestRss(hit.rss_url)` — **never auto-ingest the first search result**
+- Success message: `formatIngestMessage(r)` — `podcast_name` from API; `created: 0` + `skipped > 0` means feed already in library; `episodes_dispatched` is pipeline queue (includes backlog drain, not only new episodes)
 
 Loading and error states on every data surface. No mock numbers. No fake podcast names.
+
+**Real titles only:** Episode table and catalog must come from `libraryEpisodes` / `libraryHome` API responses. Delete any hardcoded episode rows, placeholder titles (`Episode 1`, `Untitled`, Lenny's Podcast, Acquired, etc.), or fallback arrays when the API fails. Show names and titles must match `podcast_name` + `title` from the backend.
 
 === STEP 5 — Episode detail (/episode/:id) — Layer 4 views first ===
 

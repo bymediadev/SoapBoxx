@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SoapBoxx E2E Demo — Days of our Tariffs</title>
+  <style>
+    :root {
+      --bg: #1a1210; --panel: #241915; --line: #3d2a22; --text: #f5ebe3;
+      --muted: #b8a496; --accent: #e8a54b; --ok: #6ecf8a; --fail: #f07178;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 20px 48px; }
+    h1 { font-family: Georgia, serif; font-weight: 600; margin: 0 0 6px; font-size: 1.75rem; }
+    .sub { color: var(--muted); margin-bottom: 24px; line-height: 1.5; }
+    .banner { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 20px; }
+    .pill { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); font-size: 12px; }
+    .pill.pass { border-color: var(--ok); color: var(--ok); }
+    .pill.fail { border-color: var(--fail); color: var(--fail); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+    .card h2 { margin: 0 0 12px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+    .stat { font-size: 1.6rem; font-weight: 700; color: var(--accent); }
+    .bar { height: 6px; background: #120d0b; border-radius: 3px; margin-top: 10px; overflow: hidden; }
+    .bar > span { display: block; height: 100%; background: var(--accent); width: 13.5%; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip { background: #120d0b; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font-size: 12px; }
+    .chip b { color: var(--accent); margin-right: 4px; }
+    .pipeline { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+    .pipe-step { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .pipe-step .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+    .pipe-step.done .dot { background: var(--ok); }
+    .pipe-arrow { color: var(--muted); }
+    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+    .metric { background: #120d0b; border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+    .metric .label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; }
+    .metric .value { font-size: 1.1rem; font-weight: 600; margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; }
+    tr.ok td:first-child { color: var(--ok); }
+    tr.fail td:first-child { color: var(--fail); }
+    code { font-size: 11px; color: var(--accent); }
+    .readout-block h3 { margin: 0 0 8px; font-size: 14px; color: var(--accent); }
+    .readout-block ul { margin: 0; padding-left: 18px; color: var(--text); line-height: 1.5; }
+    .readout-block { margin-bottom: 14px; }
+    .warning { background: #3a2618; border: 1px solid #8a5a2a; color: #ffd9a8; padding: 12px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; }
+    .footer { margin-top: 24px; color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>SoapBoxx — end-to-end library demo</h1>
+    <p class="sub">Live proof: Record → Transcribe → Improve on a real ingested episode.<br />
+      API: <code>https://soapboxx-production.up.railway.app</code> · Episode <strong>#55</strong> · Planet Money</p>
+    <div class="banner">
+      <span class="pill pass">ALL STEPS PASSED</span>
+      <span class="pill">Days of our Tariffs</span>
+      <span class="pill">Narrative documentary</span>
+    </div>
+    
+    <div class="grid">
+      <div class="card"><h2>Episodes</h2><div class="stat">406</div></div>
+      <div class="card"><h2>Shows</h2><div class="stat">2</div></div>
+      <div class="card"><h2>Measured</h2><div class="stat">55</div><div class="bar"><span></span></div><div style="font-size:12px;color:var(--muted);margin-top:6px">13.5% of library</div></div>
+      <div class="card"><h2>Queued</h2><div class="stat">351</div></div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <h2>Pipeline status</h2>
+      <div class="chips"><span class="chip"><b>queued</b> 351</span><span class="chip"><b>ready</b> 55</span></div>
+      <h2 style="margin-top:16px">Episode pipeline</h2>
+      <div class="pipeline"><div class="pipe-step done"><div class="dot"></div><span>Ingested</span></div><div class="pipe-arrow">→</div><div class="pipe-step done"><div class="dot"></div><span>Transcript</span></div><div class="pipe-arrow">→</div><div class="pipe-step done"><div class="dot"></div><span>Measured</span></div><div class="pipe-arrow">→</div><div class="pipe-step done"><div class="dot"></div><span>Insight</span></div></div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <h2>Layer 2 — seven measurements</h2>
+      <div class="metrics"><div class="metric"><span class="label">Hook</span><span class="value">2s</span></div><div class="metric"><span class="label">Intro</span><span class="value">6s</span></div><div class="metric"><span class="label">Questions</span><span class="value">57</span></div><div class="metric"><span class="label">Turns</span><span class="value">0</span></div><div class="metric"><span class="label">Host/guest</span><span class="value">50%</span></div><div class="metric"><span class="label">Topic shifts</span><span class="value">7</span></div><div class="metric"><span class="label">CTA</span><span class="value">No</span></div></div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <h2>Layer 4 — editorial readout</h2>
+      <section class="readout-block"><h3>What’s happening</h3><ul><li>Listeners reach the main thread quickly — the episode does not linger in runway before the story or guest voice takes over.</li><li>Many question marks appear in the transcript — without speaker labels these read as rhetorical narration (diary/explainer pacing), not interviewer-led pivots.</li><li>Speaker handoffs were not detected from labeled lines — pacing may read as one continuous voice in the transcript.</li><li>The listener hears several structural pivots — distinct beats as the conversation moves between threads.</li></ul></section><section class="readout-block"><h3>Why it matters</h3><ul><li>Trade-off: rhetorical questions pace the diary — momentum from narration, not interview discovery.</li><li>Trade-off: one voice in the transcript — clarity depends on re-hooks and orientation, not speaker handoffs.</li></ul></section><section class="readout-block"><h3>What to try next</h3><ul><li>Potential drag: 11m 48s uninterrupted segment at ~19m 36s</li><li>Potential weak transition: 1 abrupt length shift(s) between segments</li><li>Trade-off: rhetorical questions pace the diary — momentum from narration, not interview discovery.</li></ul></section>
+    </div>
+    <div class="card">
+      <h2>API steps executed</h2>
+      <table>
+        <thead><tr><th></th><th>Step</th><th>Endpoint</th><th>Result</th></tr></thead>
+        <tbody><tr class="ok"><td>✓</td><td>Health</td><td><code>GET /health</code></td><td>soapboxx-v1-api</td></tr><tr class="ok"><td>✓</td><td>Library stats</td><td><code>GET /library/stats</code></td><td>406 episodes · 2 shows</td></tr><tr class="ok"><td>✓</td><td>Pipeline</td><td><code>GET /pipeline/status</code></td><td>55 ready · 0 processing</td></tr><tr class="ok"><td>✓</td><td>Pick episode</td><td><code>GET /library/episodes</code></td><td>Planet Money — Days of our Tariffs (user-selected episode 55)</td></tr><tr class="ok"><td>✓</td><td>Episode state</td><td><code>GET /episodes/55/state</code></td><td>ingested, transcribed, measured, insight_ready</td></tr><tr class="ok"><td>✓</td><td>Features (Layer 2)</td><td><code>GET /episodes/55/features</code></td><td>57 questions · hook 2s</td></tr><tr class="ok"><td>✓</td><td>Producer report (Layer 4)</td><td><code>GET /episodes/55/report/producer</code></td><td>Narrative documentary</td></tr><tr class="ok"><td>✓</td><td>Actions report</td><td><code>GET /episodes/55/report/actions</code></td><td>4 actions</td></tr></tbody>
+      </table>
+    </div>
+    <p class="footer">Generated 2026-06-05 22:59 UTC. Re-run: <code>python scripts/e2e_library_demo.py</code></p>
+  </div>
+</body>
+</html>

@@ -136,11 +136,13 @@ def _prepare_cloud_stt_payload(audio_data: bytes) -> tuple[bytes, str]:
 
 
 def _stt_http_timeout() -> Any:
-    """Bounded HTTP timeout for cloud Whisper APIs (env SOAPBOXX_STT_HTTP_TIMEOUT, default 300s)."""
+    """Bounded HTTP timeout for cloud STT APIs."""
     try:
         import httpx
 
-        read_s = float(os.getenv("SOAPBOXX_STT_HTTP_TIMEOUT", "300"))
+        from backend.stt_config import stt_http_timeout_seconds
+
+        read_s = stt_http_timeout_seconds()
         return httpx.Timeout(connect=10.0, read=read_s, write=60.0, pool=10.0)
     except ImportError:
         return None
@@ -261,10 +263,15 @@ class Transcriber:
                 or os.getenv("SOAPBOXX_GROQ_API_KEY")
                 or os.getenv("GROQ_API_KEY")
             )
-            self.model = (
-                os.getenv("SOAPBOXX_GROQ_WHISPER_MODEL", "").strip()
-                or "whisper-large-v3-turbo"
-            )
+            try:
+                from backend.stt_config import groq_whisper_model
+
+                self.model = groq_whisper_model()
+            except ImportError:
+                self.model = (
+                    os.getenv("SOAPBOXX_GROQ_WHISPER_MODEL", "").strip()
+                    or "whisper-large-v3-turbo"
+                )
             self.groq_base_url = (
                 os.getenv("SOAPBOXX_GROQ_BASE_URL", "https://api.groq.com/openai/v1")
                 .strip()
@@ -284,9 +291,15 @@ class Transcriber:
         elif self.service == "local":
             if WHISPER_AVAILABLE:
                 try:
-                    model_size = (
-                        os.getenv("SOAPBOXX_LOCAL_WHISPER_MODEL", "base").strip() or "base"
-                    )
+                    try:
+                        from backend.stt_config import local_whisper_model
+
+                        model_size = local_whisper_model()
+                    except ImportError:
+                        model_size = (
+                            os.getenv("SOAPBOXX_LOCAL_WHISPER_MODEL", "base").strip()
+                            or "base"
+                        )
                     self.local_model = _get_or_load_local_whisper_model(model_size)
                 except Exception as e:
                     print(f"Warning: Failed to load local Whisper model: {e}")
@@ -391,8 +404,7 @@ class Transcriber:
             elif self.service == "local":
                 result = self._transcribe_local(audio_data, verbose=True)
             elif self.service == "assemblyai":
-                text = self._transcribe_assemblyai(audio_data)
-                result = text
+                result = self._transcribe_assemblyai(audio_data, verbose=True)
             else:
                 text = self.transcribe(audio_data)
                 result = text
@@ -664,56 +676,21 @@ class Transcriber:
                 )
             return f"Error: Groq transcription failed: {exc}"
 
-    def _transcribe_assemblyai(self, audio_data: bytes) -> str:
-        """Transcribe using AssemblyAI API"""
-        if not self.api_key:
-            return "Error: No AssemblyAI API key configured"
-
+    def _transcribe_assemblyai(
+        self, audio_data: bytes, *, verbose: bool = False
+    ) -> Union[str, Dict[str, Any]]:
+        """Transcribe via AssemblyAI (SDK preferred) with speaker diarization."""
         try:
-            # Upload audio to AssemblyAI
-            upload_url = "https://api.assemblyai.com/v2/upload"
-            headers = {"authorization": self.api_key}
+            from backend.services.assemblyai_stt import transcribe_assemblyai_audio
+        except ImportError:
+            from services.assemblyai_stt import transcribe_assemblyai_audio  # type: ignore
 
-            response = requests.post(upload_url, headers=headers, data=audio_data)
-            upload_url_response = response.json()
-
-            if response.status_code != 200:
-                return f"AssemblyAI upload failed: {upload_url_response}"
-
-            # Transcribe the uploaded audio
-            transcript_url = "https://api.assemblyai.com/v2/transcript"
-            transcript_request = {
-                "audio_url": upload_url_response["upload_url"],
-                "language_code": "en",
-            }
-
-            response = requests.post(
-                transcript_url, json=transcript_request, headers=headers
-            )
-            transcript_response = response.json()
-
-            if response.status_code != 200:
-                return f"AssemblyAI transcription failed: {transcript_response}"
-
-            # Poll for completion
-            polling_url = (
-                f"https://api.assemblyai.com/v2/transcript/{transcript_response['id']}"
-            )
-            while True:
-                polling_response = requests.get(polling_url, headers=headers)
-                polling_response = polling_response.json()
-
-                if polling_response["status"] == "completed":
-                    return polling_response["text"]
-                elif polling_response["status"] == "error":
-                    return f"AssemblyAI transcription error: {polling_response}"
-
-                import time
-
-                time.sleep(3)
-
-        except Exception as e:
-            return f"AssemblyAI transcription failed: {str(e)}"
+        return transcribe_assemblyai_audio(
+            audio_data,
+            api_key=self.api_key or "",
+            language=self.language,
+            verbose=verbose,
+        )
 
     def _transcribe_azure(self, audio_data: bytes) -> str:
         """Transcribe using Azure Speech Services"""

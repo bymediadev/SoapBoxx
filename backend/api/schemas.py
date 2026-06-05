@@ -75,8 +75,10 @@ class RssIngestRequest(BaseModel):
 
 class RssIngestResponse(BaseModel):
     podcast_id: int
+    podcast_name: str = ""
     episodes_created: int
     episodes_skipped: int = 0
+    episodes_updated: int = 0
     episodes_dispatched: int = 0
     episode_ids: list[int] = Field(default_factory=list)
 
@@ -329,6 +331,7 @@ class RssSyncResponse(BaseModel):
     podcasts_checked: int
     episodes_created: int
     episodes_skipped: int
+    episodes_updated: int = 0
     episodes_dispatched: int
     failed_podcasts: int
     results: list[dict] = []

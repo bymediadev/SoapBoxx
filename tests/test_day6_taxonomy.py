@@ -43,6 +43,33 @@ def test_taxonomy_tree(v1_db_clean):
         db.close()
 
 
+def test_synthetic_tree_when_taxonomy_empty(v1_db_clean):
+    """Catalog categories without running seed_taxonomy.py."""
+    from backend.api.deps import get_session_factory
+    from backend.models import Podcast
+
+    db = get_session_factory()()
+    try:
+        db.add(Podcast(name="Planet Money", rss_url="https://example.com/pm.xml"))
+        db.add(Podcast(name="Why Mastermind", rss_url="https://example.com/wm.xml"))
+        db.commit()
+        tree = get_library_tree(db)
+        assert tree
+        domain_names = [n["name"] for n in tree]
+        assert "Business" in domain_names or "Library" in domain_names
+        all_pods = []
+        def walk(nodes):
+            for n in nodes:
+                all_pods.extend(n.get("podcasts") or [])
+                walk(n.get("children") or [])
+        walk(tree)
+        names = {p["name"] for p in all_pods}
+        assert "Planet Money" in names
+        assert "Why Mastermind" in names
+    finally:
+        db.close()
+
+
 def test_podcast_taxonomy_map(v1_client, v1_db_clean):
     pr = v1_client.post("/podcasts", json={"name": "Mapped Show"})
     pid = pr.json()["id"]

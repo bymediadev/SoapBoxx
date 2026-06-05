@@ -128,12 +128,24 @@ After RSS ingest, episodes start as **`queued`**. Ingest emits `ingest.started` 
 
 ---
 
+## Real titles (no placeholders)
+
+Episode **titles and show names** must come from the API (`libraryEpisodes`, `libraryHome`) — not hardcoded Lovable arrays.
+
+| Problem | Fix |
+|---------|-----|
+| UI shows Lenny's / Acquired / `Episode 1` placeholders | Delete mock/fallback data; wire `libraryEpisodes()` only |
+| DB rows say `Untitled episode` | Re-ingest the feed — `POST /ingest/rss` or `POST /pipeline/sync-feeds` now **refreshes** placeholder titles from RSS (`episodes_updated` in response) |
+| Report doesn't match episode audio | Demo transcript — `POST /episodes/{id}/process` with `force_retranscribe: true` |
+
+---
+
 ## 4. Auto-update (RSS)
 
 The UI does not need to “download a database.” **Scheduled re-ingest is backend-only** — implement in this SoapBoxx API repo, not in Lovable.
 
-1. **On demand:** Lovable `POST /ingest/rss` when the user adds a feed (new episodes auto-dispatch when `AUTO_PROCESS_ON_INGEST=true`).
-2. **Scheduled (already in API repo):** Celery beat task `soapboxx.sync_rss_feeds` → `sync_saved_rss_feeds()` re-ingests every stored `rss_url` and dispatches **new** episodes only. Default every **3h** (`RSS_SYNC_MINUTES=180`) on `soapboxx-worker` with embedded beat.
+1. **On demand:** Lovable `POST /ingest/rss` when the user adds a feed (new episodes auto-dispatch when `AUTO_PROCESS_ON_INGEST=true`; existing rows get title/metadata refresh when RSS has real titles).
+2. **Scheduled (already in API repo):** Celery beat task `soapboxx.sync_rss_feeds` → `sync_saved_rss_feeds()` re-ingests every stored `rss_url`, refreshes placeholder metadata, and dispatches **new** episodes only. Default every **3h** (`RSS_SYNC_MINUTES=180`) on `soapboxx-worker` with embedded beat.
 3. **Alternatives:** daily `soapboxx-sync` cron (`scripts/sync_all_feeds.py`) or `POST /pipeline/sync-feeds` with `X-Cron-Secret` — see [`RSS_AUTO_SYNC.md`](RSS_AUTO_SYNC.md).
 4. Lovable may **refetch** library endpoints on focus/refresh; that is not a substitute for server-side RSS sync.
 

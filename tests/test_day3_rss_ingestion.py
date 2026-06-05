@@ -92,6 +92,45 @@ def test_no_duplicate_ingestion(v1_db_clean):
         db.close()
 
 
+def test_reingest_refreshes_placeholder_titles(v1_db_clean):
+    """Re-ingest updates Untitled episode rows from RSS without creating duplicates."""
+    from backend.api.deps import get_session_factory
+
+    xml_placeholder = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+<title>Refresh Show</title>
+<item>
+  <guid>refresh-ep-1</guid>
+  <title>Untitled episode</title>
+  <pubDate>Mon, 15 Jan 2024 12:00:00 GMT</pubDate>
+  <enclosure url="https://example.com/a.mp3" type="audio/mpeg"/>
+</item>
+</channel></rss>"""
+    xml_real = xml_placeholder.replace(
+        "<title>Untitled episode</title>",
+        "<title>Real Episode Title From RSS</title>",
+    )
+    db = get_session_factory()()
+    try:
+        first = ingest_rss_xml(db, xml_placeholder, rss_url="https://example.com/refresh.xml")
+        assert first.created == 1
+        assert first.updated == 0
+
+        ep = db.get(Episode, first.episode_ids[0])
+        assert ep is not None
+        assert ep.title == "Untitled episode"
+
+        second = ingest_rss_xml(db, xml_real, rss_url="https://example.com/refresh.xml")
+        assert second.created == 0
+        assert second.skipped == 1
+        assert second.updated == 1
+
+        db.refresh(ep)
+        assert ep.title == "Real Episode Title From RSS"
+    finally:
+        db.close()
+
+
 def test_duplicate_fallback_title_and_date(v1_db_clean):
     """Idempotent when guid missing but title + published_at match."""
     from backend.api.deps import get_session_factory

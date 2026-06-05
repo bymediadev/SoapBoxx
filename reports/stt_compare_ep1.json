@@ -1,0 +1,258 @@
+{
+  "api": "https://soapboxx-production.up.railway.app",
+  "episode_id": 1,
+  "before": {
+    "state": {
+      "episode_id": 1,
+      "podcast_id": 1,
+      "podcast_name": "Planet Money",
+      "title": "The giant factory town that might be a giant mistake",
+      "status": "ready",
+      "pipeline_error": null,
+      "pipeline_updated_at": "2026-06-04T14:16:21.146383+00:00",
+      "steps": {
+        "ingested": true,
+        "transcribed": true,
+        "measured": true,
+        "insight_ready": true
+      },
+      "next_action": null
+    },
+    "features": {
+      "episode_id": 1,
+      "hook_length_seconds": 6.4,
+      "intro_length_seconds": 6.4,
+      "question_count": 3,
+      "speaking_turns": 8,
+      "host_guest_ratio": 0.542,
+      "topic_shift_count": 0,
+      "cta_present": true
+    },
+    "producer": {
+      "episode_id": 1,
+      "title": "The giant factory town that might be a giant mistake",
+      "disclaimer": "We show how the episode is built \u2014 not a quality verdict. Structure signals only; they do not predict audience response.",
+      "transcript_warning": {
+        "code": "demo_transcript",
+        "message": "This report was built from demo/sample transcript text, not this episode's audio. Re-run the pipeline with real STT to measure \u00abThe giant factory town that might be a giant mistake\u00bb."
+      },
+      "structure_label": "Narrative documentary (structural pattern)",
+      "template_id": "C",
+      "structural_identity": [
+        "Narrative documentary (structural pattern)",
+        "One dominant narrative thread, sparse Q&A, long explanation blocks \u2014 built for listeners who stay for the through-line, not rapid back-and-forth."
+      ],
+      "measurements": {
+        "hook_length_seconds": 6.4,
+        "intro_length_seconds": 6.4,
+        "question_count": 3,
+        "speaking_turns": 8,
+        "host_guest_ratio": 0.542,
+        "topic_shift_count": 0,
+        "cta_present": true
+      },
+      "patterns": [
+        "You drop into the story quickly \u2014 like joining a reporter mid-walkthrough, not sitting through a long intro montage.",
+        "Questions are rare \u2014 you hear a guided explanation more than a back-and-forth interview. The host carries the narrative.",
+        "Voices change infrequently \u2014 each stretch runs long, like a documentary segment rather than a conversation clip show.",
+        "The transcript reads as one dominant narrative thread \u2014 few explicit transition markers, even if sub-stories or scene changes exist in the edit.",
+        "If you've listened to Planet Money or similar explainers, this is that shape: a dominant thread, reporter voice, sparse Q&A."
+      ],
+      "leverage_points": [
+        "Speaking-turn density \u00b7 extended-opening band on Planet Money \u00b7 episodes in this band in your feed have been observed in extended-opening patterns within your measured catalog",
+        "Question density \u00b7 narrative documentary band on Planet Money \u00b7 episodes in this band in your feed have been observed in narrative documentary patterns within your measured catalog"
+      ],
+      "editorial_tradeoffs": [
+        "Quick entry + dominant thread: clarity stays high; side-path exploration stays minimal.",
+        "Long explanation blocks over frequent exchange \u2014 narrative continuity over conversational variety."
+      ],
+      "transcript_limitations": []
+    },
+    "actions": {
+      "episode_id": 1,
+      "title": "The giant factory town that might be a giant mistake",
+      "transcript_warning": {
+        "code": "demo_transcript",
+        "message": "This report was built from demo/sample transcript text, not this episode's audio. Re-run the pipeline with real STT to measure \u00abThe giant factory town that might be a giant mistake\u00bb."
+      },
+      "actions": [
+        {
+          "id": "review-0",
+          "category": "replay",
+          "priority": "high",
+          "text": "On replay: mark the first line where a new listener would know what this episode is about \u2014 you entered fast; confirm that line is clear without show context."
+        },
+        {
+          "id": "review-1",
+          "category": "replay",
+          "priority": "high",
+          "text": "Scan each question \u2014 are they moving the story forward, or only bridging between explanation blocks? In this form, questions often work as signposts, not probes."
+        },
+        {
+          "id": "review-2",
+          "category": "replay",
+          "priority": "high",
+          "text": "Pick one long segment and listen for mid-block re-hooks (mini questions, scene resets, 'here's why that matters') \u2014 documentary cuts need them when handoffs are rare."
+        },
+        {
+          "id": "review-3",
+          "category": "replay",
+          "priority": "high",
+          "text": "If the story covers several sub-topics, listen for places a stranger might think the thread changed \u2014 pivot language may not show up in the transcript."
+        },
+        {
+          "id": "tradeoff-4",
+          "category": "awareness",
+          "priority": "low",
+          "text": "Quick entry + dominant thread: clarity stays high; side-path exploration stays minimal."
+        },
+        {
+          "id": "tradeoff-5",
+          "category": "awareness",
+          "priority": "low",
+          "text": "Long explanation blocks over frequent exchange \u2014 narrative continuity over conversational variety."
+        }
+      ],
+      "keep_patterns": [
+        "The story opens in about 6 seconds with guest or topic in around 6 seconds \u2014 listeners are in the premise quickly, typical for narrative explainers that skip long runway.",
+        "Only 3 questions in the transcript \u2014 the host narrates and explains more than they excavate. Information moves in blocks, not ping-pong Q&A.",
+        "8 speaking turns \u2014 each handoff covers a long stretch. That's documentary pacing: fewer cuts, longer uninterrupted segments."
+      ]
+    }
+  },
+  "after": {
+    "state": {
+      "episode_id": 1,
+      "podcast_id": 1,
+      "podcast_name": "Planet Money",
+      "title": "The giant factory town that might be a giant mistake",
+      "status": "ready",
+      "pipeline_error": null,
+      "pipeline_updated_at": "2026-06-04T14:16:21.146383+00:00",
+      "steps": {
+        "ingested": true,
+        "transcribed": true,
+        "measured": true,
+        "insight_ready": true
+      },
+      "next_action": null
+    },
+    "features": {
+      "episode_id": 1,
+      "hook_length_seconds": 6.4,
+      "intro_length_seconds": 6.4,
+      "question_count": 3,
+      "speaking_turns": 8,
+      "host_guest_ratio": 0.542,
+      "topic_shift_count": 0,
+      "cta_present": true
+    },
+    "producer": {
+      "episode_id": 1,
+      "title": "The giant factory town that might be a giant mistake",
+      "disclaimer": "We show how the episode is built \u2014 not a quality verdict. Structure signals only; they do not predict audience response.",
+      "transcript_warning": {
+        "code": "demo_transcript",
+        "message": "This report was built from demo/sample transcript text, not this episode's audio. Re-run the pipeline with real STT to measure \u00abThe giant factory town that might be a giant mistake\u00bb."
+      },
+      "structure_label": "Narrative documentary (structural pattern)",
+      "template_id": "C",
+      "structural_identity": [
+        "Narrative documentary (structural pattern)",
+        "One dominant narrative thread, sparse Q&A, long explanation blocks \u2014 built for listeners who stay for the through-line, not rapid back-and-forth."
+      ],
+      "measurements": {
+        "hook_length_seconds": 6.4,
+        "intro_length_seconds": 6.4,
+        "question_count": 3,
+        "speaking_turns": 8,
+        "host_guest_ratio": 0.542,
+        "topic_shift_count": 0,
+        "cta_present": true
+      },
+      "patterns": [
+        "You drop into the story quickly \u2014 like joining a reporter mid-walkthrough, not sitting through a long intro montage.",
+        "Questions are rare \u2014 you hear a guided explanation more than a back-and-forth interview. The host carries the narrative.",
+        "Voices change infrequently \u2014 each stretch runs long, like a documentary segment rather than a conversation clip show.",
+        "The transcript reads as one dominant narrative thread \u2014 few explicit transition markers, even if sub-stories or scene changes exist in the edit.",
+        "If you've listened to Planet Money or similar explainers, this is that shape: a dominant thread, reporter voice, sparse Q&A."
+      ],
+      "leverage_points": [
+        "Speaking-turn density \u00b7 extended-opening band on Planet Money \u00b7 episodes in this band in your feed have been observed in extended-opening patterns within your measured catalog",
+        "Question density \u00b7 narrative documentary band on Planet Money \u00b7 episodes in this band in your feed have been observed in narrative documentary patterns within your measured catalog"
+      ],
+      "editorial_tradeoffs": [
+        "Quick entry + dominant thread: clarity stays high; side-path exploration stays minimal.",
+        "Long explanation blocks over frequent exchange \u2014 narrative continuity over conversational variety."
+      ],
+      "transcript_limitations": []
+    },
+    "actions": {
+      "episode_id": 1,
+      "title": "The giant factory town that might be a giant mistake",
+      "transcript_warning": {
+        "code": "demo_transcript",
+        "message": "This report was built from demo/sample transcript text, not this episode's audio. Re-run the pipeline with real STT to measure \u00abThe giant factory town that might be a giant mistake\u00bb."
+      },
+      "actions": [
+        {
+          "id": "review-0",
+          "category": "replay",
+          "priority": "high",
+          "text": "On replay: mark the first line where a new listener would know what this episode is about \u2014 you entered fast; confirm that line is clear without show context."
+        },
+        {
+          "id": "review-1",
+          "category": "replay",
+          "priority": "high",
+          "text": "Scan each question \u2014 are they moving the story forward, or only bridging between explanation blocks? In this form, questions often work as signposts, not probes."
+        },
+        {
+          "id": "review-2",
+          "category": "replay",
+          "priority": "high",
+          "text": "Pick one long segment and listen for mid-block re-hooks (mini questions, scene resets, 'here's why that matters') \u2014 documentary cuts need them when handoffs are rare."
+        },
+        {
+          "id": "review-3",
+          "category": "replay",
+          "priority": "high",
+          "text": "If the story covers several sub-topics, listen for places a stranger might think the thread changed \u2014 pivot language may not show up in the transcript."
+        },
+        {
+          "id": "tradeoff-4",
+          "category": "awareness",
+          "priority": "low",
+          "text": "Quick entry + dominant thread: clarity stays high; side-path exploration stays minimal."
+        },
+        {
+          "id": "tradeoff-5",
+          "category": "awareness",
+          "priority": "low",
+          "text": "Long explanation blocks over frequent exchange \u2014 narrative continuity over conversational variety."
+        }
+      ],
+      "keep_patterns": [
+        "The story opens in about 6 seconds with guest or topic in around 6 seconds \u2014 listeners are in the premise quickly, typical for narrative explainers that skip long runway.",
+        "Only 3 questions in the transcript \u2014 the host narrates and explains more than they excavate. Information moves in blocks, not ping-pong Q&A.",
+        "8 speaking turns \u2014 each handoff covers a long stretch. That's documentary pacing: fewer cuts, longer uninterrupted segments."
+      ]
+    }
+  },
+  "diff": {
+    "transcript_warning_before": {
+      "code": "demo_transcript",
+      "message": "This report was built from demo/sample transcript text, not this episode's audio. Re-run the pipeline with real STT to measure \u00abThe giant factory town that might be a giant mistake\u00bb."
+    },
+    "transcript_warning_after": {
+      "code": "demo_transcript",
+      "message": "This report was built from demo/sample transcript text, not this episode's audio. Re-run the pipeline with real STT to measure \u00abThe giant factory town that might be a giant mistake\u00bb."
+    },
+    "speaking_turns_before": 8,
+    "speaking_turns_after": 8,
+    "host_guest_ratio_before": 0.542,
+    "host_guest_ratio_after": 0.542,
+    "status_before": "ready",
+    "status_after": "ready"
+  }
+}
