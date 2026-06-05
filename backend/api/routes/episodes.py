@@ -120,11 +120,17 @@ def process_episode_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Episode {episode_id} not found",
         )
-    if episode_needs_stt(
-        row,
-        transcript=body.transcript,
-        force_retranscribe=body.force_retranscribe,
-    ) and try_dispatch_episode_to_celery(db, episode_id, trigger="api_process"):
+    # Re-transcribe runs synchronously on the API — AssemblyAI polling can take minutes
+    # and Celery tasks do not receive force_retranscribe today.
+    if (
+        not body.force_retranscribe
+        and episode_needs_stt(
+            row,
+            transcript=body.transcript,
+            force_retranscribe=body.force_retranscribe,
+        )
+        and try_dispatch_episode_to_celery(db, episode_id, trigger="api_process")
+    ):
         return ProcessEpisodeResponse(
             episode_id=episode_id,
             status="queued",
