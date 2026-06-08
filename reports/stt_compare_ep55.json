@@ -1,0 +1,190 @@
+{
+  "api": "https://soapboxx-production.up.railway.app",
+  "episode_id": 55,
+  "before": {
+    "state": {
+      "episode_id": 55,
+      "podcast_id": 1,
+      "podcast_name": "Planet Money",
+      "title": "Days of our Tariffs",
+      "status": "ready",
+      "pipeline_error": null,
+      "pipeline_updated_at": "2026-06-05T22:58:58.469059+00:00",
+      "steps": {
+        "ingested": true,
+        "transcribed": true,
+        "measured": true,
+        "insight_ready": true
+      },
+      "next_action": null
+    },
+    "features": {
+      "episode_id": 55,
+      "hook_length_seconds": 1.7,
+      "intro_length_seconds": 5.6,
+      "question_count": 57,
+      "speaking_turns": 0,
+      "host_guest_ratio": 0.5,
+      "topic_shift_count": 7,
+      "cta_present": false
+    },
+    "producer": {
+      "episode_id": 55,
+      "title": "Days of our Tariffs",
+      "disclaimer": "We show how the episode is built \u2014 not a quality verdict. Structure signals only; they do not predict audience response.",
+      "transcript_warning": null,
+      "structure_label": "Narrative documentary",
+      "template_id": "C",
+      "measurements": {
+        "hook_length_seconds": 1.7,
+        "intro_length_seconds": 5.6,
+        "question_count": 57,
+        "speaking_turns": 0,
+        "host_guest_ratio": 0.5,
+        "topic_shift_count": 7,
+        "cta_present": false
+      },
+      "editorial_readout": {
+        "what_happening": [
+          "Diary / explainer narration (structural pattern)",
+          "Listeners reach the main thread quickly \u2014 the episode does not linger in runway before the story or guest voice takes over.",
+          "Many question marks appear in the transcript \u2014 without speaker labels these read as rhetorical narration (diary/explainer pacing), not interviewer-led pivots.",
+          "Speaker handoffs were not detected from labeled lines \u2014 pacing may read as one continuous voice in the transcript."
+        ],
+        "why_it_matters": [
+          "Trade-off: rhetorical questions pace the diary \u2014 momentum from narration, not interview discovery.",
+          "Trade-off: one voice in the transcript \u2014 clarity depends on re-hooks and orientation, not speaker handoffs.",
+          "Pattern: diary / explainer narration \u2014 question marks pace the story but the transcript reads as one voice without labeled interview handoffs."
+        ],
+        "what_to_try_next": [
+          "Potential drag: 11m 48s uninterrupted segment at ~19m 36s",
+          "Potential weak transition: 1 abrupt length shift(s) between segments"
+        ]
+      },
+      "transcript_limitations": [
+        "Speaker labels not detected in transcript \u2014 question marks may be rhetorical (narration), not interview pivots; talk-share is unavailable."
+      ]
+    },
+    "actions": {
+      "episode_id": 55,
+      "title": "Days of our Tariffs",
+      "transcript_warning": null,
+      "actions": [
+        {
+          "id": "action-0",
+          "category": "next_episode",
+          "priority": "high",
+          "text": "Potential drag: 11m 48s uninterrupted segment at ~19m 36s"
+        },
+        {
+          "id": "action-1",
+          "category": "next_episode",
+          "priority": "high",
+          "text": "Potential weak transition: 1 abrupt length shift(s) between segments"
+        }
+      ],
+      "keep_patterns": [
+        "Diary / explainer narration (structural pattern)",
+        "Listeners reach the main thread quickly \u2014 the episode does not linger in runway before the story or guest voice takes over."
+      ]
+    }
+  },
+  "after": {
+    "state": {
+      "episode_id": 55,
+      "podcast_id": 1,
+      "podcast_name": "Planet Money",
+      "title": "Days of our Tariffs",
+      "status": "ready",
+      "pipeline_error": null,
+      "pipeline_updated_at": "2026-06-05T22:58:58.469059+00:00",
+      "steps": {
+        "ingested": true,
+        "transcribed": true,
+        "measured": true,
+        "insight_ready": true
+      },
+      "next_action": null
+    },
+    "features": {
+      "episode_id": 55,
+      "hook_length_seconds": 1.7,
+      "intro_length_seconds": 5.6,
+      "question_count": 57,
+      "speaking_turns": 0,
+      "host_guest_ratio": 0.5,
+      "topic_shift_count": 7,
+      "cta_present": false
+    },
+    "producer": {
+      "episode_id": 55,
+      "title": "Days of our Tariffs",
+      "disclaimer": "We show how the episode is built \u2014 not a quality verdict. Structure signals only; they do not predict audience response.",
+      "transcript_warning": null,
+      "structure_label": "Narrative documentary",
+      "template_id": "C",
+      "measurements": {
+        "hook_length_seconds": 1.7,
+        "intro_length_seconds": 5.6,
+        "question_count": 57,
+        "speaking_turns": 0,
+        "host_guest_ratio": 0.5,
+        "topic_shift_count": 7,
+        "cta_present": false
+      },
+      "editorial_readout": {
+        "what_happening": [
+          "Diary / explainer narration (structural pattern)",
+          "Listeners reach the main thread quickly \u2014 the episode does not linger in runway before the story or guest voice takes over.",
+          "Many question marks appear in the transcript \u2014 without speaker labels these read as rhetorical narration (diary/explainer pacing), not interviewer-led pivots.",
+          "Speaker handoffs were not detected from labeled lines \u2014 pacing may read as one continuous voice in the transcript."
+        ],
+        "why_it_matters": [
+          "Trade-off: rhetorical questions pace the diary \u2014 momentum from narration, not interview discovery.",
+          "Trade-off: one voice in the transcript \u2014 clarity depends on re-hooks and orientation, not speaker handoffs.",
+          "Pattern: diary / explainer narration \u2014 question marks pace the story but the transcript reads as one voice without labeled interview handoffs."
+        ],
+        "what_to_try_next": [
+          "Potential drag: 11m 48s uninterrupted segment at ~19m 36s",
+          "Potential weak transition: 1 abrupt length shift(s) between segments"
+        ]
+      },
+      "transcript_limitations": [
+        "Speaker labels not detected in transcript \u2014 question marks may be rhetorical (narration), not interview pivots; talk-share is unavailable."
+      ]
+    },
+    "actions": {
+      "episode_id": 55,
+      "title": "Days of our Tariffs",
+      "transcript_warning": null,
+      "actions": [
+        {
+          "id": "action-0",
+          "category": "next_episode",
+          "priority": "high",
+          "text": "Potential drag: 11m 48s uninterrupted segment at ~19m 36s"
+        },
+        {
+          "id": "action-1",
+          "category": "next_episode",
+          "priority": "high",
+          "text": "Potential weak transition: 1 abrupt length shift(s) between segments"
+        }
+      ],
+      "keep_patterns": [
+        "Diary / explainer narration (structural pattern)",
+        "Listeners reach the main thread quickly \u2014 the episode does not linger in runway before the story or guest voice takes over."
+      ]
+    }
+  },
+  "diff": {
+    "transcript_warning_before": null,
+    "transcript_warning_after": null,
+    "speaking_turns_before": 0,
+    "speaking_turns_after": 0,
+    "host_guest_ratio_before": 0.5,
+    "host_guest_ratio_after": 0.5,
+    "status_before": "ready",
+    "status_after": "ready"
+  }
+}

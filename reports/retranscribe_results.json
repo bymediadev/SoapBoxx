@@ -1,0 +1,30 @@
+[
+  {
+    "episode_id": 2,
+    "elapsed_seconds": 25.3,
+    "before": {
+      "episode_id": 2,
+      "hook_length_seconds": 1758.0,
+      "intro_length_seconds": 1758.0,
+      "question_count": 25,
+      "speaking_turns": 0,
+      "host_guest_ratio": 0.5,
+      "topic_shift_count": 0,
+      "cta_present": true
+    },
+    "after": {
+      "episode_id": 2,
+      "hook_length_seconds": 24.2,
+      "intro_length_seconds": 33.9,
+      "question_count": 29,
+      "speaking_turns": 49,
+      "host_guest_ratio": 0.91,
+      "topic_shift_count": 8,
+      "cta_present": false
+    },
+    "transcript_warning": null,
+    "template_id": "B",
+    "structure_label": "Question-driven interview",
+    "limitations": []
+  }
+]
