@@ -30,6 +30,7 @@ echo 🔧 Activating environment...
 echo.
 
 call ".venv\Scripts\activate.bat"
+REM Insights Library desktop shell (embeds /ui/ — same as Lovable)
 python frontend\main_window.py
 
 echo.

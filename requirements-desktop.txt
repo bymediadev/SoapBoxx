@@ -2,6 +2,7 @@
 # Usage: pip install -r requirements.txt -r requirements-desktop.txt
 
 PyQt6
+PyQt6-WebEngine
 openai
 sounddevice
 numpy

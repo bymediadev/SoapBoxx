@@ -19,7 +19,7 @@ from backend.services.feed_leverage_service import (
     build_feed_leverage_points,
     build_structural_identity,
 )
-from backend.services.measurement_versions import stamp_for_row
+from backend.services.measurement_versions import stamp_for_row, stamp_dict, cohort_note
 from backend.services.narrative_timeline_service import build_narrative_engine_map
 from backend.services.producer_view_service import build_producer_view
 from backend.services.audio_motion_service import load_audio_motion
@@ -578,7 +578,6 @@ def build_coaching_report(
         )
 
     cohort_excluded = lib_excluded + show_excluded
-    _ = cohort_excluded  # used for comparable-row filtering only, not user copy
 
     producer = None
     narrative_engine = None
@@ -632,8 +631,8 @@ def build_coaching_report(
         what_this_means=pattern_lines,
         similar_to=similar,
         topic_shift_note=_topic_shift_detection_note(topic_shifts),
-        measurement_stamp={},
-        measurement_cohort_note=None,
+        measurement_stamp=stamp_dict(anchor_stamp),
+        measurement_cohort_note=cohort_note(cohort_excluded),
         transcript_limitations=limits,
         narrative_engine=narrative_engine,
         producer_notes=producer,

@@ -1,9 +1,5 @@
-# frontend/__init__.py
-# This file makes the frontend directory a Python package
+# SoapBoxx desktop shell — Insights Library only
 
-from .main_window import MainWindow
-from .reverb_tab import ReverbTab
-from .scoop_tab import ScoopTab
-from .soapboxx_tab import SoapBoxxTab
+from .library_window import LibraryOfflineWindow, run_library_offline_app
 
-__all__ = ["MainWindow", "SoapBoxxTab", "ReverbTab", "ScoopTab"]
+__all__ = ["LibraryOfflineWindow", "run_library_offline_app"]

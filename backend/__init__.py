@@ -1,4 +1,4 @@
-# backend package — lazy desktop imports so V1 API deploy does not require PortAudio.
+# backend package — V1 API + transcription utilities.
 
 from __future__ import annotations
 
@@ -8,24 +8,12 @@ from typing import Any
 from .error_tracker import error_tracker
 
 __all__ = [
-    "SoapBoxxCore",
-    "Config",
     "Transcriber",
-    "FeedbackEngine",
-    "GuestResearch",
-    "AudioRecorder",
-    "Logger",
     "error_tracker",
 ]
 
 _LAZY_EXPORTS: dict[str, str] = {
-    "SoapBoxxCore": "soapboxx_core",
-    "Config": "config",
     "Transcriber": "transcriber",
-    "FeedbackEngine": "feedback_engine",
-    "GuestResearch": "guest_research",
-    "AudioRecorder": "audio_recorder",
-    "Logger": "logger",
 }
 
 

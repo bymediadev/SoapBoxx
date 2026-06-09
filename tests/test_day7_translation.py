@@ -59,3 +59,22 @@ def test_translation_not_empty(v1_db_clean):
         assert len(result.insight_text) > 50
     finally:
         db.close()
+
+
+def test_get_translation_endpoint(v1_db_clean, v1_client):
+    from backend.api.deps import get_session_factory
+
+    db = get_session_factory()()
+    try:
+        eid = seed_episode_with_transcript(db)
+        run_all_steps(db, eid)
+    finally:
+        db.close()
+
+    r = v1_client.get(f"/episodes/{eid}/translation")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["episode_id"] == eid
+    assert body["insight_text"]
+    assert body["report"] is not None
+    assert body["report"]["measurement_stamp"]["feature_schema_version"]

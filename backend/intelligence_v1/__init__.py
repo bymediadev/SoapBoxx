@@ -1,9 +1,5 @@
-"""
-SoapBoxx Phase 1 — measurement engine (local SQLite + metrics + benchmarks + rule-based tier).
+"""V1 transcription adapter — delegates to provider layer."""
 
-Not Spotify/YouTube ingestion. Reuses ``transcriber`` and ``llm_service`` / OpenAI coach path.
-"""
+from backend.providers.transcribe import transcribe_audio_file as transcribe_file
 
-from .pipeline import process_episode
-
-__all__ = ["process_episode"]
+__all__ = ["transcribe_file"]
