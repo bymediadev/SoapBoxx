@@ -1,7 +1,7 @@
 """Layer A — per-episode narrative engine map (timeline, not trends).
 
-Semantic narrative understanding via Gemini when configured; rule-based fallback
-for timing cues when the API is unavailable.
+Narrative Engine v2: producer-level reasoning via Gemini semantic pass.
+Rule-based fallback supplies timing cues only — no per-question open loops.
 """
 
 from __future__ import annotations
@@ -43,73 +43,65 @@ _DEPENDENCY_ADD = re.compile(
 
 _QUESTION = re.compile(r"[^.!?]*\?", re.M)
 
-_NARRATIVE_SEMANTIC_PROMPT = """You are a podcast narrative editor analyzing one episode transcript.
+_NARRATIVE_V2_PROMPT = """You are a podcast narrative editor producing a producer-level narrative summary.
 
-Your job is editorial comprehension — not transcript annotation and not coaching advice.
+Analyze MEANING, not wording. Your job is editorial intelligence — not transcript statistics.
 
-Reason at the CONCEPT level, not the sentence level:
-- Merge paraphrases and related questions into one explanatory thread.
-- Recognize implied answers, indirect explanations, narrative callbacks, and thematic resolutions.
-- Do NOT create separate loops for surface questions that express the same underlying curiosity.
+CRITICAL — eliminate loop inflation:
+- Do NOT treat every question as a separate narrative unit.
+- Cluster paraphrases, restatements, rhetorical questions, and follow-up wording BEFORE analysis.
+- Surface questions like "What is wrong with us?", "Why don't we use vacation?", and
+  "Why don't Americans prioritize vacations?" are ONE curiosity — not three loops.
 
-Example (one thread, not four):
-Surface lines: "Why do Americans take less vacation?", "What is wrong with us?",
-"Why don't we use our vacation days?", "Why are Europeans different?"
-Merged thread: "Why American work culture produces less vacation usage than other wealthy countries."
+Infer one primary narrative question the episode is fundamentally trying to explain.
 
-At the opening, infer the narrative promise even when it is never stated directly:
-- What curiosity is being created?
-- What question is the audience invited to follow?
-- What answer is implicitly promised?
+Supporting threads are major EXPLANATORY PATHS (historical, economic, cultural, psychological,
+policy, institutional) — NOT individual transcript questions. Group related moments under
+the same thread. Maximum 7 supporting threads.
 
-Satisfaction scoring:
+Narrative promise:
+- Infer what answer the episode implicitly promises, even if never stated directly.
+
+Narrative payoff:
 - Do NOT ask "Was every question answered?"
-- Ask "Would a reasonable listener feel the central curiosity was satisfied by the end?"
-- Verdict must be one of: fully_satisfied, mostly_satisfied, partially_satisfied, unsatisfied
-- Include confidence 0.0-1.0 and a short rationale.
+- Ask "Would a reasonable listener feel the central curiosity was satisfied?"
+- Status: fully_delivered | mostly_delivered | partially_delivered | not_delivered
+- Confidence: high | medium | low (and confidence_score 0.0-1.0)
+- Recognize implied answers, indirect explanations, callbacks, and thematic resolutions.
+
+Remaining open questions: only meaningful unresolved issues (max 4). Omit rhetorical restatements.
 
 Copy rules:
-- Neutral editorial tone only.
-- Never use coaching verdict language (no "good/bad episode", "you should", "score", "rank").
+- Neutral editorial tone. No coaching verdict language (no "good/bad episode", "you should", "rank").
 - Use "appears", "suggests", "may" when uncertain.
 
-Return JSON only with this shape:
+Return JSON only:
 {
-  "central_topic": "one sentence",
-  "listener_curiosity": "one sentence — the curiosity driving the episode",
-  "narrative_promise": {
-    "curiosity_created": "",
-    "question_invited": "",
-    "answer_promised": ""
-  },
-  "explanatory_threads": [
-    {
-      "thread_label": "concept-level thread label",
-      "status": "resolved|partial|open",
-      "evidence_summary": "how the episode addresses this thread semantically",
-      "surfaced_phrases": ["distinct transcript phrases merged into this thread"],
-      "approx_open_seconds": 0,
-      "approx_close_seconds": null
-    }
-  ],
-  "satisfaction": {
-    "verdict": "fully_satisfied|mostly_satisfied|partially_satisfied|unsatisfied",
-    "confidence": 0.0,
+  "story_being_told": "what story this episode is telling",
+  "primary_question": "single central narrative question",
+  "curiosity_driver": "what curiosity drives the episode",
+  "narrative_promise": "one sentence — what payoff is promised to the listener",
+  "payoff": {
+    "status": "fully_delivered|mostly_delivered|partially_delivered|not_delivered",
+    "confidence": "high|medium|low",
+    "confidence_score": 0.0,
     "rationale": ""
   },
-  "editorial_summary": {
-    "story_being_told": "",
-    "curiosity_driver": "",
-    "explanations_that_landed": ["..."],
-    "questions_still_open": ["..."],
-    "listener_payoff_assessment": ""
-  },
+  "supporting_threads": [
+    {
+      "thread_label": "e.g. Historical roots of work culture",
+      "status": "delivered|partially_delivered|open",
+      "evidence_summary": "how this explanatory path is addressed semantically"
+    }
+  ],
+  "conclusions_reached": ["major conclusions the episode reaches"],
+  "remaining_open_questions": ["only meaningful unresolved issues"],
   "timeline_beats": [
     {
       "time_seconds": 0,
-      "event_type": "promise_established|thread_opened|explanation|partial_resolution|resolution|callback",
-      "label": "short producer-facing beat label",
-      "detail": "what this beat means editorially"
+      "event_type": "promise_established|explanation|partial_payoff|payoff|callback",
+      "label": "producer-facing beat",
+      "detail": "editorial meaning of this beat"
     }
   ]
 }
@@ -163,10 +155,43 @@ class OpenLoopState:
 
 
 @dataclass
+class NarrativeSummary:
+    primary_question: str = ""
+    story_being_told: str = ""
+    curiosity_driver: str = ""
+    narrative_promise: str = ""
+    payoff_status: str = ""
+    payoff_label: str = ""
+    confidence: str = ""
+    confidence_score: Optional[float] = None
+    payoff_rationale: str = ""
+    supporting_threads: List[Dict[str, Any]] = field(default_factory=list)
+    conclusions_reached: List[str] = field(default_factory=list)
+    remaining_open_questions: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "primary_question": self.primary_question,
+            "story_being_told": self.story_being_told,
+            "curiosity_driver": self.curiosity_driver,
+            "narrative_promise": self.narrative_promise,
+            "payoff_status": self.payoff_status,
+            "payoff_label": self.payoff_label,
+            "confidence": self.confidence,
+            "confidence_score": self.confidence_score,
+            "payoff_rationale": self.payoff_rationale,
+            "supporting_threads": list(self.supporting_threads),
+            "conclusions_reached": list(self.conclusions_reached),
+            "remaining_open_questions": list(self.remaining_open_questions),
+        }
+
+
+@dataclass
 class NarrativeEngineMap:
     timeline: List[TimelineEvent] = field(default_factory=list)
     open_loops: List[OpenLoopState] = field(default_factory=list)
     engine_notes: List[str] = field(default_factory=list)
+    narrative_summary: Optional[NarrativeSummary] = None
     central_topic: Optional[str] = None
     listener_curiosity: Optional[str] = None
     narrative_promise: Optional[Dict[str, str]] = None
@@ -174,14 +199,18 @@ class NarrativeEngineMap:
     satisfaction: Optional[Dict[str, Any]] = None
     editorial_summary: Optional[Dict[str, Any]] = None
     analysis_mode: str = "rule_based"
+    engine_version: str = "v2"
 
     def to_dict(self) -> dict:
-        out = {
+        out: Dict[str, Any] = {
             "timeline": [e.to_dict() for e in self.timeline],
             "open_loops": [o.to_dict() for o in self.open_loops],
             "engine_notes": list(self.engine_notes),
             "analysis_mode": self.analysis_mode,
+            "engine_version": self.engine_version,
         }
+        if self.narrative_summary:
+            out["narrative_summary"] = self.narrative_summary.to_dict()
         if self.central_topic:
             out["central_topic"] = self.central_topic
         if self.listener_curiosity:
@@ -254,23 +283,129 @@ def _safe_float(val: Any, default: float = 0.0) -> float:
         return default
 
 
-def _thread_status_to_loop(status: str) -> str:
-    s = (status or "").strip().lower()
-    if s in ("resolved", "closed"):
-        return "closed"
-    if s in ("partial", "partially_resolved"):
-        return "partial"
-    return "open"
-
-
-def _satisfaction_label(verdict: str) -> str:
+def _payoff_label(status: str) -> str:
     labels = {
-        "fully_satisfied": "Fully satisfied",
-        "mostly_satisfied": "Mostly satisfied",
-        "partially_satisfied": "Partially satisfied",
-        "unsatisfied": "Unsatisfied",
+        "fully_delivered": "Fully Delivered",
+        "mostly_delivered": "Mostly Delivered",
+        "partially_delivered": "Partially Delivered",
+        "not_delivered": "Not Delivered",
+        "fully_satisfied": "Fully Delivered",
+        "mostly_satisfied": "Mostly Delivered",
+        "partially_satisfied": "Partially Delivered",
+        "unsatisfied": "Not Delivered",
     }
-    return labels.get((verdict or "").strip().lower(), verdict or "Unknown")
+    return labels.get((status or "").strip().lower(), status or "Unknown")
+
+
+def _thread_delivery_label(status: str) -> str:
+    labels = {
+        "delivered": "Delivered",
+        "partially_delivered": "Partially Delivered",
+        "open": "Open",
+        "resolved": "Delivered",
+        "partial": "Partially Delivered",
+    }
+    return labels.get((status or "").strip().lower(), status or "Open")
+
+
+def _normalize_confidence(raw: Any, score: Optional[float]) -> str:
+    text = str(raw or "").strip().lower()
+    if text in ("high", "medium", "low"):
+        return text.capitalize()
+    if score is not None:
+        if score >= 0.75:
+            return "High"
+        if score >= 0.5:
+            return "Medium"
+        return "Low"
+    return ""
+
+
+def _parse_supporting_threads(raw_threads: Any) -> List[Dict[str, Any]]:
+    if not isinstance(raw_threads, list):
+        return []
+    threads: List[Dict[str, Any]] = []
+    for item in raw_threads[:7]:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("thread_label") or "").strip()
+        if not label:
+            continue
+        status = str(item.get("status") or "open").strip().lower()
+        threads.append(
+            {
+                "thread_label": label,
+                "status": status,
+                "status_label": _thread_delivery_label(status),
+                "evidence_summary": str(item.get("evidence_summary") or "").strip(),
+            }
+        )
+    return threads
+
+
+def _build_producer_notes(summary: NarrativeSummary) -> List[str]:
+    notes: List[str] = []
+    if summary.primary_question:
+        notes.append(f"Primary question: {summary.primary_question}")
+    if summary.narrative_promise:
+        notes.append(f"Narrative promise: {summary.narrative_promise}")
+    if summary.payoff_label:
+        conf = summary.confidence or ""
+        conf_txt = f" ({conf} confidence)" if conf else ""
+        notes.append(f"Payoff — {summary.payoff_label}{conf_txt}")
+        if summary.payoff_rationale:
+            notes.append(summary.payoff_rationale)
+    if summary.conclusions_reached:
+        notes.append(f"Conclusion: {summary.conclusions_reached[0]}")
+    if summary.remaining_open_questions:
+        notes.append(
+            f"Remaining open: {summary.remaining_open_questions[0]}"
+        )
+    return notes[:6]
+
+
+def _legacy_fields_from_summary(summary: NarrativeSummary) -> Dict[str, Any]:
+    """Backward-compatible aliases for API consumers on older shapes."""
+    verdict_map = {
+        "fully_delivered": "fully_satisfied",
+        "mostly_delivered": "mostly_satisfied",
+        "partially_delivered": "partially_satisfied",
+        "not_delivered": "unsatisfied",
+    }
+    return {
+        "central_topic": summary.story_being_told or None,
+        "listener_curiosity": summary.curiosity_driver or summary.primary_question or None,
+        "narrative_promise": {
+            "curiosity_created": summary.curiosity_driver,
+            "question_invited": summary.primary_question,
+            "answer_promised": summary.narrative_promise,
+        }
+        if summary.narrative_promise or summary.primary_question
+        else None,
+        "explanatory_threads": [
+            {
+                "thread_label": t["thread_label"],
+                "status": t["status"],
+                "evidence_summary": t.get("evidence_summary", ""),
+                "surfaced_phrases": [],
+            }
+            for t in summary.supporting_threads
+        ],
+        "satisfaction": {
+            "verdict": verdict_map.get(summary.payoff_status, summary.payoff_status),
+            "confidence": summary.confidence_score,
+            "rationale": summary.payoff_rationale,
+        }
+        if summary.payoff_status
+        else None,
+        "editorial_summary": {
+            "story_being_told": summary.story_being_told,
+            "curiosity_driver": summary.curiosity_driver,
+            "explanations_that_landed": summary.conclusions_reached[:6],
+            "questions_still_open": summary.remaining_open_questions[:4],
+            "listener_payoff_assessment": summary.payoff_rationale,
+        },
+    }
 
 
 def _build_semantic_narrative_map(
@@ -278,54 +413,67 @@ def _build_semantic_narrative_map(
     moments: Sequence[tuple[float, str]],
 ) -> Optional[NarrativeEngineMap]:
     user_prompt = (
-        "Analyze this podcast episode transcript for narrative promise, explanatory "
-        "threads, and listener satisfaction.\n\n"
+        "Produce a producer-level narrative summary for this podcast episode. "
+        "Cluster semantically equivalent questions before identifying threads.\n\n"
         f"{_format_transcript_for_llm(moments)}"
     )
     raw = run_gemini_json(
-        system_prompt=_NARRATIVE_SEMANTIC_PROMPT,
+        system_prompt=_NARRATIVE_V2_PROMPT,
         user_prompt=user_prompt,
     )
     if not raw:
         return None
 
-    threads_raw = raw.get("explanatory_threads") or []
-    if not isinstance(threads_raw, list):
-        threads_raw = []
+    primary = str(raw.get("primary_question") or "").strip()
+    if not primary:
+        return None
 
-    threads: List[Dict[str, Any]] = []
-    loops: List[OpenLoopState] = []
-    for item in threads_raw[:6]:
-        if not isinstance(item, dict):
-            continue
-        label = str(item.get("thread_label") or "").strip()
-        if not label:
-            continue
-        status = str(item.get("status") or "open").strip().lower()
-        opened = _safe_float(item.get("approx_open_seconds"), 0.0)
-        closed_raw = item.get("approx_close_seconds")
-        closed = _safe_float(closed_raw) if closed_raw is not None else None
-        loop_status = _thread_status_to_loop(status)
-        threads.append(
-            {
-                "thread_label": label,
-                "status": status,
-                "evidence_summary": str(item.get("evidence_summary") or "").strip(),
-                "surfaced_phrases": [
-                    str(p).strip()
-                    for p in (item.get("surfaced_phrases") or [])
-                    if str(p).strip()
-                ][:6],
-            }
+    payoff_raw = raw.get("payoff") or {}
+    payoff_status = ""
+    payoff_rationale = ""
+    confidence = ""
+    confidence_score = None
+    if isinstance(payoff_raw, dict):
+        payoff_status = str(payoff_raw.get("status") or "").strip().lower()
+        payoff_rationale = str(payoff_raw.get("rationale") or "").strip()
+        confidence = _normalize_confidence(
+            payoff_raw.get("confidence"),
+            None,
         )
-        loops.append(
-            OpenLoopState(
-                opened_at=opened,
-                closed_at=closed if loop_status == "closed" else None,
-                snippet=label,
-                status=loop_status,
-            )
-        )
+        try:
+            score_raw = payoff_raw.get("confidence_score")
+            confidence_score = round(float(score_raw), 2) if score_raw is not None else None
+        except (TypeError, ValueError):
+            confidence_score = None
+        if not confidence:
+            confidence = _normalize_confidence("", confidence_score)
+
+    supporting = _parse_supporting_threads(raw.get("supporting_threads"))
+    conclusions = [
+        str(x).strip()
+        for x in (raw.get("conclusions_reached") or [])
+        if str(x).strip()
+    ][:6]
+    remaining = [
+        str(x).strip()
+        for x in (raw.get("remaining_open_questions") or [])
+        if str(x).strip()
+    ][:4]
+
+    summary = NarrativeSummary(
+        primary_question=primary,
+        story_being_told=str(raw.get("story_being_told") or "").strip(),
+        curiosity_driver=str(raw.get("curiosity_driver") or "").strip(),
+        narrative_promise=str(raw.get("narrative_promise") or "").strip(),
+        payoff_status=payoff_status,
+        payoff_label=_payoff_label(payoff_status),
+        confidence=confidence,
+        confidence_score=confidence_score,
+        payoff_rationale=payoff_rationale,
+        supporting_threads=supporting,
+        conclusions_reached=conclusions,
+        remaining_open_questions=remaining,
+    )
 
     events: List[TimelineEvent] = []
     for beat in (raw.get("timeline_beats") or [])[:20]:
@@ -344,92 +492,20 @@ def _build_semantic_narrative_map(
         )
     events.sort(key=lambda e: e.time_seconds)
 
-    promise_raw = raw.get("narrative_promise") or {}
-    narrative_promise = (
-        {
-            "curiosity_created": str(promise_raw.get("curiosity_created") or "").strip(),
-            "question_invited": str(promise_raw.get("question_invited") or "").strip(),
-            "answer_promised": str(promise_raw.get("answer_promised") or "").strip(),
-        }
-        if isinstance(promise_raw, dict)
-        else None
-    )
-
-    satisfaction_raw = raw.get("satisfaction") or {}
-    satisfaction = None
-    if isinstance(satisfaction_raw, dict) and satisfaction_raw.get("verdict"):
-        conf = satisfaction_raw.get("confidence")
-        try:
-            confidence = round(float(conf), 2) if conf is not None else None
-        except (TypeError, ValueError):
-            confidence = None
-        satisfaction = {
-            "verdict": str(satisfaction_raw.get("verdict") or "").strip().lower(),
-            "confidence": confidence,
-            "rationale": str(satisfaction_raw.get("rationale") or "").strip(),
-        }
-
-    editorial_raw = raw.get("editorial_summary") or {}
-    editorial_summary = None
-    if isinstance(editorial_raw, dict):
-        editorial_summary = {
-            "story_being_told": str(editorial_raw.get("story_being_told") or "").strip(),
-            "curiosity_driver": str(editorial_raw.get("curiosity_driver") or "").strip(),
-            "explanations_that_landed": [
-                str(x).strip()
-                for x in (editorial_raw.get("explanations_that_landed") or [])
-                if str(x).strip()
-            ][:6],
-            "questions_still_open": [
-                str(x).strip()
-                for x in (editorial_raw.get("questions_still_open") or [])
-                if str(x).strip()
-            ][:6],
-            "listener_payoff_assessment": str(
-                editorial_raw.get("listener_payoff_assessment") or ""
-            ).strip(),
-        }
-
-    notes: List[str] = []
-    central = str(raw.get("central_topic") or "").strip()
-    curiosity = str(raw.get("listener_curiosity") or "").strip()
-    if central:
-        notes.append(f"Central topic: {central}")
-    if curiosity:
-        notes.append(f"Listener curiosity: {curiosity}")
-    if narrative_promise and narrative_promise.get("answer_promised"):
-        notes.append(
-            f"Implied narrative promise: {narrative_promise['answer_promised']}"
-        )
-    if satisfaction:
-        conf = satisfaction.get("confidence")
-        conf_txt = f" (confidence {conf})" if conf is not None else ""
-        notes.append(
-            f"Curiosity payoff — {_satisfaction_label(satisfaction['verdict'])}{conf_txt}: "
-            f"{satisfaction.get('rationale', '')}"
-        )
-    if editorial_summary:
-        landed = editorial_summary.get("explanations_that_landed") or []
-        if landed:
-            notes.append(f"Explanations that landed: {landed[0]}")
-        open_q = editorial_summary.get("questions_still_open") or []
-        if open_q:
-            notes.append(f"Questions still open: {open_q[0]}")
-
-    if not threads and not events:
-        return None
-
+    legacy = _legacy_fields_from_summary(summary)
     return NarrativeEngineMap(
         timeline=events,
-        open_loops=loops,
-        engine_notes=notes[:8],
-        central_topic=central or None,
-        listener_curiosity=curiosity or None,
-        narrative_promise=narrative_promise,
-        explanatory_threads=threads,
-        satisfaction=satisfaction,
-        editorial_summary=editorial_summary,
+        open_loops=[],
+        engine_notes=_build_producer_notes(summary),
+        narrative_summary=summary,
+        central_topic=legacy["central_topic"],
+        listener_curiosity=legacy["listener_curiosity"],
+        narrative_promise=legacy["narrative_promise"],
+        explanatory_threads=legacy["explanatory_threads"],
+        satisfaction=legacy["satisfaction"],
+        editorial_summary=legacy["editorial_summary"],
         analysis_mode="semantic",
+        engine_version="v2",
     )
 
 
@@ -452,44 +528,46 @@ def _detect_false_resolution(
     return False
 
 
+def _first_early_question(
+    moments: Sequence[tuple[float, str]], total_runtime: float
+) -> Optional[tuple[float, str]]:
+    """Best-effort primary question — one surface cue only, not a loop inventory."""
+    for t, line in moments:
+        questions = _extract_questions(line)
+        if not questions:
+            continue
+        if t <= max(90.0, total_runtime * 0.3):
+            return t, questions[0]
+    for t, line in moments:
+        questions = _extract_questions(line)
+        if questions:
+            return t, questions[0]
+    return None
+
+
 def _build_rule_based_narrative_map(
     text: str,
     moments: Sequence[tuple[float, str]],
 ) -> NarrativeEngineMap:
     total_runtime = moments[-1][0] if moments else 0.0
     events: List[TimelineEvent] = []
-    loops: List[OpenLoopState] = []
-    primary_idx: Optional[int] = None
+    primary_open: Optional[float] = None
+    primary_close: Optional[float] = None
+    early = _first_early_question(moments, total_runtime)
+
+    if early:
+        t, q = early
+        primary_open = t
+        events.append(
+            TimelineEvent(
+                t,
+                "primary_question",
+                "Possible primary question (transcript cue only)",
+                q[:100],
+            )
+        )
 
     for i, (t, line) in enumerate(moments):
-        questions = _extract_questions(line)
-        for q in questions:
-            is_primary = primary_idx is None and (
-                t <= max(60.0, total_runtime * 0.25) or len(loops) == 0
-            )
-            if is_primary:
-                primary_idx = len(loops)
-                events.append(
-                    TimelineEvent(
-                        t,
-                        "primary_question",
-                        "Possible primary question (transcript)",
-                        q[:100],
-                    )
-                )
-            else:
-                events.append(
-                    TimelineEvent(
-                        t,
-                        "sub_question",
-                        "Possible follow-up question (transcript)",
-                        q[:100],
-                    )
-                )
-            loops.append(
-                OpenLoopState(opened_at=t, closed_at=None, snippet=q, status="open")
-            )
-
         if _DEPENDENCY_ADD.search(line):
             events.append(
                 TimelineEvent(
@@ -509,11 +587,6 @@ def _build_rule_based_narrative_map(
                     line[:100],
                 )
             )
-            for loop in reversed(loops):
-                if loop.status == "open" and loop.opened_at <= t:
-                    loop.status = "partial"
-                    break
-
         if _RESOLUTION.search(line):
             false_close = _detect_false_resolution(moments, i)
             if false_close:
@@ -534,70 +607,50 @@ def _build_rule_based_narrative_map(
                         line[:100],
                     )
                 )
-                for loop in reversed(loops):
-                    if loop.status in ("open", "partial") and loop.opened_at <= t:
-                        loop.closed_at = t
-                        loop.status = "closed"
-                        break
+                if primary_open is not None and primary_close is None:
+                    primary_close = t
 
     events.sort(key=lambda e: e.time_seconds)
 
     notes: List[str] = []
-    if loops:
-        primary = loops[primary_idx or 0]
-        if primary.closed_at:
+    summary: Optional[NarrativeSummary] = None
+    if early:
+        _, q = early
+        payoff_status = "partially_delivered" if primary_close else "not_delivered"
+        summary = NarrativeSummary(
+            primary_question=q[:200],
+            narrative_promise="Unclear without semantic analysis — transcript cue only.",
+            payoff_status=payoff_status,
+            payoff_label=_payoff_label(payoff_status),
+            confidence="Low",
+            payoff_rationale=(
+                f"Closure language detected near {_fmt_time(primary_close)}"
+                if primary_close
+                else "No clear closure detected — semantic pass recommended."
+            ),
+        )
+        notes.append(f"Primary question (surface cue): {q[:120]}")
+        if primary_close:
             notes.append(
-                f"Possible primary thread at {_fmt_time(primary.opened_at)} — "
-                f"closure language detected near {_fmt_time(primary.closed_at)}"
+                f"Possible payoff near {_fmt_time(primary_close)} — explicit transcript cue only"
             )
         else:
             notes.append(
-                f"Possible primary thread at {_fmt_time(primary.opened_at)} — "
-                "appears unresolved at episode end (no clear closure in transcript)"
+                "Payoff unclear from transcript cues — semantic narrative pass recommended."
             )
-        if primary.closed_at and total_runtime > 0:
-            pct = round(100 * primary.closed_at / total_runtime)
-            notes.append(
-                f"Main thread closure at {_fmt_time(primary.closed_at)} "
-                f"({pct}% through runtime)"
-            )
-        elif not primary.closed_at:
-            notes.append(
-                f"Main-thread payoff may still be open near {_fmt_time(total_runtime)} — "
-                "based on transcript cues only"
-            )
-
-    open_at_end = [l for l in loops if l.status in ("open", "partial")]
-    if len(open_at_end) > 1:
-        notes.append(
-            f"{len(open_at_end)} thread(s) appear unresolved at episode end — "
-            "stacked open loops in transcript"
-        )
-
-    false_events = [e for e in events if e.event_type == "false_resolution"]
-    if false_events:
-        notes.append(
-            f"{len(false_events)} moment(s) where closure language is followed by new questions — "
-            "worth checking for accidental early resolution"
-        )
-
-    partial_events = [e for e in events if e.event_type == "partial_resolution"]
-    if partial_events and not false_events:
-        notes.append(
-            f"Partial resolution at {_fmt_time(partial_events[0].time_seconds)} — "
-            "narrative engine may still be active"
-        )
 
     notes.append(
-        "Rule-based fallback — set GEMINI_API_KEY and use gemini-2.5-flash "
-        "(gemini-2.0-* free quota is 0)."
+        "Rule-based timing cues only — enable GEMINI_API_KEY + gemini-2.5-flash "
+        "for producer-level narrative summary (v2)."
     )
 
     return NarrativeEngineMap(
         timeline=events[:20],
-        open_loops=loops[:8],
+        open_loops=[],
         engine_notes=notes[:6],
+        narrative_summary=summary,
         analysis_mode="rule_based",
+        engine_version="v2",
     )
 
 

@@ -1,4 +1,4 @@
-"""Narrative engine map — semantic threads and within-episode tension timeline."""
+"""Narrative engine v2 — producer summary, not per-question loops."""
 
 from unittest.mock import patch
 
@@ -19,47 +19,51 @@ VACATION_TRANSCRIPT = """
 Host: Why do Americans take less vacation?
 Host: What is wrong with us?
 Host: Why don't we use our vacation days?
+Host: Why don't Americans prioritize vacations?
 Host: A traveler notices Europeans appear to work less and vacation more.
 Host: Later we discuss labor history, tax incentives, workplace norms, and the Protestant work ethic.
 Host: So that is the pattern — Americans defer time off in ways Europeans often do not.
 """.strip()
 
 SEMANTIC_VACATION_RESPONSE = {
-    "central_topic": "American vacation culture compared with European norms",
-    "listener_curiosity": "Why Americans take significantly less vacation than peers in other wealthy countries",
-    "narrative_promise": {
-        "curiosity_created": "Europeans seem to vacation more while working less",
-        "question_invited": "Why American work culture produces less vacation usage",
-        "answer_promised": "The episode will explain structural and cultural reasons Americans defer time off",
+    "story_being_told": "A contrast between US and European vacation habits becomes a cultural and institutional explanation.",
+    "primary_question": "Why do Americans take less vacation than workers in other wealthy countries?",
+    "curiosity_driver": "Why Americans leave vacation days unused",
+    "narrative_promise": "This episode will explain why American work culture produces unusually low vacation usage.",
+    "payoff": {
+        "status": "mostly_delivered",
+        "confidence": "high",
+        "confidence_score": 0.84,
+        "rationale": "Labor history, tax incentives, workplace norms, and Protestant work ethic address the central curiosity without restating every surface question.",
     },
-    "explanatory_threads": [
+    "supporting_threads": [
         {
-            "thread_label": "Why American work culture produces less vacation usage than other wealthy countries",
-            "status": "resolved",
-            "evidence_summary": "Labor history, tax incentives, workplace norms, and Protestant work ethic explain the gap without restating every surface question.",
-            "surfaced_phrases": [
-                "Why do Americans take less vacation?",
-                "Why don't we use our vacation days?",
-                "Why are Europeans different?",
-            ],
-            "approx_open_seconds": 0,
-            "approx_close_seconds": 240,
-        }
+            "thread_label": "Historical roots of work culture",
+            "status": "delivered",
+            "evidence_summary": "Labor history frames how time off became optional.",
+        },
+        {
+            "thread_label": "Protestant work ethic influence",
+            "status": "delivered",
+            "evidence_summary": "Cultural norms treat vacation as deferrable.",
+        },
+        {
+            "thread_label": "Economic incentives and taxation",
+            "status": "delivered",
+            "evidence_summary": "Tax and workplace incentives shape usage.",
+        },
+        {
+            "thread_label": "Individual worker psychology",
+            "status": "partially_delivered",
+            "evidence_summary": "Mentioned but not fully explored.",
+        },
     ],
-    "satisfaction": {
-        "verdict": "mostly_satisfied",
-        "confidence": 0.82,
-        "rationale": "The central curiosity is addressed through multiple indirect explanations even though no single line states the final answer verbatim.",
-    },
-    "editorial_summary": {
-        "story_being_told": "An opening contrast between US and European vacation habits becomes a cultural and institutional explanation.",
-        "curiosity_driver": "Why Americans leave vacation days unused",
-        "explanations_that_landed": [
-            "Workplace norms and Protestant work ethic frame time off as optional",
-        ],
-        "questions_still_open": [],
-        "listener_payoff_assessment": "A reasonable listener would likely feel the main curiosity was answered.",
-    },
+    "conclusions_reached": [
+        "American work culture systematically discourages taking full vacation.",
+    ],
+    "remaining_open_questions": [
+        "Whether cultural attitudes can realistically change.",
+    ],
     "timeline_beats": [
         {
             "time_seconds": 0,
@@ -69,7 +73,7 @@ SEMANTIC_VACATION_RESPONSE = {
         },
         {
             "time_seconds": 180,
-            "event_type": "resolution",
+            "event_type": "payoff",
             "label": "Institutional explanation lands",
             "detail": "Labor and cultural factors close the central thread.",
         },
@@ -77,23 +81,24 @@ SEMANTIC_VACATION_RESPONSE = {
 }
 
 
-def test_timeline_has_primary_question():
+def test_rule_based_does_not_inflate_open_loops():
     m = build_narrative_engine_map(SAMPLE)
-    types = [e.event_type for e in m.timeline]
-    assert "primary_question" in types
-    assert m.open_loops
-    assert m.open_loops[0].snippet
+    assert m.open_loops == []
+    assert m.engine_version == "v2"
+
+
+def test_rule_based_has_single_primary_cue_not_many_loops():
+    m = build_narrative_engine_map(SAMPLE)
+    d = m.to_dict()
+    assert d.get("narrative_summary")
+    assert d["narrative_summary"]["primary_question"]
+    assert len(d["open_loops"]) == 0
 
 
 def test_engine_notes_are_local_not_trend():
     m = build_narrative_engine_map(SAMPLE)
     blob = " ".join(m.engine_notes).lower()
-    assert (
-        "primary question" in blob
-        or "primary thread" in blob
-        or "main-thread" in blob
-        or "main thread" in blob
-    )
+    assert "primary question" in blob or "semantic" in blob
     assert "category" not in blob
     assert "usually" not in blob
     assert "average" not in blob
@@ -117,25 +122,29 @@ def test_timeline_events_have_time_labels():
 
 
 @patch("backend.services.narrative_timeline_service.run_gemini_json")
-def test_semantic_analysis_merges_surface_questions(mock_gemini):
+def test_semantic_v2_merges_surface_questions(mock_gemini):
     mock_gemini.return_value = SEMANTIC_VACATION_RESPONSE
     m = build_narrative_engine_map(VACATION_TRANSCRIPT)
     d = m.to_dict()
 
     assert m.analysis_mode == "semantic"
-    assert len(m.open_loops) == 1
-    assert len(d.get("explanatory_threads") or []) == 1
-    assert "American work culture" in m.open_loops[0].snippet
-    assert d["satisfaction"]["verdict"] == "mostly_satisfied"
-    assert d["narrative_promise"]["answer_promised"]
+    assert m.open_loops == []
+    summary = d["narrative_summary"]
+    assert "vacation" in summary["primary_question"].lower()
+    assert summary["payoff_label"] == "Mostly Delivered"
+    assert summary["confidence"] == "High"
+    assert len(summary["supporting_threads"]) == 4
+    assert len(summary["remaining_open_questions"]) == 1
 
 
 @patch("backend.services.narrative_timeline_service.run_gemini_json")
-def test_semantic_editorial_fields_in_payload(mock_gemini):
+def test_semantic_v2_producer_summary_fields(mock_gemini):
     mock_gemini.return_value = SEMANTIC_VACATION_RESPONSE
     d = build_narrative_engine_map(VACATION_TRANSCRIPT).to_dict()
 
-    assert d["central_topic"]
-    assert d["listener_curiosity"]
-    assert d["editorial_summary"]["story_being_told"]
-    assert any("Curiosity payoff" in note for note in d["engine_notes"])
+    summary = d["narrative_summary"]
+    assert summary["narrative_promise"]
+    assert summary["story_being_told"]
+    assert summary["supporting_threads"][0]["status_label"] == "Delivered"
+    assert any("Primary question" in note for note in d["engine_notes"])
+    assert d["engine_version"] == "v2"

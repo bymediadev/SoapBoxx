@@ -13,12 +13,22 @@ from backend.services.narrative_timeline_service import (
 
 
 def _primary_close_ratio(map_: NarrativeEngineMap, runtime: float) -> Optional[float]:
-    if runtime <= 0 or not map_.open_loops:
+    if runtime <= 0:
         return None
-    primary = map_.open_loops[0]
-    if not primary.closed_at:
-        return None
-    return primary.closed_at / runtime
+
+    if map_.narrative_summary:
+        status = (map_.narrative_summary.payoff_status or "").lower()
+        if status in ("not_delivered", "unsatisfied"):
+            return None
+        for event in reversed(map_.timeline):
+            if event.event_type in ("payoff", "resolution", "partial_payoff"):
+                return event.time_seconds / runtime
+
+    if map_.open_loops:
+        primary = map_.open_loops[0]
+        if primary.closed_at:
+            return primary.closed_at / runtime
+    return None
 
 
 def build_narrative_deviation_notes(

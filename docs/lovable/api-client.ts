@@ -229,8 +229,24 @@ export type NarrativePromise = {
 export type NarrativeThread = {
   thread_label: string;
   status: string;
+  status_label?: string;
   evidence_summary: string;
-  surfaced_phrases: string[];
+  surfaced_phrases?: string[];
+};
+
+export type NarrativeSummary = {
+  primary_question: string;
+  story_being_told: string;
+  curiosity_driver: string;
+  narrative_promise: string;
+  payoff_status: string;
+  payoff_label: string;
+  confidence: string;
+  confidence_score?: number | null;
+  payoff_rationale: string;
+  supporting_threads: NarrativeThread[];
+  conclusions_reached: string[];
+  remaining_open_questions: string[];
 };
 
 export type NarrativeSatisfaction = {
@@ -267,6 +283,8 @@ export type NarrativeEngineMap = {
   }[];
   engine_notes: string[];
   analysis_mode?: "semantic" | "rule_based";
+  engine_version?: "v2" | string;
+  narrative_summary?: NarrativeSummary | null;
   central_topic?: string | null;
   listener_curiosity?: string | null;
   narrative_promise?: NarrativePromise | null;

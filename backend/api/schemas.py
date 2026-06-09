@@ -172,8 +172,24 @@ class NarrativePromiseRead(BaseModel):
 class NarrativeThreadRead(BaseModel):
     thread_label: str = ""
     status: str = ""
+    status_label: str = ""
     evidence_summary: str = ""
     surfaced_phrases: List[str] = []
+
+
+class NarrativeSummaryRead(BaseModel):
+    primary_question: str = ""
+    story_being_told: str = ""
+    curiosity_driver: str = ""
+    narrative_promise: str = ""
+    payoff_status: str = ""
+    payoff_label: str = ""
+    confidence: str = ""
+    confidence_score: Optional[float] = None
+    payoff_rationale: str = ""
+    supporting_threads: List[NarrativeThreadRead] = []
+    conclusions_reached: List[str] = []
+    remaining_open_questions: List[str] = []
 
 
 class NarrativeSatisfactionRead(BaseModel):
@@ -195,6 +211,8 @@ class NarrativeEngineRead(BaseModel):
     open_loops: List[dict] = []
     engine_notes: List[str] = []
     analysis_mode: str = "rule_based"
+    engine_version: str = "v2"
+    narrative_summary: Optional[NarrativeSummaryRead] = None
     central_topic: Optional[str] = None
     listener_curiosity: Optional[str] = None
     narrative_promise: Optional[NarrativePromiseRead] = None

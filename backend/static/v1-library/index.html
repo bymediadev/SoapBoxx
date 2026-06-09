@@ -960,13 +960,15 @@
             </div>
             <div id="detailNarrativeEngine" class="report-section" style="display:none">
               <h3 class="font-serif">Narrative engine</h3>
-              <p class="card-hint" style="margin-top:0">Editorial narrative map — central curiosity, implied promise, and whether the episode delivers. Not a category trend.</p>
+              <p class="card-hint" style="margin-top:0">Producer narrative summary — one primary question, explanatory threads, and payoff delivery. Not a question count.</p>
+              <div id="detailEngineSummary" style="display:none;margin-top:8px"></div>
               <ul id="detailEngineNotes" class="coaching-list"></ul>
-              <div id="detailEngineEditorial" style="display:none;margin-top:12px"></div>
+              <h4 class="font-serif" style="font-size:0.9rem;margin:16px 0 6px">Supporting threads</h4>
+              <ul id="detailEngineLoops" class="coaching-list"></ul>
+              <h4 class="font-serif" style="font-size:0.9rem;margin:16px 0 6px">Remaining open questions</h4>
+              <ul id="detailEngineOpenQuestions" class="coaching-list"></ul>
               <h4 class="font-serif" style="font-size:0.9rem;margin:16px 0 6px">Timeline</h4>
               <ul id="detailEngineTimeline" class="coaching-list engine-timeline"></ul>
-              <h4 class="font-serif" style="font-size:0.9rem;margin:16px 0 6px">Explanatory threads</h4>
-              <ul id="detailEngineLoops" class="coaching-list"></ul>
             </div>
             <div id="detailProducer" class="report-section" style="display:none">
               <h3 class="font-serif">Pacing pressure</h3>
@@ -1756,59 +1758,55 @@
 
         const engine = report.narrative_engine;
         const engineEl = document.getElementById("detailNarrativeEngine");
-        if (engine && (engine.timeline?.length || engine.engine_notes?.length || engine.central_topic)) {
+        const summary = engine?.narrative_summary;
+        if (engine && (summary?.primary_question || engine.timeline?.length || engine.engine_notes?.length)) {
           engineEl.style.display = "block";
+          const summaryEl = document.getElementById("detailEngineSummary");
+          if (summary?.primary_question) {
+            const bits = [
+              `<p><strong>Primary question:</strong> ${esc(summary.primary_question)}</p>`,
+            ];
+            if (summary.story_being_told) {
+              bits.push(`<p><strong>Story:</strong> ${esc(summary.story_being_told)}</p>`);
+            }
+            if (summary.narrative_promise) {
+              bits.push(`<p><strong>Narrative promise:</strong> ${esc(summary.narrative_promise)}</p>`);
+            }
+            if (summary.payoff_label) {
+              const conf = summary.confidence ? ` · ${esc(summary.confidence)} confidence` : "";
+              bits.push(`<p><strong>Status:</strong> ${esc(summary.payoff_label)}${conf}</p>`);
+            }
+            if (summary.payoff_rationale) {
+              bits.push(`<p class="card-hint" style="margin:6px 0 0">${esc(summary.payoff_rationale)}</p>`);
+            }
+            summaryEl.style.display = "block";
+            summaryEl.innerHTML = bits.join("");
+          } else {
+            summaryEl.style.display = "none";
+            summaryEl.innerHTML = "";
+          }
           document.getElementById("detailEngineNotes").innerHTML = (engine.engine_notes || [])
             .map((b) => `<li>${esc(b)}</li>`)
             .join("");
-          const editorialEl = document.getElementById("detailEngineEditorial");
-          const editorialBits = [];
-          if (engine.central_topic) {
-            editorialBits.push(`<p><strong>Central topic:</strong> ${esc(engine.central_topic)}</p>`);
-          }
-          if (engine.listener_curiosity) {
-            editorialBits.push(`<p><strong>Listener curiosity:</strong> ${esc(engine.listener_curiosity)}</p>`);
-          }
-          if (engine.narrative_promise?.answer_promised) {
-            editorialBits.push(`<p><strong>Implied promise:</strong> ${esc(engine.narrative_promise.answer_promised)}</p>`);
-          }
-          if (engine.satisfaction?.verdict) {
-            const verdict = String(engine.satisfaction.verdict).replace(/_/g, " ");
-            const conf = engine.satisfaction.confidence != null ? ` (${esc(String(engine.satisfaction.confidence))} confidence)` : "";
-            editorialBits.push(`<p><strong>Payoff:</strong> ${esc(verdict)}${conf}</p>`);
-          }
-          if (engine.editorial_summary?.story_being_told) {
-            editorialBits.push(`<p><strong>Story:</strong> ${esc(engine.editorial_summary.story_being_told)}</p>`);
-          }
-          if (editorialBits.length) {
-            editorialEl.style.display = "block";
-            editorialEl.innerHTML = editorialBits.join("");
-          } else {
-            editorialEl.style.display = "none";
-            editorialEl.innerHTML = "";
-          }
+          const threads = (summary?.supporting_threads || engine.explanatory_threads || []);
+          document.getElementById("detailEngineLoops").innerHTML = threads.length
+            ? threads
+                .map((t, i) => {
+                  const status = esc(t.status_label || t.status || "");
+                  const evidence = t.evidence_summary ? ` — ${esc(t.evidence_summary)}` : "";
+                  return `<li>${i + 1}. ${esc(t.thread_label || "")} · ${status}${evidence}</li>`;
+                })
+                .join("")
+            : "<li class=\"empty\">No supporting threads — semantic pass may be required.</li>";
+          const openQs = summary?.remaining_open_questions || engine.editorial_summary?.questions_still_open || [];
+          document.getElementById("detailEngineOpenQuestions").innerHTML = openQs.length
+            ? openQs.map((q) => `<li>${esc(q)}</li>`).join("")
+            : "<li class=\"empty\">No meaningful open questions surfaced.</li>";
           document.getElementById("detailEngineTimeline").innerHTML = (engine.timeline || [])
             .map(
               (e) =>
                 `<li><span class="engine-time">${esc(e.time_label)}</span> — ${esc(e.label)}<span class="engine-detail">${esc(e.detail ? ": " + e.detail : "")}</span></li>`
             )
-            .join("");
-          const threads = (engine.explanatory_threads || []).length
-            ? engine.explanatory_threads
-            : (engine.open_loops || []).map((l) => ({
-                thread_label: l.snippet,
-                status: l.status,
-                evidence_summary: l.lifespan_label,
-                surfaced_phrases: [],
-              }));
-          document.getElementById("detailEngineLoops").innerHTML = threads
-            .map((t) => {
-              const phrases = (t.surfaced_phrases || []).length
-                ? ` · surfaced: ${esc((t.surfaced_phrases || []).join("; "))}`
-                : "";
-              const evidence = t.evidence_summary ? ` — ${esc(t.evidence_summary)}` : "";
-              return `<li>${esc(t.thread_label || "")} · ${esc(t.status || "")}${evidence}${phrases}</li>`;
-            })
             .join("");
         } else {
           engineEl.style.display = "none";
