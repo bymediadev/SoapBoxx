@@ -324,6 +324,23 @@
     }
     .layer4-panel { display: none; }
     .layer4-panel.active { display: block; }
+    .primary-insight {
+      margin: 0 0 16px;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--background);
+    }
+    .primary-insight h3 {
+      font-size: 0.95rem;
+      margin: 0 0 8px;
+    }
+    .primary-insight .insight-lead {
+      font-size: 14px;
+      line-height: 1.55;
+      margin: 0 0 10px;
+      color: var(--foreground);
+    }
     .action-item {
       padding: 10px 12px;
       border-left: 3px solid var(--amber);
@@ -915,6 +932,7 @@
           </div>
           <p class="detail-meta" id="detailMeta"></p>
           <div class="detail-steps" id="detailSteps"></div>
+          <div id="detailPrimaryInsight" class="primary-insight" style="display:none" aria-live="polite"></div>
           <div id="detailTranscriptWarning" class="transcript-warning" style="display:none" role="alert"></div>
           <p id="detailTranscriptLimits" class="card-hint transcript-limits" style="display:none" role="note"></p>
           <div id="detailLayer4" style="display:none">
@@ -1067,7 +1085,7 @@
     let selectedEpisodeId = null;
     let episodePageIds = [];
     let openEpisodeGen = 0;
-    let openEpisodeBusy = false;
+    let lastLayer4 = { producer: null, actions: null };
     const browse = {
       podcastId: "",
       categoryKey: "",
@@ -1562,6 +1580,56 @@
         keepHtml;
     }
 
+    function renderPrimaryInsight(translation, producer) {
+      const el = document.getElementById("detailPrimaryInsight");
+      if (!el) return;
+
+      const readout = (producer && producer.editorial_readout) || {};
+      const what = readout.what_happening || [];
+      const matters = readout.why_it_matters || [];
+      const tryNext = readout.what_to_try_next || [];
+      const report = (translation && translation.report) || {};
+
+      if (what.length || matters.length || tryNext.length) {
+        el.style.display = "block";
+        el.innerHTML =
+          `<h3 class="font-serif">What this episode is doing</h3>` +
+          (what.length
+            ? `<ul class="coaching-list">${what.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>`
+            : "") +
+          (matters.length
+            ? `<h3 class="font-serif" style="margin-top:14px;font-size:0.9rem">Why it matters</h3><ul class="coaching-list">${matters.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>`
+            : "") +
+          (tryNext.length
+            ? `<h3 class="font-serif" style="margin-top:14px;font-size:0.9rem">What to try next</h3><ul class="coaching-list">${tryNext.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>`
+            : "");
+        return;
+      }
+
+      const listener = report.listener_experience || [];
+      const means = report.what_this_means || [];
+      if (listener.length) {
+        el.style.display = "block";
+        el.innerHTML =
+          `<h3 class="font-serif">Listener experience</h3><ul class="coaching-list">${listener.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>`;
+        return;
+      }
+      if (means.length) {
+        el.style.display = "block";
+        el.innerHTML =
+          `<h3 class="font-serif">Pattern</h3><ul class="coaching-list">${means.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>`;
+        return;
+      }
+      if (translation && translation.insight_text) {
+        el.style.display = "block";
+        el.innerHTML = `<p class="insight-lead">${esc(translation.insight_text)}</p>`;
+        return;
+      }
+
+      el.style.display = "none";
+      el.innerHTML = "";
+    }
+
     async function loadLayer4Views(episodeId) {
       const layer4 = document.getElementById("detailLayer4");
       if (!layer4) return;
@@ -1571,21 +1639,25 @@
           api(`/episodes/${episodeId}/report/producer`),
           api(`/episodes/${episodeId}/report/actions`),
         ]);
+        lastLayer4 = { producer, actions };
         showTranscriptWarning(producer.transcript_warning || actions.transcript_warning);
         renderLayer4Measurements(producer.measurements || {});
         renderLayer4Structure(producer);
         renderLayer4Actions(actions);
         layer4.style.display = "block";
-        document.getElementById("detailAdvancedWrap").style.display = "block";
+        const advWrap = document.getElementById("detailAdvancedWrap");
+        if (advWrap) advWrap.style.display = "block";
         document.getElementById("detailOpening").style.display = "none";
         document.getElementById("detailShape").style.display = "none";
         document.getElementById("detailAllMetricsWrap").style.display = "none";
-        setLayer4Tab("measurements");
+        setLayer4Tab("structure");
+        return { producer, actions };
       } catch (e) {
         if (!String(e.message).includes("404")) {
           console.warn("Layer4 views:", e.message);
         }
       }
+      return null;
     }
 
     function renderCoachingTable(tableEl, rows) {
@@ -1635,28 +1707,18 @@
           (report.episode_structure && report.episode_structure.length));
       if (hasCoaching) {
         const advWrap = document.getElementById("detailAdvancedWrap");
-        if (advWrap) advWrap.style.display = "block";
+        if (advWrap) {
+          advWrap.style.display = "block";
+          if (typeof advWrap.open === "boolean") advWrap.open = false;
+        }
         coaching.style.display = "block";
         legacy.style.display = "none";
         opening.style.display = "none";
         shape.style.display = "none";
         const rv = document.querySelector("#detailCoaching .report-version");
         if (rv) {
-          rv.textContent =
-            "Advanced — timeline & metric tables only (summary is in Editorial readout tab)";
+          rv.textContent = "Advanced — full metric tables & narrative engine";
         }
-        [
-          "detailListener",
-          "detailEditorial",
-          "detailPlaybook",
-          "detailMeans",
-          "detailLeverage",
-          "detailCompared",
-          "detailVariance",
-        ].forEach((id) => {
-          const el = document.getElementById(id);
-          if (el) el.style.display = "none";
-        });
 
         const limits = report.transcript_limitations || [];
         const limitsEl = document.getElementById("detailTranscriptLimits");
@@ -1848,10 +1910,8 @@
     async function openEpisode(episodeId, { fromHash = false } = {}) {
       const id = Number(episodeId) || 0;
       if (!id) return;
-      if (openEpisodeBusy && selectedEpisodeId === id) return;
 
       const gen = ++openEpisodeGen;
-      openEpisodeBusy = true;
       selectedEpisodeId = id;
 
       if (!fromHash) {
@@ -1874,6 +1934,7 @@
       document.getElementById("detailMeta").textContent = "";
       renderDetailSteps(null);
       renderDetailMetrics(null);
+      renderPrimaryInsight(null, null);
       showCoachingReport(null, null);
       showTranscriptWarning(null);
       document.getElementById("detailLayer4").style.display = "none";
@@ -1907,8 +1968,15 @@
           if (!String(e.message).includes("404")) throw e;
         }
         if (gen !== openEpisodeGen) return;
-        await loadLayer4Views(id);
+
+        let layer4Data = null;
+        try {
+          layer4Data = await loadLayer4Views(id);
+        } catch (e) {
+          console.warn("Layer4 load failed:", e.message);
+        }
         if (gen !== openEpisodeGen) return;
+        renderPrimaryInsight(translation, layer4Data && layer4Data.producer);
         showCoachingReport(translation, features);
         const idx = episodePageIds.indexOf(id);
         const pos =
@@ -1923,8 +1991,6 @@
         if (gen !== openEpisodeGen) return;
         msg.textContent = e.message;
         msg.className = "detail-msg err";
-      } finally {
-        if (gen === openEpisodeGen) openEpisodeBusy = false;
       }
     }
 

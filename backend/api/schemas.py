@@ -163,10 +163,44 @@ class TemplatePlaybookRead(BaseModel):
     similar_form: str
 
 
+class NarrativePromiseRead(BaseModel):
+    curiosity_created: str = ""
+    question_invited: str = ""
+    answer_promised: str = ""
+
+
+class NarrativeThreadRead(BaseModel):
+    thread_label: str = ""
+    status: str = ""
+    evidence_summary: str = ""
+    surfaced_phrases: List[str] = []
+
+
+class NarrativeSatisfactionRead(BaseModel):
+    verdict: str = ""
+    confidence: Optional[float] = None
+    rationale: str = ""
+
+
+class NarrativeEditorialSummaryRead(BaseModel):
+    story_being_told: str = ""
+    curiosity_driver: str = ""
+    explanations_that_landed: List[str] = []
+    questions_still_open: List[str] = []
+    listener_payoff_assessment: str = ""
+
+
 class NarrativeEngineRead(BaseModel):
     timeline: List[dict] = []
     open_loops: List[dict] = []
     engine_notes: List[str] = []
+    analysis_mode: str = "rule_based"
+    central_topic: Optional[str] = None
+    listener_curiosity: Optional[str] = None
+    narrative_promise: Optional[NarrativePromiseRead] = None
+    explanatory_threads: List[NarrativeThreadRead] = []
+    satisfaction: Optional[NarrativeSatisfactionRead] = None
+    editorial_summary: Optional[NarrativeEditorialSummaryRead] = None
 
 
 class ProducerMetricRowRead(BaseModel):

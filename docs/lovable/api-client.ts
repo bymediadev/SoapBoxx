@@ -220,6 +220,33 @@ export type TemplatePlaybook = {
   similar_form: string;
 };
 
+export type NarrativePromise = {
+  curiosity_created: string;
+  question_invited: string;
+  answer_promised: string;
+};
+
+export type NarrativeThread = {
+  thread_label: string;
+  status: string;
+  evidence_summary: string;
+  surfaced_phrases: string[];
+};
+
+export type NarrativeSatisfaction = {
+  verdict: string;
+  confidence?: number | null;
+  rationale: string;
+};
+
+export type NarrativeEditorialSummary = {
+  story_being_told: string;
+  curiosity_driver: string;
+  explanations_that_landed: string[];
+  questions_still_open: string[];
+  listener_payoff_assessment: string;
+};
+
 export type NarrativeEngineMap = {
   timeline: {
     time_seconds: number;
@@ -239,6 +266,13 @@ export type NarrativeEngineMap = {
     status: string;
   }[];
   engine_notes: string[];
+  analysis_mode?: "semantic" | "rule_based";
+  central_topic?: string | null;
+  listener_curiosity?: string | null;
+  narrative_promise?: NarrativePromise | null;
+  explanatory_threads?: NarrativeThread[];
+  satisfaction?: NarrativeSatisfaction | null;
+  editorial_summary?: NarrativeEditorialSummary | null;
 };
 
 export type ProducerNotes = {
