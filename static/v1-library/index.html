@@ -916,6 +916,7 @@
           <p class="detail-meta" id="detailMeta"></p>
           <div class="detail-steps" id="detailSteps"></div>
           <div id="detailTranscriptWarning" class="transcript-warning" style="display:none" role="alert"></div>
+          <p id="detailTranscriptLimits" class="card-hint transcript-limits" style="display:none" role="note"></p>
           <div id="detailLayer4" style="display:none">
             <div class="layer4-tabs">
               <button type="button" class="btn btn-ghost active" data-layer4="measurements">Signals</button>
@@ -1475,6 +1476,7 @@
 
     function showTranscriptWarning(warning) {
       const el = document.getElementById("detailTranscriptWarning");
+      if (!el) return;
       if (!warning || !warning.message) {
         el.style.display = "none";
         el.textContent = "";
@@ -1561,6 +1563,7 @@
 
     async function loadLayer4Views(episodeId) {
       const layer4 = document.getElementById("detailLayer4");
+      if (!layer4) return;
       layer4.style.display = "none";
       try {
         const [producer, actions] = await Promise.all([
@@ -1654,11 +1657,13 @@
 
         const limits = report.transcript_limitations || [];
         const limitsEl = document.getElementById("detailTranscriptLimits");
-        if (limits.length) {
-          limitsEl.textContent = limits.join(" ");
-          limitsEl.style.display = "block";
-        } else {
-          limitsEl.style.display = "none";
+        if (limitsEl) {
+          if (limits.length) {
+            limitsEl.textContent = limits.join(" ");
+            limitsEl.style.display = "block";
+          } else {
+            limitsEl.style.display = "none";
+          }
         }
 
         const identity = report.structural_identity || [];
