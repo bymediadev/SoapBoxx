@@ -589,7 +589,8 @@ def _build_rule_based_narrative_map(
         )
 
     notes.append(
-        "Rule-based fallback — configure GEMINI_API_KEY for semantic narrative analysis."
+        "Rule-based fallback — set GEMINI_API_KEY and use gemini-2.5-flash "
+        "(gemini-2.0-* free quota is 0)."
     )
 
     return NarrativeEngineMap(
