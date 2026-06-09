@@ -1066,6 +1066,8 @@
     const EPISODE_PAGE_SIZE = 50;
     let selectedEpisodeId = null;
     let episodePageIds = [];
+    let openEpisodeGen = 0;
+    let openEpisodeBusy = false;
     const browse = {
       podcastId: "",
       categoryKey: "",
@@ -1250,8 +1252,7 @@
           const st = (ep.status || "unknown").toLowerCase().replace(/\s+/g, "-");
           const sel = selectedEpisodeId === ep.id ? " selected" : "";
           const id = Number(ep.id) || 0;
-          return `<tr class="ep-row${sel}" data-episode-id="${id}" role="button" tabindex="0"
-            onclick="__openEpisode(${id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();__openEpisode(${id})}">
+          return `<tr class="ep-row${sel}" data-episode-id="${id}" role="button" tabindex="0">
             <td class="title">${esc(ep.title || "Untitled")}</td>
             <td class="show">${esc(ep.podcast_name)}</td>
             <td><span class="status status-${esc(st)}">${esc(ep.status)}</span></td>
@@ -1633,6 +1634,8 @@
         ((report.listener_experience && report.listener_experience.length) ||
           (report.episode_structure && report.episode_structure.length));
       if (hasCoaching) {
+        const advWrap = document.getElementById("detailAdvancedWrap");
+        if (advWrap) advWrap.style.display = "block";
         coaching.style.display = "block";
         legacy.style.display = "none";
         opening.style.display = "none";
@@ -1842,14 +1845,26 @@
       }
     }
 
-    async function openEpisode(episodeId) {
-      selectedEpisodeId = episodeId;
-      location.hash = `episode/${episodeId}`;
+    async function openEpisode(episodeId, { fromHash = false } = {}) {
+      const id = Number(episodeId) || 0;
+      if (!id) return;
+      if (openEpisodeBusy && selectedEpisodeId === id) return;
+
+      const gen = ++openEpisodeGen;
+      openEpisodeBusy = true;
+      selectedEpisodeId = id;
+
+      if (!fromHash) {
+        const target = `#episode/${id}`;
+        if (location.hash !== target) {
+          history.replaceState(null, "", target);
+        }
+      }
       document.getElementById("episodeBackdrop").classList.add("open");
       document.getElementById("episodeDetail").classList.add("open");
       document.body.style.overflow = "hidden";
       document.querySelectorAll("tr.ep-row").forEach((r) => {
-        r.classList.toggle("selected", Number(r.getAttribute("data-episode-id")) === episodeId);
+        r.classList.toggle("selected", Number(r.getAttribute("data-episode-id")) === id);
       });
 
       const msg = document.getElementById("detailMsg");
@@ -1866,43 +1881,50 @@
 
       try {
         const [episode, state] = await Promise.all([
-          api(`/episodes/${episodeId}`),
-          api(`/episodes/${episodeId}/state`),
+          api(`/episodes/${id}`),
+          api(`/episodes/${id}/state`),
         ]);
+        if (gen !== openEpisodeGen) return;
 
         document.getElementById("detailTitle").textContent = episode.title || "Untitled";
         document.getElementById("detailMeta").textContent =
-          `Episode #${episodeId} · ${state.podcast_name || ""} · status: ${state.status || "unknown"}`;
+          `Episode #${id} · ${state.podcast_name || ""} · status: ${state.status || "unknown"}`;
         renderDetailSteps(state.steps || {});
 
         let features = null;
         try {
-          features = await api(`/episodes/${episodeId}/features`);
+          features = await api(`/episodes/${id}/features`);
         } catch (e) {
           if (!String(e.message).includes("404")) throw e;
         }
+        if (gen !== openEpisodeGen) return;
         renderDetailMetrics(features);
 
         let translation = null;
         try {
-          translation = await api(`/episodes/${episodeId}/translation`);
+          translation = await api(`/episodes/${id}/translation`);
         } catch (e) {
           if (!String(e.message).includes("404")) throw e;
         }
+        if (gen !== openEpisodeGen) return;
+        await loadLayer4Views(id);
+        if (gen !== openEpisodeGen) return;
         showCoachingReport(translation, features);
-        await loadLayer4Views(episodeId);
-        const idx = episodePageIds.indexOf(episodeId);
+        const idx = episodePageIds.indexOf(id);
         const pos =
           browse.total && idx >= 0
             ? ` · ${browse.offset + idx + 1} of ${browse.total} in catalog`
             : "";
         document.getElementById("detailMeta").textContent =
-          `Episode #${episodeId} · ${state.podcast_name || ""} · status: ${state.status || "unknown"}${pos}`;
+          `Episode #${id} · ${state.podcast_name || ""} · status: ${state.status || "unknown"}${pos}`;
         msg.textContent = "";
         updateDetailNav();
       } catch (e) {
+        if (gen !== openEpisodeGen) return;
         msg.textContent = e.message;
         msg.className = "detail-msg err";
+      } finally {
+        if (gen === openEpisodeGen) openEpisodeBusy = false;
       }
     }
 
@@ -1977,6 +1999,14 @@
         await loadPodcastsFromTree(home.tree);
         renderTree(home.tree);
         await loadEpisodes();
+        if (selectedEpisodeId) {
+          document.querySelectorAll("tr.ep-row").forEach((r) => {
+            r.classList.toggle(
+              "selected",
+              Number(r.getAttribute("data-episode-id")) === selectedEpisodeId
+            );
+          });
+        }
       } catch (e) {
         setHealth({ status: "error" }, e.message);
         document.getElementById("stats").innerHTML =
@@ -2012,6 +2042,14 @@
     document.getElementById("episodesBody").addEventListener("click", (e) => {
       const row = e.target.closest("tr.ep-row");
       if (!row) return;
+      const id = Number(row.getAttribute("data-episode-id"));
+      if (id) openEpisode(id);
+    });
+    document.getElementById("episodesBody").addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const row = e.target.closest("tr.ep-row");
+      if (!row) return;
+      e.preventDefault();
       const id = Number(row.getAttribute("data-episode-id"));
       if (id) openEpisode(id);
     });
@@ -2209,7 +2247,7 @@
 
     function openEpisodeFromHash() {
       const m = location.hash.match(/^#episode\/(\d+)/);
-      if (m) openEpisode(Number(m[1]));
+      if (m) openEpisode(Number(m[1]), { fromHash: true });
     }
 
     window.__openEpisode = (id) => {
@@ -2219,7 +2257,9 @@
 
     refresh().then(() => openEpisodeFromHash());
     window.addEventListener("hashchange", openEpisodeFromHash);
-    setInterval(refresh, 45000);
+    setInterval(() => {
+      if (!selectedEpisodeId) refresh();
+    }, 45000);
   </script>
 </body>
 </html>
