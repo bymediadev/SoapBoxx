@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 import httpx
 
-from backend.http_verify import requests_verify_arg
+from backend.http_verify import httpx_verify_arg
 
 _JSON_FENCE = re.compile(r"```(?:json)?\s*([\s\S]*?)\s*```", re.I)
 
@@ -102,7 +102,7 @@ def _call_gemini_model(
         },
     }
     try:
-        with httpx.Client(timeout=timeout_seconds, verify=requests_verify_arg()) as client:
+        with httpx.Client(timeout=timeout_seconds, verify=httpx_verify_arg()) as client:
             resp = client.post(url, params={"key": api_key}, json=payload)
     except (httpx.HTTPError, ValueError, json.JSONDecodeError) as exc:
         return None, None, str(exc)
@@ -138,7 +138,7 @@ def run_gemini_json(
     user_prompt: str,
     model: Optional[str] = None,
     models: Optional[Sequence[str]] = None,
-    timeout_seconds: float = 90.0,
+    timeout_seconds: float = 45.0,
 ) -> Optional[Dict[str, Any]]:
     """
     Call Gemini generateContent and parse a JSON object from the response.
@@ -155,7 +155,6 @@ def run_gemini_json(
     if not candidates:
         candidates = narrative_model_candidates()
 
-    last_error = ""
     for model_name in candidates:
         parsed, status, err = _call_gemini_model(
             model_name=model_name,
@@ -166,7 +165,6 @@ def run_gemini_json(
         )
         if parsed:
             return parsed
-        last_error = err
         if status is not None and _should_try_next_model(status, err):
             continue
         break

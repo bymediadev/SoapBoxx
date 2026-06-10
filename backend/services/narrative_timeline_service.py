@@ -6,7 +6,9 @@ Rule-based fallback supplies timing cues only — no per-question open loops.
 
 from __future__ import annotations
 
+import hashlib
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -108,6 +110,24 @@ Return JSON only:
 """.strip()
 
 _MAX_TRANSCRIPT_CHARS = 120_000
+
+# Per-process cache: the same transcript is requested by /translation,
+# /report/producer, and /report/actions on a single episode open — one
+# Gemini call should serve all of them.
+_SEMANTIC_CACHE: Dict[str, tuple[float, "NarrativeEngineMap"]] = {}
+_SEMANTIC_CACHE_TTL_SECONDS = 24 * 3600.0
+_SEMANTIC_FAILURE_TTL_SECONDS = 600.0
+_SEMANTIC_CACHE_MAX = 64
+_SEMANTIC_FAILED_AT: Dict[str, float] = {}
+
+
+def clear_narrative_cache() -> None:
+    _SEMANTIC_CACHE.clear()
+    _SEMANTIC_FAILED_AT.clear()
+
+
+def _transcript_key(text: str) -> str:
+    return hashlib.sha1(text.encode("utf-8", "ignore")).hexdigest()
 
 
 @dataclass
@@ -657,6 +677,8 @@ def _build_rule_based_narrative_map(
 def build_narrative_engine_map(
     transcript: str,
     segments: Optional[Sequence[Dict[str, Any]]] = None,
+    *,
+    allow_semantic: bool = True,
 ) -> NarrativeEngineMap:
     text = (transcript or "").strip()
     if len(text) < 40:
@@ -668,9 +690,24 @@ def build_narrative_engine_map(
     if not moments:
         return NarrativeEngineMap(engine_notes=["No timed moments detected in transcript."])
 
-    if narrative_semantic_enabled():
-        semantic = _build_semantic_narrative_map(text, moments)
-        if semantic:
-            return semantic
+    if allow_semantic and narrative_semantic_enabled():
+        key = _transcript_key(text)
+        now = time.time()
+
+        cached = _SEMANTIC_CACHE.get(key)
+        if cached and now - cached[0] < _SEMANTIC_CACHE_TTL_SECONDS:
+            return cached[1]
+
+        failed_at = _SEMANTIC_FAILED_AT.get(key)
+        if not (failed_at and now - failed_at < _SEMANTIC_FAILURE_TTL_SECONDS):
+            semantic = _build_semantic_narrative_map(text, moments)
+            if semantic:
+                if len(_SEMANTIC_CACHE) >= _SEMANTIC_CACHE_MAX:
+                    oldest = min(_SEMANTIC_CACHE, key=lambda k: _SEMANTIC_CACHE[k][0])
+                    _SEMANTIC_CACHE.pop(oldest, None)
+                _SEMANTIC_CACHE[key] = (now, semantic)
+                _SEMANTIC_FAILED_AT.pop(key, None)
+                return semantic
+            _SEMANTIC_FAILED_AT[key] = now
 
     return _build_rule_based_narrative_map(text, moments)

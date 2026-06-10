@@ -10,9 +10,11 @@ from tests.utils.db_reset import reset_v1_tables
 
 @pytest.fixture
 def v1_db_clean(v1_db_ready):
-  reset_v1_tables()
+  from backend.api.deps import get_engine
+
+  reset_v1_tables(get_engine())
   yield
-  reset_v1_tables()
+  reset_v1_tables(get_engine())
 
 
 def test_sync_feeds_disabled_without_secret(v1_client, v1_db_clean, monkeypatch):

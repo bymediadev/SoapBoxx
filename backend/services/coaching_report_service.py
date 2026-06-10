@@ -594,10 +594,12 @@ def build_coaching_report(
                 {"start": r.start_time, "end": r.end_time, "text": r.text}
                 for r in seg_rows
             ]
-            narrative_engine = build_narrative_engine_map(
-                episode_row.full_transcript,
-                segments or None,
-            ).to_dict()
+            narrative_engine = _sanitize_llm_narrative(
+                build_narrative_engine_map(
+                    episode_row.full_transcript,
+                    segments or None,
+                ).to_dict()
+            )
             producer = build_producer_notes(
                 episode_row.full_transcript,
                 segments or None,
@@ -663,6 +665,25 @@ def coaching_report_for_episode(
     if not features:
         return None
     return build_coaching_report(db, features).to_dict()
+
+
+def _sanitize_llm_narrative(engine: Optional[dict]) -> Optional[dict]:
+    """
+    Drop LLM-generated lines that would trip the forbidden-language guard.
+    Gemini copy is advisory Layer 2 text; a stray phrase must degrade the
+    narrative section, not 500 the whole report.
+    """
+    if not engine:
+        return engine
+    engine["engine_notes"] = [
+        n for n in (engine.get("engine_notes") or []) if not _FORBIDDEN.search(n)
+    ]
+    engine["timeline"] = [
+        ev
+        for ev in (engine.get("timeline") or [])
+        if not _FORBIDDEN.search(str(ev.get("label") or ""))
+    ]
+    return engine
 
 
 def _assert_no_forbidden(report: CoachingReport) -> None:

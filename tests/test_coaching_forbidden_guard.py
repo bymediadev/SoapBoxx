@@ -52,3 +52,24 @@ def test_coaching_verdict_language_still_blocked():
     except RuntimeError:
         raised = True
     assert raised
+
+
+def test_llm_narrative_copy_sanitized_not_crashed():
+    from backend.services.coaching_report_service import _sanitize_llm_narrative
+
+    engine = _sanitize_llm_narrative(
+        {
+            "engine_notes": [
+                "Primary question: why the town collapsed",
+                "Listeners will love this good episode",
+            ],
+            "timeline": [
+                {"label": "Promise established", "detail": "ok"},
+                {"label": "This is a good episode beat", "detail": "bad"},
+            ],
+        }
+    )
+    assert engine["engine_notes"] == ["Primary question: why the town collapsed"]
+    assert len(engine["timeline"]) == 1
+    report = CoachingReport(narrative_engine=engine)
+    _assert_no_forbidden(report)

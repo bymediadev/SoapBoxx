@@ -55,9 +55,9 @@ def build_narrative_deviation_notes(
     for text, segs in show_transcripts:
         if not (text or "").strip():
             continue
-        peer = build_narrative_engine_map(text, segs)
-        if not peer.open_loops:
-            continue
+        # Rule-based only for peers: timing ratio doesn't justify one
+        # Gemini call per peer episode.
+        peer = build_narrative_engine_map(text, segs, allow_semantic=False)
         rt = runtime_seconds
         if segs:
             try:

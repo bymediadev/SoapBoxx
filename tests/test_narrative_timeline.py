@@ -2,7 +2,20 @@
 
 from unittest.mock import patch
 
-from backend.services.narrative_timeline_service import build_narrative_engine_map
+import pytest
+
+from backend.services.narrative_timeline_service import (
+    build_narrative_engine_map,
+    clear_narrative_cache,
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolated_narrative_engine():
+    """No cross-test cache leakage; no live Gemini calls from ambient env keys."""
+    clear_narrative_cache()
+    yield
+    clear_narrative_cache()
 
 SAMPLE = """
 Host: Welcome. Why did this factory town collapse?
@@ -81,13 +94,15 @@ SEMANTIC_VACATION_RESPONSE = {
 }
 
 
-def test_rule_based_does_not_inflate_open_loops():
+@patch("backend.services.narrative_timeline_service.run_gemini_json", return_value=None)
+def test_rule_based_does_not_inflate_open_loops(_mock):
     m = build_narrative_engine_map(SAMPLE)
     assert m.open_loops == []
     assert m.engine_version == "v2"
 
 
-def test_rule_based_has_single_primary_cue_not_many_loops():
+@patch("backend.services.narrative_timeline_service.run_gemini_json", return_value=None)
+def test_rule_based_has_single_primary_cue_not_many_loops(_mock):
     m = build_narrative_engine_map(SAMPLE)
     d = m.to_dict()
     assert d.get("narrative_summary")
@@ -95,7 +110,8 @@ def test_rule_based_has_single_primary_cue_not_many_loops():
     assert len(d["open_loops"]) == 0
 
 
-def test_engine_notes_are_local_not_trend():
+@patch("backend.services.narrative_timeline_service.run_gemini_json", return_value=None)
+def test_engine_notes_are_local_not_trend(_mock):
     m = build_narrative_engine_map(SAMPLE)
     blob = " ".join(m.engine_notes).lower()
     assert "primary question" in blob or "semantic" in blob
@@ -104,7 +120,8 @@ def test_engine_notes_are_local_not_trend():
     assert "average" not in blob
 
 
-def test_false_resolution_detected():
+@patch("backend.services.narrative_timeline_service.run_gemini_json", return_value=None)
+def test_false_resolution_detected(_mock):
     text = """
 Host: Why did it fail?
 Host: So in the end it was simple. That's why.
@@ -114,11 +131,35 @@ Host: But wait — what about the workers?
     assert any(e.event_type == "false_resolution" for e in m.timeline)
 
 
-def test_timeline_events_have_time_labels():
+@patch("backend.services.narrative_timeline_service.run_gemini_json", return_value=None)
+def test_timeline_events_have_time_labels(_mock):
     m = build_narrative_engine_map(SAMPLE)
     d = m.to_dict()
     assert d["timeline"][0]["time_label"]
     assert ":" in d["timeline"][0]["time_label"]
+
+
+@patch("backend.services.narrative_timeline_service.run_gemini_json")
+def test_semantic_result_cached_per_transcript(mock_gemini):
+    mock_gemini.return_value = SEMANTIC_VACATION_RESPONSE
+    first = build_narrative_engine_map(VACATION_TRANSCRIPT)
+    second = build_narrative_engine_map(VACATION_TRANSCRIPT)
+    assert mock_gemini.call_count == 1
+    assert first is second
+
+
+@patch("backend.services.narrative_timeline_service.run_gemini_json", return_value=None)
+def test_semantic_failure_not_retried_within_ttl(mock_gemini):
+    build_narrative_engine_map(VACATION_TRANSCRIPT)
+    build_narrative_engine_map(VACATION_TRANSCRIPT)
+    assert mock_gemini.call_count == 1
+
+
+@patch("backend.services.narrative_timeline_service.run_gemini_json")
+def test_allow_semantic_false_skips_gemini(mock_gemini):
+    m = build_narrative_engine_map(VACATION_TRANSCRIPT, allow_semantic=False)
+    mock_gemini.assert_not_called()
+    assert m.analysis_mode == "rule_based"
 
 
 @patch("backend.services.narrative_timeline_service.run_gemini_json")
