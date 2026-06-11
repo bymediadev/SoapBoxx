@@ -62,13 +62,47 @@ def episode_needs_stt(
     return not bool((episode.full_transcript or "").strip())
 
 
+# Worker liveness is checked at most once per TTL — a broadcast ping costs
+# up to `timeout` seconds and the answer rarely changes between requests.
+_WORKER_PING_TTL_SECONDS = 30.0
+_worker_ping_cache: Optional[tuple[float, bool]] = None
+_worker_ping_lock = threading.Lock()
+
+
+def celery_worker_available(*, timeout: float = 1.0) -> bool:
+    """
+    True only when at least one Celery worker answers a ping.
+
+    ``task.delay()`` succeeds with zero workers (it just publishes to Redis),
+    which leaves episodes stuck on "queued" forever when no worker process
+    runs (e.g. Railway API service without a worker service).
+    """
+    global _worker_ping_cache
+    now = time.monotonic()
+    with _worker_ping_lock:
+        if _worker_ping_cache and now - _worker_ping_cache[0] < _WORKER_PING_TTL_SECONDS:
+            return _worker_ping_cache[1]
+    try:
+        from backend.workers.celery_app import celery_app
+
+        ok = bool(celery_app.control.ping(timeout=timeout))
+    except Exception:
+        ok = False
+    with _worker_ping_lock:
+        _worker_ping_cache = (now, ok)
+    return ok
+
+
 def try_dispatch_episode_to_celery(
     db: Session,
     episode_id: int,
     *,
     trigger: str,
 ) -> bool:
-    """Queue one episode on Celery when Redis + worker are available."""
+    """Queue one episode on Celery when Redis + a live worker are available."""
+    if not celery_worker_available():
+        return False
+
     from backend.services.rss_service import dispatch_processing_for_episodes
 
     dispatched = dispatch_processing_for_episodes(db, [episode_id], trigger=trigger)
