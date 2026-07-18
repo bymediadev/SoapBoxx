@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
 from backend.api.config import get_settings
 from backend.api.routes.ui import _ui_index_path
@@ -67,14 +68,10 @@ def create_app() -> FastAPI:
             logger.error("UI index MISSING at %s (cwd=%s)", ui_index, Path.cwd())
         pipeline.register_pipeline_startup()
 
-    @app.get("/")
-    def root() -> dict:
-        return {
-            "service": "SoapBoxx V1 API",
-            "docs": "/docs",
-            "health": "/health",
-            "ui": "/ui/",
-        }
+    @app.get("/", include_in_schema=False)
+    def root() -> RedirectResponse:
+        """Product entry: library UI (API map lives at /docs and /health)."""
+        return RedirectResponse(url="/ui/", status_code=307)
 
     return app
 

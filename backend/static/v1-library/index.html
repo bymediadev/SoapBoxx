@@ -960,15 +960,12 @@
             </div>
             <div id="detailNarrativeEngine" class="report-section" style="display:none">
               <h3 class="font-serif">Narrative engine</h3>
-              <p class="card-hint" style="margin-top:0">Producer narrative summary — one primary question, explanatory threads, and payoff delivery. Not a question count.</p>
-              <div id="detailEngineSummary" style="display:none;margin-top:8px"></div>
+              <p class="card-hint" style="margin-top:0">Within-episode tension map — what the listener is still waiting for, minute by minute. Not a category trend.</p>
               <ul id="detailEngineNotes" class="coaching-list"></ul>
-              <h4 class="font-serif" style="font-size:0.9rem;margin:16px 0 6px">Supporting threads</h4>
-              <ul id="detailEngineLoops" class="coaching-list"></ul>
-              <h4 class="font-serif" style="font-size:0.9rem;margin:16px 0 6px">Remaining open questions</h4>
-              <ul id="detailEngineOpenQuestions" class="coaching-list"></ul>
               <h4 class="font-serif" style="font-size:0.9rem;margin:16px 0 6px">Timeline</h4>
               <ul id="detailEngineTimeline" class="coaching-list engine-timeline"></ul>
+              <h4 class="font-serif" style="font-size:0.9rem;margin:16px 0 6px">Open loops</h4>
+              <ul id="detailEngineLoops" class="coaching-list"></ul>
             </div>
             <div id="detailProducer" class="report-section" style="display:none">
               <h3 class="font-serif">Pacing pressure</h3>
@@ -1758,54 +1755,21 @@
 
         const engine = report.narrative_engine;
         const engineEl = document.getElementById("detailNarrativeEngine");
-        const summary = engine?.narrative_summary;
-        if (engine && (summary?.primary_question || engine.timeline?.length || engine.engine_notes?.length)) {
+        if (engine && (engine.timeline?.length || engine.engine_notes?.length)) {
           engineEl.style.display = "block";
-          const summaryEl = document.getElementById("detailEngineSummary");
-          if (summary?.primary_question) {
-            const bits = [
-              `<p><strong>Primary question:</strong> ${esc(summary.primary_question)}</p>`,
-            ];
-            if (summary.story_being_told) {
-              bits.push(`<p><strong>Story:</strong> ${esc(summary.story_being_told)}</p>`);
-            }
-            if (summary.narrative_promise) {
-              bits.push(`<p><strong>Narrative promise:</strong> ${esc(summary.narrative_promise)}</p>`);
-            }
-            if (summary.payoff_label) {
-              const conf = summary.confidence ? ` · ${esc(summary.confidence)} confidence` : "";
-              bits.push(`<p><strong>Status:</strong> ${esc(summary.payoff_label)}${conf}</p>`);
-            }
-            if (summary.payoff_rationale) {
-              bits.push(`<p class="card-hint" style="margin:6px 0 0">${esc(summary.payoff_rationale)}</p>`);
-            }
-            summaryEl.style.display = "block";
-            summaryEl.innerHTML = bits.join("");
-          } else {
-            summaryEl.style.display = "none";
-            summaryEl.innerHTML = "";
-          }
           document.getElementById("detailEngineNotes").innerHTML = (engine.engine_notes || [])
             .map((b) => `<li>${esc(b)}</li>`)
             .join("");
-          const threads = (summary?.supporting_threads || engine.explanatory_threads || []);
-          document.getElementById("detailEngineLoops").innerHTML = threads.length
-            ? threads
-                .map((t, i) => {
-                  const status = esc(t.status_label || t.status || "");
-                  const evidence = t.evidence_summary ? ` — ${esc(t.evidence_summary)}` : "";
-                  return `<li>${i + 1}. ${esc(t.thread_label || "")} · ${status}${evidence}</li>`;
-                })
-                .join("")
-            : "<li class=\"empty\">No supporting threads — semantic pass may be required.</li>";
-          const openQs = summary?.remaining_open_questions || engine.editorial_summary?.questions_still_open || [];
-          document.getElementById("detailEngineOpenQuestions").innerHTML = openQs.length
-            ? openQs.map((q) => `<li>${esc(q)}</li>`).join("")
-            : "<li class=\"empty\">No meaningful open questions surfaced.</li>";
           document.getElementById("detailEngineTimeline").innerHTML = (engine.timeline || [])
             .map(
               (e) =>
                 `<li><span class="engine-time">${esc(e.time_label)}</span> — ${esc(e.label)}<span class="engine-detail">${esc(e.detail ? ": " + e.detail : "")}</span></li>`
+            )
+            .join("");
+          document.getElementById("detailEngineLoops").innerHTML = (engine.open_loops || [])
+            .map(
+              (l) =>
+                `<li>${esc(l.opened_label)} → ${esc(l.lifespan_label)} · ${esc(l.status)} · ${esc(l.snippet)}</li>`
             )
             .join("");
         } else {
@@ -2237,21 +2201,31 @@
     async function ingestRssUrl(url, matchedName) {
       const msg = document.getElementById("ingestMsg");
       const btn = document.getElementById("ingestBtn");
+      const addBtns = document.querySelectorAll(".btn-add-feed");
       btn.disabled = true;
-      msg.textContent = "Ingesting…";
+      addBtns.forEach((b) => {
+        b.disabled = true;
+      });
+      msg.textContent = "Ingesting feed (episodes only — this can take a minute)…";
       msg.className = "ingest-msg";
       try {
-        const r = await api("/ingest/rss", { method: "POST", body: JSON.stringify({ rss_url: url }) });
+        const r = await api("/ingest/rss", {
+          method: "POST",
+          body: JSON.stringify({ rss_url: url }),
+        });
         msg.textContent = formatIngestMessage(r, matchedName);
         msg.className = "ingest-msg ok";
         document.getElementById("ingestQuery").value = "";
         document.getElementById("podcastSearchResults").hidden = true;
         await refresh();
       } catch (e) {
-        msg.textContent = e.message;
+        msg.textContent = e.message || "Ingest failed";
         msg.className = "ingest-msg err";
       } finally {
         btn.disabled = false;
+        addBtns.forEach((b) => {
+          b.disabled = false;
+        });
       }
     }
 
@@ -2263,30 +2237,30 @@
         return;
       }
       el.innerHTML = hits
-        .map((h) => {
+        .map((h, i) => {
           const art = h.artwork_url
             ? `<img src="${esc(h.artwork_url)}" alt="" loading="lazy" />`
             : "";
           const genre = h.genre ? esc(h.genre) : "";
           const eps =
             h.episode_count != null ? ` · ~${esc(h.episode_count)} episodes` : "";
-          return `<div class="podcast-hit">
+          return `<div class="podcast-hit" data-hit-index="${i}">
             ${art}
             <div class="meta">
               <div class="title">${esc(h.name)}</div>
               <div class="sub">${esc(h.artist)}${genre ? " · " + genre : ""}${eps}</div>
             </div>
-            <button type="button" class="btn btn-primary btn-add-feed" data-rss-url="${esc(h.rss_url)}">Add feed</button>
+            <button type="button" class="btn btn-primary btn-add-feed" data-hit-index="${i}">Add feed</button>
           </div>`;
         })
         .join("");
       el.hidden = false;
       el.querySelectorAll(".btn-add-feed").forEach((btn) => {
         btn.addEventListener("click", async () => {
-          const feed = btn.getAttribute("data-rss-url");
-          if (!feed) return;
-          const showName = btn.closest(".podcast-hit")?.querySelector(".title")?.textContent || "";
-          await ingestRssUrl(feed, showName);
+          const idx = Number(btn.getAttribute("data-hit-index"));
+          const hit = hits[idx];
+          if (!hit || !hit.rss_url) return;
+          await ingestRssUrl(hit.rss_url, hit.name);
         });
       });
     }

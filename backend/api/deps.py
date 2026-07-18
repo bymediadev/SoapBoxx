@@ -20,9 +20,14 @@ def get_engine():
     global _engine, _SessionLocal
     if _engine is None:
         settings = get_settings()
+        # Small pool for Render free Postgres; pre_ping recycles dead sockets after idle/sleep.
         _engine = create_engine(
             settings.database_url,
             pool_pre_ping=True,
+            pool_size=3,
+            max_overflow=2,
+            pool_timeout=20,
+            pool_recycle=280,
         )
         _SessionLocal = sessionmaker(bind=_engine, autocommit=False, autoflush=False)
     return _engine

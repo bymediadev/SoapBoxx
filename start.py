@@ -1,7 +1,7 @@
 """
-Local / fallback start entry (migrations + uvicorn).
+Local / cloud start entry (migrations + uvicorn).
 
-Railway/Railpack: no preDeploy; start `python start.py` (alembic + uvicorn — see railway.toml).
+Cloud (Railway/Render): start `python start.py` (wait → alembic → uvicorn).
 """
 
 from __future__ import annotations
@@ -21,11 +21,15 @@ if str(ROOT) not in sys.path:
 ASGI_TARGET = os.environ.get("ASGI_APP", "main:app").strip() or "main:app"
 
 
-def _on_railway() -> bool:
+def _on_cloud_host() -> bool:
+    """True on Railway or Render (or if PLATFORM=cloud is set)."""
     return bool(
         os.environ.get("RAILWAY_ENVIRONMENT")
         or os.environ.get("RAILWAY_SERVICE_NAME")
         or os.environ.get("RAILWAY_PROJECT_ID")
+        or os.environ.get("RENDER")
+        or os.environ.get("RENDER_SERVICE_ID")
+        or os.environ.get("PLATFORM", "").strip().lower() == "cloud"
     )
 
 
@@ -36,9 +40,9 @@ def _redis_configured_for_worker() -> bool:
     return "127.0.0.1" not in url and "localhost" not in url
 
 
-def _apply_railway_pipeline_defaults() -> None:
+def _apply_cloud_pipeline_defaults() -> None:
     """Only auto-dispatch backlog on boot when a real Redis URL exists (worker queue)."""
-    if not _on_railway() or "PIPELINE_BOOT_DISPATCH_LIMIT" in os.environ:
+    if not _on_cloud_host() or "PIPELINE_BOOT_DISPATCH_LIMIT" in os.environ:
         return
     if _redis_configured_for_worker():
         os.environ["PIPELINE_BOOT_DISPATCH_LIMIT"] = "50"
@@ -61,11 +65,11 @@ def _log_database_url() -> None:
 
 def _guard_database_url() -> None:
     url = os.environ.get("DATABASE_URL", "")
-    if _on_railway() and url and ("127.0.0.1" in url or "localhost" in url):
+    if _on_cloud_host() and url and ("127.0.0.1" in url or "localhost" in url):
         print(
-            "FATAL: DATABASE_URL points to localhost on Railway.\n"
-            "  Fix: API service → Variables → reference DATABASE_URL from Postgres.\n"
-            "  Do not copy .env.v1.example (127.0.0.1) into Railway.",
+            "FATAL: DATABASE_URL points to localhost on a cloud host.\n"
+            "  Fix: Web service → Environment → link DATABASE_URL from Render Postgres\n"
+            "  (or Railway Postgres). Do not paste .env local URLs (127.0.0.1).",
             flush=True,
         )
         sys.exit(1)
@@ -77,7 +81,7 @@ def _wait_for_database() -> int:
         return 0
     if not os.environ.get("DATABASE_URL"):
         print(
-            "WARNING: DATABASE_URL not set — skip DB wait; attach Postgres on Railway.",
+            "WARNING: DATABASE_URL not set — skip DB wait; attach Postgres on the host.",
             flush=True,
         )
         return 1
@@ -86,7 +90,7 @@ def _wait_for_database() -> int:
     env["PYTHONPATH"] = (
         root if not env.get("PYTHONPATH") else f"{root}{os.pathsep}{env['PYTHONPATH']}"
     )
-    if _on_railway() and "DB_WAIT_ATTEMPTS" not in env:
+    if _on_cloud_host() and "DB_WAIT_ATTEMPTS" not in env:
         env["DB_WAIT_ATTEMPTS"] = "12"
     return subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "wait_for_db.py")],
@@ -152,14 +156,14 @@ def _verify_asgi_import() -> None:
 
 def main() -> None:
     print("=== SoapBoxx boot ===", flush=True)
-    _apply_railway_pipeline_defaults()
+    _apply_cloud_pipeline_defaults()
     _log_database_url()
     _guard_database_url()
     wait_rc = _wait_for_database()
     if wait_rc != 0 and os.environ.get("DATABASE_URL"):
         print(
             "WARNING: database not reachable — migrations may fail; "
-            "check Postgres plugin + DATABASE_URL reference.",
+            "check Postgres + DATABASE_URL link on the host.",
             flush=True,
         )
     _run_migrations()

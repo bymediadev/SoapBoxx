@@ -2201,21 +2201,31 @@
     async function ingestRssUrl(url, matchedName) {
       const msg = document.getElementById("ingestMsg");
       const btn = document.getElementById("ingestBtn");
+      const addBtns = document.querySelectorAll(".btn-add-feed");
       btn.disabled = true;
-      msg.textContent = "Ingesting…";
+      addBtns.forEach((b) => {
+        b.disabled = true;
+      });
+      msg.textContent = "Ingesting feed (episodes only — this can take a minute)…";
       msg.className = "ingest-msg";
       try {
-        const r = await api("/ingest/rss", { method: "POST", body: JSON.stringify({ rss_url: url }) });
+        const r = await api("/ingest/rss", {
+          method: "POST",
+          body: JSON.stringify({ rss_url: url }),
+        });
         msg.textContent = formatIngestMessage(r, matchedName);
         msg.className = "ingest-msg ok";
         document.getElementById("ingestQuery").value = "";
         document.getElementById("podcastSearchResults").hidden = true;
         await refresh();
       } catch (e) {
-        msg.textContent = e.message;
+        msg.textContent = e.message || "Ingest failed";
         msg.className = "ingest-msg err";
       } finally {
         btn.disabled = false;
+        addBtns.forEach((b) => {
+          b.disabled = false;
+        });
       }
     }
 
@@ -2227,30 +2237,30 @@
         return;
       }
       el.innerHTML = hits
-        .map((h) => {
+        .map((h, i) => {
           const art = h.artwork_url
             ? `<img src="${esc(h.artwork_url)}" alt="" loading="lazy" />`
             : "";
           const genre = h.genre ? esc(h.genre) : "";
           const eps =
             h.episode_count != null ? ` · ~${esc(h.episode_count)} episodes` : "";
-          return `<div class="podcast-hit">
+          return `<div class="podcast-hit" data-hit-index="${i}">
             ${art}
             <div class="meta">
               <div class="title">${esc(h.name)}</div>
               <div class="sub">${esc(h.artist)}${genre ? " · " + genre : ""}${eps}</div>
             </div>
-            <button type="button" class="btn btn-primary btn-add-feed" data-rss-url="${esc(h.rss_url)}">Add feed</button>
+            <button type="button" class="btn btn-primary btn-add-feed" data-hit-index="${i}">Add feed</button>
           </div>`;
         })
         .join("");
       el.hidden = false;
       el.querySelectorAll(".btn-add-feed").forEach((btn) => {
         btn.addEventListener("click", async () => {
-          const feed = btn.getAttribute("data-rss-url");
-          if (!feed) return;
-          const showName = btn.closest(".podcast-hit")?.querySelector(".title")?.textContent || "";
-          await ingestRssUrl(feed, showName);
+          const idx = Number(btn.getAttribute("data-hit-index"));
+          const hit = hits[idx];
+          if (!hit || !hit.rss_url) return;
+          await ingestRssUrl(hit.rss_url, hit.name);
         });
       });
     }

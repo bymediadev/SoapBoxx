@@ -1,0 +1,53 @@
+# SoapBoxx V1 on Render — Blueprint (free-tier friendly)
+# Dashboard: New → Blueprint → connect this repo (branch: production)
+# Existing service https://soapboxx.onrender.com can keep using manual settings;
+# use this file for a clean recreate or sync.
+#
+# Free limits: web sleeps after idle; Postgres expires ~30 days; no free workers.
+# Secrets (ASSEMBLYAI_API_KEY, GROQ_API_KEY, etc.): set in Dashboard (sync: false).
+
+databases:
+  - name: soapboxx-db
+    plan: free
+    databaseName: soapboxx_v1
+    user: soapboxx
+
+services:
+  - type: keyvalue
+    name: soapboxx-redis
+    plan: free
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+
+  - type: web
+    name: soapboxx
+    runtime: python
+    plan: free
+    branch: production
+    buildCommand: pip install -r requirements.txt
+    startCommand: python start.py
+    healthCheckPath: /health/live
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: soapboxx-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: soapboxx-redis
+          type: keyvalue
+          property: connectionString
+      - key: AUTO_PROCESS_ON_INGEST
+        value: "false"
+      - key: PIPELINE_BOOT_DISPATCH_LIMIT
+        value: "0"
+      - key: SOAPBOXX_CORS_ORIGINS
+        value: "http://127.0.0.1:8000,http://localhost:5173"
+      - key: ASSEMBLYAI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false

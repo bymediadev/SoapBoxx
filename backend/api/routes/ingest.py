@@ -65,19 +65,22 @@ def ingest_rss(body: RssIngestRequest, db: Session = Depends(get_db)) -> RssInge
             detail=f"RSS ingest failed: {exc}",
         ) from exc
     settings = get_settings()
-    dispatched_ids = (
-        dispatch_processing_for_episodes(
-            db,
-            result.created_episode_ids,
-            trigger="rss_ingest",
-        )
-        if settings.auto_process_on_ingest and result.created_episode_ids
-        else []
+    # Only auto-queue when a Celery worker is reachable. Sync pipeline during
+    # the HTTP request (no Redis/worker) hangs the UI "Add feed" button for minutes.
+    from backend.services.episode_pipeline_service import (
+        celery_worker_available,
+        drain_pending_pipeline,
     )
-    backlog_dispatched = 0
-    if settings.auto_process_on_ingest:
-        from backend.services.episode_pipeline_service import drain_pending_pipeline
 
+    dispatched_ids: list[int] = []
+    backlog_dispatched = 0
+    if settings.auto_process_on_ingest and celery_worker_available():
+        if result.created_episode_ids:
+            dispatched_ids = dispatch_processing_for_episodes(
+                db,
+                result.created_episode_ids,
+                trigger="rss_ingest",
+            )
         backlog = drain_pending_pipeline(
             db,
             limit=settings.pipeline_sync_batch_size,

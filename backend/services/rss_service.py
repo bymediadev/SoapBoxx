@@ -375,14 +375,6 @@ def _ingest_parsed(
         created += 1
         episode_ids.append(int(row.id))
         created_episode_ids.append(int(row.id))
-        record_event(
-            db,
-            "episode.ingested",
-            f"Ingested: {item.title}",
-            podcast_id=int(podcast.id),
-            episode_id=int(row.id),
-            commit=False,
-        )
 
     record_event(
         db,
