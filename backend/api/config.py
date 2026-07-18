@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     auto_audio_motion_on_process: bool = False
     # On API boot (Railway): dispatch N pending episodes to Celery (0 = off)
     pipeline_boot_dispatch_limit: int = 0
+    # Cap episodes per RSS ingest (keeps Render free 512MB from OOM on huge feeds)
+    rss_ingest_max_episodes: int = 50
     rss_sync_minutes: int = 180
     # Optional: protect POST /pipeline/sync-feeds (Railway HTTP cron). Empty = endpoint disabled.
     cron_secret: str = ""

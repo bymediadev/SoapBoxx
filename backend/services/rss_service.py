@@ -119,29 +119,57 @@ def _entry_guid(entry: Any) -> Optional[str]:
 
 
 def _serialize_entry(entry: Any) -> dict[str, Any]:
-    """Preserve raw feed fields for debugging and later pipeline stages."""
+    """Keep a small raw snapshot (full feed entries blow memory on free hosts)."""
     if hasattr(entry, "as_dict"):
         raw = entry.as_dict()  # type: ignore[attr-defined]
     else:
         raw = dict(entry)
-    # Normalize non-JSON-serializable values
+    keep = (
+        "id",
+        "guid",
+        "title",
+        "link",
+        "published",
+        "updated",
+        "summary",
+        "itunes_duration",
+    )
     cleaned: dict[str, Any] = {}
-    for key, val in raw.items():
-        if key in ("published_parsed", "updated_parsed") and val is not None:
-            cleaned[key] = list(val[:9]) if hasattr(val, "__getitem__") else val
-        else:
-            try:
-                json.dumps(val)
-                cleaned[key] = val
-            except (TypeError, ValueError):
-                cleaned[key] = str(val)
+    for key in keep:
+        if key not in raw:
+            continue
+        val = raw[key]
+        try:
+            json.dumps(val)
+            cleaned[key] = val
+        except (TypeError, ValueError):
+            cleaned[key] = str(val)[:500]
+    # Audio enclosure URL only (drop huge nested structures)
+    audio = _entry_audio_url(entry)
+    if audio:
+        cleaned["audio_url"] = audio
     return cleaned
+
+
+def _limit_rss_items(
+    items: List[RssEpisodeItem],
+    *,
+    max_episodes: int,
+) -> List[RssEpisodeItem]:
+    """Keep the newest N episodes (0 / negative = no cap)."""
+    if max_episodes <= 0 or len(items) <= max_episodes:
+        return items
+    dated = [i for i in items if i.published_at is not None]
+    undated = [i for i in items if i.published_at is None]
+    dated.sort(key=lambda i: i.published_at or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    return (dated + undated)[:max_episodes]
 
 
 def parse_rss_feed(
     source: str,
     *,
     is_url: bool = False,
+    max_episodes: Optional[int] = None,
 ) -> tuple[RssFeedMeta, List[RssEpisodeItem]]:
     """
     Parse RSS/Atom using feedparser.
@@ -149,6 +177,7 @@ def parse_rss_feed(
     Args:
         source: Feed URL or XML text.
         is_url: When True, fetch and parse remote feed.
+        max_episodes: Keep only the newest N items (None = use settings default).
     """
     if is_url:
         parsed = feedparser.parse(
@@ -185,7 +214,17 @@ def parse_rss_feed(
                 raw_rss=_serialize_entry(entry),
             )
         )
-    return meta, items
+    # Drop feedparser object ASAP so GC can reclaim the full XML tree
+    del parsed
+
+    if max_episodes is None:
+        try:
+            from backend.api.config import get_settings
+
+            max_episodes = int(get_settings().rss_ingest_max_episodes)
+        except Exception:
+            max_episodes = 50
+    return meta, _limit_rss_items(items, max_episodes=int(max_episodes))
 
 
 def parse_rss(xml_text: str) -> tuple[str, Optional[str], List[RssEpisodeItem]]:

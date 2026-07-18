@@ -120,11 +120,23 @@ def _run_migrations() -> int:
 
 
 def _verify_pipeline_deps() -> None:
-    """Fail at boot if STT/pipeline packages are missing (avoids 500 mid-request)."""
+    """Fail at boot if core HTTP deps are missing.
+
+    On Render free (512MB), skip importing openai/pydub/numpy at boot — they are
+    large and only needed when processing audio later.
+    """
     import importlib
 
+    required = ("requests",)
+    if not (
+        os.environ.get("RENDER")
+        or os.environ.get("RENDER_SERVICE_ID")
+        or os.environ.get("SOAPBOXX_LIGHT_BOOT", "").strip().lower() in ("1", "true", "yes")
+    ):
+        required = ("requests", "openai", "pydub", "numpy")
+
     missing: list[str] = []
-    for name in ("requests", "openai", "pydub", "numpy"):
+    for name in required:
         try:
             importlib.import_module(name)
         except ImportError:
@@ -134,7 +146,7 @@ def _verify_pipeline_deps() -> None:
             f"Missing Python packages: {', '.join(missing)} — "
             "add them to requirements.txt and redeploy."
         )
-    print("Pipeline deps OK (requests, openai, pydub, numpy)", flush=True)
+    print(f"Pipeline deps OK ({', '.join(required)})", flush=True)
 
 
 def _verify_asgi_import() -> None:

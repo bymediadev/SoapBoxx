@@ -41,6 +41,8 @@ services:
           property: connectionString
       - key: AUTO_PROCESS_ON_INGEST
         value: "false"
+      - key: RSS_INGEST_MAX_EPISODES
+        value: "40"
       - key: PIPELINE_BOOT_DISPATCH_LIMIT
         value: "0"
       - key: SOAPBOXX_CORS_ORIGINS

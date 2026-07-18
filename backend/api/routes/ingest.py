@@ -90,6 +90,8 @@ def ingest_rss(body: RssIngestRequest, db: Session = Depends(get_db)) -> RssInge
         )
         backlog_dispatched = backlog.get("dispatched", 0) + backlog.get("processed", 0)
     pod = db.get(Podcast, result.podcast_id)
+    # Cap id list in response — huge feeds previously returned hundreds of ints.
+    id_cap = 50
     return RssIngestResponse(
         podcast_id=result.podcast_id,
         podcast_name=(pod.name if pod else "") or "",
@@ -97,5 +99,5 @@ def ingest_rss(body: RssIngestRequest, db: Session = Depends(get_db)) -> RssInge
         episodes_skipped=result.skipped,
         episodes_updated=result.updated,
         episodes_dispatched=len(dispatched_ids) + backlog_dispatched,
-        episode_ids=result.episode_ids,
+        episode_ids=result.episode_ids[:id_cap],
     )
