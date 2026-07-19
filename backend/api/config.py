@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     rss_sync_minutes: int = 180
     # Optional: protect POST /pipeline/sync-feeds (Railway HTTP cron). Empty = endpoint disabled.
     cron_secret: str = ""
+    # Before STT: fetch HTML transcripts linked in show notes (Lex etc.) — free, no worker
+    use_published_transcripts: bool = True
 
     @field_validator("database_url", mode="before")
     @classmethod

@@ -390,37 +390,51 @@ def _run_transcription(
     if transcript is not None:
         full_text = transcript.strip()
     else:
-        if not episode.audio_url:
-            raise ValueError("Episode has no audio_url and no transcript provided")
-        import tempfile
+        # Free path: publisher HTML transcripts linked in show notes (e.g. Lex).
+        # Avoids long STT / Celery worker when a public transcript URL exists.
+        from backend.api.config import get_settings
+        from backend.services.published_transcript_service import (
+            resolve_published_transcript,
+        )
 
-        from backend.intelligence_v1.transcribe import transcribe_file
+        settings = get_settings()
+        published: Optional[str] = None
+        if settings.use_published_transcripts:
+            published = resolve_published_transcript(episode.description)
+        if published:
+            full_text = published.strip()
+        else:
+            if not episode.audio_url:
+                raise ValueError("Episode has no audio_url and no transcript provided")
+            import tempfile
 
-        suffix = ".mp3"
-        if "." in episode.audio_url.split("?")[0]:
-            suffix = Path(episode.audio_url.split("?")[0]).suffix or suffix
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-            tmp_path = Path(tmp.name)
-        prepared_path: Optional[Path] = None
-        cleanup_path: Optional[Path] = None
-        try:
-            _download_audio(episode.audio_url, tmp_path)
-            prepared_path, cleanup_path = _maybe_prepare_audio_for_cloud_stt(tmp_path)
-            tr = transcribe_file(prepared_path)
-            full_text = str(tr.get("transcript") or "").strip()
-            raw_segments = tr.get("segments")
-            if raw_segments:
-                stt_segments = list(raw_segments)
-        finally:
-            if cleanup_path is not None:
+            from backend.intelligence_v1.transcribe import transcribe_file
+
+            suffix = ".mp3"
+            if "." in episode.audio_url.split("?")[0]:
+                suffix = Path(episode.audio_url.split("?")[0]).suffix or suffix
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                tmp_path = Path(tmp.name)
+            prepared_path: Optional[Path] = None
+            cleanup_path: Optional[Path] = None
+            try:
+                _download_audio(episode.audio_url, tmp_path)
+                prepared_path, cleanup_path = _maybe_prepare_audio_for_cloud_stt(tmp_path)
+                tr = transcribe_file(prepared_path)
+                full_text = str(tr.get("transcript") or "").strip()
+                raw_segments = tr.get("segments")
+                if raw_segments:
+                    stt_segments = list(raw_segments)
+            finally:
+                if cleanup_path is not None:
+                    try:
+                        cleanup_path.unlink(missing_ok=True)
+                    except OSError:
+                        pass
                 try:
-                    cleanup_path.unlink(missing_ok=True)
+                    tmp_path.unlink(missing_ok=True)
                 except OSError:
                     pass
-            try:
-                tmp_path.unlink(missing_ok=True)
-            except OSError:
-                pass
 
     if len(full_text) < 40:
         raise ValueError("Transcript too short")
