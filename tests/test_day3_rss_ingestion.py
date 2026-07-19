@@ -165,6 +165,11 @@ def test_ingest_rss_api(v1_client, v1_db_clean, monkeypatch):
             db, xml, rss_url=url, podcast_id=podcast_id
         ),
     )
+    # Ingest only auto-dispatches when a Celery worker is reachable.
+    monkeypatch.setattr(
+        "backend.services.episode_pipeline_service.celery_worker_available",
+        lambda: True,
+    )
     monkeypatch.setattr(
         "backend.api.routes.ingest.dispatch_processing_for_episodes",
         lambda db, episode_ids, trigger: dispatched_calls.append(
