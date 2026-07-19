@@ -1,10 +1,16 @@
-# SoapBoxx V1 on Render — Blueprint (free-tier friendly)
+# SoapBoxx V1 on Render — Blueprint (free-tier friendly web; worker needs paid plan)
 # Dashboard: New → Blueprint → connect this repo (branch: production)
 # Existing service https://soapboxx.onrender.com can keep using manual settings;
 # use this file for a clean recreate or sync.
 #
-# Free limits: web sleeps after idle; Postgres expires ~30 days; no free workers.
+# Free limits: web sleeps after idle; Postgres expires ~30 days.
+# Background workers are NOT free on Render — use plan starter (or higher).
 # Secrets (ASSEMBLYAI_API_KEY, GROQ_API_KEY, etc.): set in Dashboard (sync: false).
+#
+# Manual worker (if not using Blueprint): New → Background Worker → same repo/branch
+#   Build: pip install -r requirements.txt
+#   Start: python scripts/run_celery_worker.py
+#   Env: copy DATABASE_URL, REDIS_URL, GROQ_API_KEY from the web service
 
 databases:
   - name: soapboxx-db
@@ -40,16 +46,52 @@ services:
           type: keyvalue
           property: connectionString
       - key: AUTO_PROCESS_ON_INGEST
-        value: "false"
+        value: "true"
       - key: RSS_INGEST_MAX_EPISODES
         value: "40"
       - key: PIPELINE_BOOT_DISPATCH_LIMIT
-        value: "0"
+        value: "50"
       - key: SOAPBOXX_CORS_ORIGINS
         value: "http://127.0.0.1:8000,http://localhost:5173"
       - key: ASSEMBLYAI_API_KEY
         sync: false
       - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+  # Consumes Celery jobs from Redis (STT → features → insight).
+  # Requires a paid Render background worker; free web alone cannot run this.
+  - type: worker
+    name: soapboxx-worker
+    runtime: python
+    plan: starter
+    branch: production
+    buildCommand: pip install -r requirements.txt
+    startCommand: python scripts/run_celery_worker.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: soapboxx-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: soapboxx-redis
+          type: keyvalue
+          property: connectionString
+      - key: SOAPBOXX_WORKER_POOL
+        value: "solo"
+      - key: SOAPBOXX_WORKER_CONCURRENCY
+        value: "1"
+      - key: SOAPBOXX_ENABLE_BEAT
+        value: "true"
+      - key: ASSEMBLYAI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
         sync: false
       - key: GEMINI_API_KEY
         sync: false
