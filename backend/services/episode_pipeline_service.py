@@ -323,17 +323,19 @@ def drain_pending_pipeline(
         return {"pending": 0, "dispatched": 0, "processed": 0, "mode": "none"}
 
     if prefer_celery:
+        from backend.services.episode_pipeline_service import celery_worker_available
         from backend.services.rss_service import dispatch_processing_for_episodes
 
-        dispatched = dispatch_processing_for_episodes(db, pending_ids, trigger=trigger)
-        if dispatched:
-            return {
-                "pending": len(pending_ids),
-                "dispatched": len(dispatched),
-                "processed": 0,
-                "mode": "celery",
-                "episode_ids": dispatched,
-            }
+        if celery_worker_available():
+            dispatched = dispatch_processing_for_episodes(db, pending_ids, trigger=trigger)
+            if dispatched:
+                return {
+                    "pending": len(pending_ids),
+                    "dispatched": len(dispatched),
+                    "processed": 0,
+                    "mode": "celery",
+                    "episode_ids": dispatched,
+                }
 
     results: List[Dict[str, Any]] = []
     for eid in pending_ids:

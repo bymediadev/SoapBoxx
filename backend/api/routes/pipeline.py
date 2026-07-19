@@ -30,7 +30,7 @@ router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
 
 def _kick_backlog_on_boot() -> None:
-    """Load Celery queue after deploy (Railway API service)."""
+    """Drain pending episodes after deploy (Celery if worker live, else sync)."""
     settings = get_settings()
     limit = settings.pipeline_boot_dispatch_limit
     if limit <= 0:
@@ -39,11 +39,17 @@ def _kick_backlog_on_boot() -> None:
     def _run() -> None:
         db = get_session_factory()()
         try:
+            from backend.services.episode_pipeline_service import celery_worker_available
+
+            # Without a worker, prefer sync so Redis does not collect dead jobs.
+            prefer = celery_worker_available()
+            # Sync path is heavy on free tier — process a small batch only.
+            sync_limit = min(limit, 2) if not prefer else limit
             out = drain_pending_pipeline(
                 db,
-                limit=limit,
+                limit=sync_limit,
                 trigger="api_boot",
-                prefer_celery=True,
+                prefer_celery=prefer,
             )
             logger.info("Boot backlog dispatch: %s", out)
         except Exception:

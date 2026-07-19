@@ -394,15 +394,30 @@ def _run_transcription(
         # Avoids long STT / Celery worker when a public transcript URL exists.
         from backend.api.config import get_settings
         from backend.services.published_transcript_service import (
-            resolve_published_transcript,
+            extract_transcript_urls,
+            fetch_published_transcript,
         )
 
         settings = get_settings()
         published: Optional[str] = None
+        transcript_urls: list[str] = []
         if settings.use_published_transcripts:
-            published = resolve_published_transcript(episode.description)
+            transcript_urls = extract_transcript_urls(episode.description)
+            if transcript_urls:
+                published = fetch_published_transcript(transcript_urls)
         if published:
+            print(
+                f"Using published transcript for episode {episode.id} "
+                f"({len(published)} chars)",
+                flush=True,
+            )
             full_text = published.strip()
+        elif transcript_urls:
+            # Do not download multi-hour audio when show notes already link a transcript.
+            raise ValueError(
+                "Found transcript link(s) in show notes but could not fetch text: "
+                + ", ".join(transcript_urls[:3])
+            )
         else:
             if not episode.audio_url:
                 raise ValueError("Episode has no audio_url and no transcript provided")

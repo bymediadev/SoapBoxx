@@ -458,6 +458,26 @@ def dispatch_processing_for_episodes(
     if not unique_ids:
         return []
 
+    from backend.services.episode_pipeline_service import celery_worker_available
+
+    # task.delay() succeeds with zero workers — only enqueue when a worker pings.
+    if not celery_worker_available():
+        for episode_id in unique_ids:
+            episode = db.get(Episode, episode_id)
+            if not episode:
+                continue
+            record_event(
+                db,
+                "pipeline.dispatch_skipped",
+                f"No Celery worker — skip queue (use sync /pipeline/process): {episode.title}",
+                podcast_id=int(episode.podcast_id),
+                episode_id=int(episode.id),
+                meta={"trigger": trigger},
+                commit=False,
+            )
+        db.commit()
+        return []
+
     process_episode_task = None
     dispatch_error: Optional[str] = None
     try:
