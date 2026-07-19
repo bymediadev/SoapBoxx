@@ -337,7 +337,7 @@ class ProcessEpisodeRequest(BaseModel):
         False,
         description=(
             "When true, re-run STT from audio_url even if a transcript exists. "
-            "Slow on Railway (may timeout on long episodes). Default false skips STT "
+            "Slow on cloud hosts (may timeout on long episodes). Default false skips STT "
             "when full_transcript is already stored."
         ),
     )

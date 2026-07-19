@@ -45,6 +45,20 @@ def main() -> int:
         except Exception as exc:
             last_err = exc
             print(f"wait_for_db: attempt {attempt}/{max_attempts}: {exc}", flush=True)
+            msg = str(exc).lower()
+            # Retrying wrong passwords / circuit breaker digs a deeper hole (Supabase).
+            if (
+                "password authentication failed" in msg
+                or "ecircuitbreaker" in msg
+                or "too many authentication failures" in msg
+            ):
+                print(
+                    "wait_for_db: auth failure — not retrying. "
+                    "Fix DATABASE_URL (user/password; URL-encode special chars), "
+                    "wait ~15m for any circuit breaker, then redeploy once.",
+                    file=sys.stderr,
+                )
+                return 1
             time.sleep(delay)
 
     print(f"wait_for_db: gave up after {max_attempts} attempts: {last_err}", file=sys.stderr)

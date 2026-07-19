@@ -174,11 +174,14 @@ def main() -> None:
     wait_rc = _wait_for_database()
     if wait_rc != 0 and os.environ.get("DATABASE_URL"):
         print(
-            "WARNING: database not reachable — migrations may fail; "
-            "check Postgres + DATABASE_URL link on the host.",
+            "WARNING: database not reachable — skipping alembic; "
+            "check Postgres + DATABASE_URL on the host. "
+            "If you saw ECIRCUITBREAKER / password auth failed: wait ~15m, "
+            "fix credentials, redeploy once.",
             flush=True,
         )
-    _run_migrations()
+    else:
+        _run_migrations()
     _verify_pipeline_deps()
     _verify_asgi_import()
 
