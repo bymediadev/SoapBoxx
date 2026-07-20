@@ -19,6 +19,7 @@ from backend.api.schemas import (
 )
 from backend.services.rss_service import sync_saved_rss_feeds
 from backend.services.episode_pipeline_service import (
+    clear_and_requeue_for_published_path,
     drain_pending_pipeline,
     process_queued_episodes,
 )
@@ -195,3 +196,26 @@ def process_queued(
             detail=str(exc),
         ) from exc
     return ProcessBatchResponse(**payload)
+
+
+@router.post("/reset-queue")
+def reset_queue(
+    process_limit: int = Query(
+        3,
+        ge=0,
+        le=10,
+        description="After reset, sync-process this many episodes with published transcripts (0 = reset only)",
+    ),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """
+    Clear dead Celery/Redis jobs and reset unfinished episodes onto the
+    published-transcript sync path (no paid worker / no huge Whisper downloads).
+    """
+    try:
+        return clear_and_requeue_for_published_path(db, process_limit=process_limit)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc

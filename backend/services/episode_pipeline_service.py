@@ -355,6 +355,100 @@ def drain_pending_pipeline(
     }
 
 
+def clear_celery_queue() -> dict[str, Any]:
+    """Drop unconsumed Celery messages from Redis (dead jobs with no worker)."""
+    try:
+        from backend.workers.celery_app import celery_app
+
+        queue_name = celery_app.conf.task_default_queue or "celery"
+        purged = 0
+        # Broker purge works even when no worker is online (unlike control.purge).
+        with celery_app.connection_for_write() as conn:
+            purged = int(conn.default_channel.queue_purge(queue=queue_name) or 0)
+        try:
+            control_purged = int(celery_app.control.purge() or 0)
+            purged = max(purged, control_purged)
+        except Exception:
+            pass
+        return {"purged": purged, "queue": queue_name, "ok": True}
+    except Exception as exc:
+        return {"purged": 0, "ok": False, "error": str(exc)}
+
+
+def reset_non_ready_episodes_to_queued(db: Session) -> dict[str, Any]:
+    """
+    Put unfinished episodes back on the published-transcript sync path.
+
+    Leaves ``ready`` (has translation) alone. Clears stuck transcribing/failed
+    and pipeline errors so ``POST /pipeline/process`` can pick them up.
+    """
+    from backend.services.pipeline_status import STATUS_QUEUED, record_event
+    from backend.services.published_transcript_service import extract_transcript_urls
+
+    rows = (
+        db.query(Episode)
+        .outerjoin(EpisodeTranslation, EpisodeTranslation.episode_id == Episode.id)
+        .filter(EpisodeTranslation.episode_id.is_(None))
+        .order_by(Episode.id.asc())
+        .all()
+    )
+    with_pub = 0
+    without_pub = 0
+    reset = 0
+    for ep in rows:
+        if extract_transcript_urls(ep.description):
+            with_pub += 1
+        else:
+            without_pub += 1
+        if (ep.pipeline_status or "") != STATUS_QUEUED or ep.pipeline_error:
+            ep.pipeline_status = STATUS_QUEUED
+            ep.pipeline_error = None
+            reset += 1
+    record_event(
+        db,
+        "pipeline.queue_reset",
+        (
+            f"Reset queue for published-transcript path: "
+            f"{len(rows)} pending ({with_pub} with links, {without_pub} without)"
+        ),
+        meta={
+            "pending": len(rows),
+            "with_published_transcript": with_pub,
+            "without_published_transcript": without_pub,
+            "status_rows_reset": reset,
+        },
+        commit=False,
+    )
+    db.commit()
+    return {
+        "pending": len(rows),
+        "with_published_transcript": with_pub,
+        "without_published_transcript": without_pub,
+        "status_rows_reset": reset,
+    }
+
+
+def clear_and_requeue_for_published_path(
+    db: Session,
+    *,
+    process_limit: int = 0,
+) -> dict[str, Any]:
+    """Purge Redis Celery jobs, reset DB queue, optionally sync-process a batch."""
+    celery_out = clear_celery_queue()
+    reset_out = reset_non_ready_episodes_to_queued(db)
+    process_out: dict[str, Any] | None = None
+    if process_limit > 0:
+        process_out = process_queued_episodes(db, limit=process_limit)
+    from backend.services.system_state_service import get_pipeline_status
+
+    return {
+        "celery": celery_out,
+        "reset": reset_out,
+        "process": process_out,
+        "pipeline": get_pipeline_status(db),
+    }
+
+
 def process_queued_episodes(
     db: Session,
     *,
