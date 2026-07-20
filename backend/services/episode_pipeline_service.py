@@ -360,15 +360,41 @@ def process_queued_episodes(
     *,
     limit: int = 1,
 ) -> Dict[str, Any]:
-    """Process up to ``limit`` episodes that do not yet have a translation."""
-    pending = (
+    """Process up to ``limit`` episodes that do not yet have a translation.
+
+    Prefers episodes with published transcript links in show notes so the free
+    path does not stall on multi-hour audio STT (e.g. Lex without a transcript page).
+    """
+    from backend.api.config import get_settings
+    from backend.services.published_transcript_service import extract_transcript_urls
+
+    settings = get_settings()
+    cap = max(1, min(limit, 25))
+    # Look ahead so we can skip episodes that would force slow sync STT.
+    candidates = (
         db.query(Episode)
         .outerjoin(EpisodeTranslation, EpisodeTranslation.episode_id == Episode.id)
         .filter(EpisodeTranslation.episode_id.is_(None))
         .order_by(Episode.id.asc())
-        .limit(max(1, min(limit, 25)))
+        .limit(max(cap * 10, 40))
         .all()
     )
+
+    with_published: List[Episode] = []
+    without_published: List[Episode] = []
+    for ep in candidates:
+        if extract_transcript_urls(ep.description):
+            with_published.append(ep)
+        else:
+            without_published.append(ep)
+
+    if settings.allow_sync_audio_stt:
+        pending = (with_published + without_published)[:cap]
+    else:
+        pending = with_published[:cap]
+        # If nothing has a transcript link, take one and let it fail fast.
+        if not pending and without_published:
+            pending = without_published[:1]
 
     results: List[Dict[str, Any]] = []
     for ep in pending:
@@ -392,4 +418,9 @@ def process_queued_episodes(
         "succeeded": ok_count,
         "failed": len(pending) - ok_count,
         "results": results,
+        "skipped_no_published_transcript": (
+            0
+            if settings.allow_sync_audio_stt
+            else max(0, len(without_published) - (1 if pending == without_published[:1] else 0))
+        ),
     }

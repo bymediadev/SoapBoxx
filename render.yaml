@@ -51,6 +51,8 @@ services:
         value: "40"
       - key: PIPELINE_BOOT_DISPATCH_LIMIT
         value: "50"
+      - key: ALLOW_SYNC_AUDIO_STT
+        value: "false"
       - key: SOAPBOXX_CORS_ORIGINS
         value: "http://127.0.0.1:8000,http://localhost:5173"
       - key: ASSEMBLYAI_API_KEY

@@ -419,6 +419,11 @@ def _run_transcription(
                 + ", ".join(transcript_urls[:3])
             )
         else:
+            if not settings.allow_sync_audio_stt:
+                raise ValueError(
+                    "No published transcript link in show notes; sync audio STT is "
+                    "disabled (set ALLOW_SYNC_AUDIO_STT=true or paste a transcript)."
+                )
             if not episode.audio_url:
                 raise ValueError("Episode has no audio_url and no transcript provided")
             import tempfile

@@ -369,6 +369,7 @@ class ProcessBatchResponse(BaseModel):
     succeeded: int
     failed: int
     results: list[dict]
+    skipped_no_published_transcript: int = 0
 
 
 class BacklogDispatchResponse(BaseModel):

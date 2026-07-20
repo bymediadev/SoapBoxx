@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     cron_secret: str = ""
     # Before STT: fetch HTML transcripts linked in show notes (Lex etc.) — free, no worker
     use_published_transcripts: bool = True
+    # Download audio + Whisper on the API process. Keep false on free Render —
+    # Lex-sized files hang/timeout the HTTP request. Use published transcripts or a worker.
+    allow_sync_audio_stt: bool = False
 
     @field_validator("database_url", mode="before")
     @classmethod
