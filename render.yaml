@@ -51,6 +51,10 @@ services:
         value: "40"
       - key: PIPELINE_BOOT_DISPATCH_LIMIT
         value: "50"
+      - key: PIPELINE_DRAIN_MINUTES
+        value: "5"
+      - key: PIPELINE_BATCH_SIZE
+        value: "2"
       - key: ALLOW_SYNC_AUDIO_STT
         value: "false"
       - key: SOAPBOXX_CORS_ORIGINS

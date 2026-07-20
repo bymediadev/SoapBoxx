@@ -38,7 +38,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173"
     )
     auto_process_on_ingest: bool = True
-    # Celery beat: drain episodes missing translation (0 = disabled)
+    # Celery beat / in-API sync tick: drain episodes missing translation (0 = disabled)
     pipeline_drain_minutes: int = 5
     pipeline_batch_size: int = 2
     # After RSS sync / cron — also drain backlog (sync if no worker)

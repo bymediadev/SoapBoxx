@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
@@ -19,6 +20,7 @@ from backend.api.schemas import (
 )
 from backend.services.rss_service import sync_saved_rss_feeds
 from backend.services.episode_pipeline_service import (
+    celery_worker_available,
     clear_and_requeue_for_published_path,
     drain_pending_pipeline,
     process_queued_episodes,
@@ -29,6 +31,34 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
+_sync_drain_lock = threading.Lock()
+_sync_drain_started = False
+
+
+def _run_sync_drain(trigger: str, limit: int) -> dict[str, Any] | None:
+    """Process a small published-transcript batch on this API (no Celery worker)."""
+    if not _sync_drain_lock.acquire(blocking=False):
+        logger.info("Sync drain skipped (already running)")
+        return None
+    db = get_session_factory()()
+    try:
+        out = process_queued_episodes(db, limit=max(1, limit))
+        logger.info(
+            "Sync drain (%s): succeeded=%s failed=%s attempted=%s skipped_no_pub=%s",
+            trigger,
+            out.get("succeeded"),
+            out.get("failed"),
+            out.get("attempted"),
+            out.get("skipped_no_published_transcript"),
+        )
+        return out
+    except Exception:
+        logger.exception("Sync drain failed (%s)", trigger)
+        return None
+    finally:
+        db.close()
+        _sync_drain_lock.release()
+
 
 def _kick_backlog_on_boot() -> None:
     """Drain pending episodes after deploy (Celery if worker live, else sync)."""
@@ -38,44 +68,67 @@ def _kick_backlog_on_boot() -> None:
         return
 
     def _run() -> None:
-        db = get_session_factory()()
         try:
-            from backend.services.episode_pipeline_service import celery_worker_available
-
-            # Without a worker, prefer sync so Redis does not collect dead jobs.
-            prefer = celery_worker_available()
-            # Sync path is heavy on free tier — process a small batch only.
-            sync_limit = min(limit, 2) if not prefer else limit
-            out = drain_pending_pipeline(
-                db,
-                limit=sync_limit,
-                trigger="api_boot",
-                prefer_celery=prefer,
-            )
-            logger.info("Boot backlog dispatch: %s", out)
+            if celery_worker_available():
+                db = get_session_factory()()
+                try:
+                    out = drain_pending_pipeline(
+                        db,
+                        limit=limit,
+                        trigger="api_boot",
+                        prefer_celery=True,
+                    )
+                    logger.info("Boot backlog dispatch: %s", out)
+                finally:
+                    db.close()
+            else:
+                # Free path: published transcripts, small batch so boot stays healthy.
+                _run_sync_drain("api_boot", min(limit, settings.pipeline_batch_size or 2))
         except Exception:
             logger.exception("Boot backlog dispatch failed")
-        finally:
-            db.close()
 
     threading.Thread(target=_run, name="pipeline-boot-dispatch", daemon=True).start()
 
 
-def register_pipeline_startup() -> None:
-    """Call from app factory — dispatches pending episodes when configured."""
+def _start_sync_drain_loop() -> None:
+    """While no Celery worker is up, periodically drain the queue on this web process."""
+    global _sync_drain_started
     settings = get_settings()
-    if settings.pipeline_boot_dispatch_limit <= 0:
+    minutes = int(settings.pipeline_drain_minutes or 0)
+    if minutes <= 0:
         return
-    try:
-        from backend.api.deps import check_redis
+    if _sync_drain_started:
+        return
+    _sync_drain_started = True
+    batch = max(1, int(settings.pipeline_batch_size or 1))
+    interval = max(60, minutes * 60)
 
-        if check_redis().get("status") != "connected":
-            logger.info(
-                "Skipping boot backlog dispatch (Redis not connected — use POST /pipeline/process)"
-            )
-            return
-    except Exception:
-        logger.info("Skipping boot backlog dispatch (Redis check failed)")
+    def _loop() -> None:
+        # Let boot / health settle first.
+        time.sleep(45)
+        while True:
+            try:
+                if celery_worker_available(timeout=0.5):
+                    logger.debug("Sync drain idle — Celery worker is online")
+                else:
+                    _run_sync_drain("api_tick", batch)
+            except Exception:
+                logger.exception("Sync drain tick crashed")
+            time.sleep(interval)
+
+    threading.Thread(target=_loop, name="pipeline-sync-drain", daemon=True).start()
+    logger.info(
+        "Started in-API sync drain every %ss (batch=%s) when no Celery worker",
+        interval,
+        batch,
+    )
+
+
+def register_pipeline_startup() -> None:
+    """Call from app factory — boot drain + periodic sync drain when no worker."""
+    settings = get_settings()
+    _start_sync_drain_loop()
+    if settings.pipeline_boot_dispatch_limit <= 0:
         return
     _kick_backlog_on_boot()
 
